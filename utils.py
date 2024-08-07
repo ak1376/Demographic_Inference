@@ -6,6 +6,15 @@ import os
 import shap
 from sklearn.inspection import PartialDependenceDisplay
 
+
+
+
+
+
+
+
+
+
 def visualizing_results(results_obj, analysis, save_loc = "results"):
     # Extract simulated parameters
     simulated_params = results_obj['simulated_params']
@@ -199,3 +208,18 @@ def calculate_mse(sample, opt):
     
     mse = sum((sample - opt) ** 2 for true, pred in zip(sample, opt)) / len(sample)
     return mse
+
+def save_windows_to_vcf(windows, prefix='window'):
+    """
+    Save each windowed tree sequence as a VCF file.
+
+    Parameters:
+    - windows: List of tskit.TreeSequence objects containing the random windows
+    - prefix: Prefix for the VCF file names
+    """
+    for i, window_ts in enumerate(windows):
+        vcf_file = f"{prefix}_{i+1}.vcf"
+        with open(vcf_file, "w") as vcf_output:
+            window_ts.write_vcf(vcf_output)
+        print(f"Saved window {i+1} to {vcf_file}")
+
