@@ -11,6 +11,7 @@ from tqdm import tqdm
 import numpy as np
 
 from preprocess import Processor, delete_vcf_files
+from utils import visualizing_results
 
 class Experiment_Manager:
     def __init__(self, config_file):
@@ -64,7 +65,12 @@ class Experiment_Manager:
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
 
-        simulation_dict, dadi_dict, moments_dict = processor.run()
+        dadi_dict, moments_dict = processor.run()
 
-        return simulation_dict, dadi_dict, moments_dict # CHANGE LATER 
+        # I want to save the results as PNG files within the results folder 
+        visualizing_results(dadi_dict, "dadi", save_loc = self.experiment_directory)
+        visualizing_results(moments_dict, "moments", save_loc = self.experiment_directory)
+
+
+        return dadi_dict, moments_dict # CHANGE LATER 
     

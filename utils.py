@@ -6,15 +6,6 @@ import os
 import shap
 from sklearn.inspection import PartialDependenceDisplay
 
-
-
-
-
-
-
-
-
-
 def visualizing_results(results_obj, analysis, save_loc = "results"):
     # Extract simulated parameters
     simulated_params = results_obj['simulated_params']
@@ -27,13 +18,11 @@ def visualizing_results(results_obj, analysis, save_loc = "results"):
     # Extract optimized parameters
     opt_params = results_obj['opt_params']
     
-    # Flatten opt_params if nested lists are present
-    opt_params_flat = [item for sublist in opt_params for item in sublist]
     
-    Nb_opt = [d['Nb'] for d in opt_params_flat]
-    N_recover_opt = [d['N_recover'] for d in opt_params_flat]
-    t_bottleneck_start_opt = [d['t_bottleneck_start'] for d in opt_params_flat]
-    t_bottleneck_end_opt = [d['t_bottleneck_end'] for d in opt_params_flat]
+    Nb_opt = [d['Nb'] for d in opt_params]
+    N_recover_opt = [d['N_recover'] for d in opt_params]
+    t_bottleneck_start_opt = [d['t_bottleneck_start'] for d in opt_params]
+    t_bottleneck_end_opt = [d['t_bottleneck_end'] for d in opt_params]
 
     # Plotting the results
     plt.figure(figsize=(12, 8))
@@ -73,7 +62,7 @@ def visualizing_results(results_obj, analysis, save_loc = "results"):
     # plt.suptitle(f'Relative Squared Error: {sum_relative_squared_errors[3]}', fontsize=16)
     plt.tight_layout()
     print(f'/{save_loc}/inference_results_{analysis}.png')
-    plt.savefig(f'{save_loc}/inference_results_{analysis}.png', format = 'png')
+    plt.savefig(f'experiments/{save_loc}/inference_results_{analysis}.png', format = 'png')
     plt.show()
 
 def feature_importance(multi_output_model, model_number, feature_names, target_names, save_loc = 'results'):

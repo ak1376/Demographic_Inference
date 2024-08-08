@@ -28,7 +28,7 @@ config_file = {
     'num_sims': num_simulations,
     'num_samples': num_samples,
     'experiment_name': 'xgboost_bottleneck', 
-    'num_windows': 200
+    'num_windows': 50
 }
 
 xgboost_experiment = Experiment_Manager(config_file)
