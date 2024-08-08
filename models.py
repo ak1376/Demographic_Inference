@@ -61,6 +61,7 @@ class XGBoost:
         '''
         Train the model
         '''
+
         self.xgb_model.fit(X_train, y_train)
 
         # Make predictions

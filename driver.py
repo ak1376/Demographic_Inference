@@ -1,7 +1,13 @@
 from experiment_manager import Experiment_Manager
-
+import ray 
 import os
+import multiprocessing
+
+
 os.chdir("Demographic_Inference") # Feel like this is too hacky
+
+total_cores = multiprocessing.cpu_count()
+
 
 # Let's define 
 upper_bound_params = {'N0': 10000,
@@ -19,7 +25,7 @@ lower_bound_params = {'N0': 8000,
                      }
 
 
-num_simulations = 100
+num_simulations = 20
 num_samples = 20
 
 config_file = {
@@ -28,8 +34,12 @@ config_file = {
     'num_sims': num_simulations,
     'num_samples': num_samples,
     'experiment_name': 'xgboost_bottleneck', 
-    'num_windows': 50
+    'num_windows': 100
 }
 
+ray.init(num_cpus=os.cpu_count())  # Initialize Ray with all available CPU cores
 xgboost_experiment = Experiment_Manager(config_file)
 xgboost_experiment.run()
+ray.shutdown()
+
+

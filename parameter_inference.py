@@ -3,13 +3,14 @@ import moments
 import os
 from tqdm import tqdm
 import numpy as np
+import ray
 
-def get_LD_stats(folderpath, rep_ii, r_bins):
-    vcf_file = os.path.join(folderpath, f"bottleneck_window.{rep_ii}.vcf.gz")
+@ray.remote
+def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
     ld_stats = moments.LD.Parsing.compute_ld_statistics(
         vcf_file,
-        rec_map_file= os.path.join(folderpath, "flat_map.txt"),
-        pop_file=os.path.join(folderpath, "samples.txt"),
+        rec_map_file= flat_map_path,
+        pop_file=pop_file_path,
         pops=["A"],
         r_bins=r_bins,
         report=False,
@@ -17,7 +18,20 @@ def get_LD_stats(folderpath, rep_ii, r_bins):
 
     return ld_stats
 
-def run_inference_dadi(sfs, p0, sampled_params, num_samples, lower_bound = [0.01, 0.01, 0.01, 0.01], upper_bound = [10, 10, 10, 10], maxiter = 100):
+def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
+    flat_map_path = os.path.join(folderpath, "flat_map.txt")
+    pop_file_path = os.path.join(folderpath, "samples.txt")
+    vcf_files = [os.path.join(folderpath, f"bottleneck_window.{rep_ii}.vcf.gz") for rep_ii in range(num_reps)]
+
+    # Create a list of remote function calls
+    futures = [get_LD_stats.remote(vcf_file, r_bins, flat_map_path, pop_file_path) for vcf_file in vcf_files]
+    
+    # Execute the function in parallel and collect the results
+    results = ray.get(futures)
+    
+    return results
+
+def run_inference_dadi(sfs, p0, sampled_params, num_samples, lower_bound = [0.01, 0.01, 0.01, 0.01], upper_bound = [10, 10, 10, 10], maxiter = 10):
     '''
     This should do the parameter inference for dadi
     '''
@@ -50,7 +64,12 @@ def run_inference_dadi(sfs, p0, sampled_params, num_samples, lower_bound = [0.01
 
     return model, opt_theta, opt_params_dict
 
-def run_inference_moments(sfs, p0, sampled_params, lower_bound = [0.01, 0.01, 0.01, 0.01], upper_bound = [10, 10, 10, 10], maxiter = 100):
+def run_inference_moments(sfs,
+                           p0,
+                           sampled_params,
+                           lower_bound = [0.01, 0.01, 0.01, 0.01],
+                           upper_bound = [10, 10, 10, 10],
+                           maxiter = 10):
     '''
     This should do the parameter inference for moments
     '''
@@ -88,7 +107,7 @@ def run_inference_moments(sfs, p0, sampled_params, lower_bound = [0.01, 0.01, 0.
     return model, opt_theta, opt_params_dict
 
 
-def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxiter = 100):
+def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxiter = 20):
     '''
     This should do the parameter inference for momentsLD
     '''
@@ -96,14 +115,17 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
     r_bins = np.array([0, 1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3])
 
     print("parsing LD statistics")
+
     ld_stats = {}
-    for ii in tqdm(range(num_windows)):
-        ld_stats[ii] = get_LD_stats(folderpath, ii, r_bins)
+
+    results = compute_ld_stats_parallel(folderpath, num_windows, r_bins)
+
+    for i, result in enumerate(results):
+        ld_stats[i] = result
 
     print("computing mean and varcov matrix from LD statistics sums")
     mv = moments.LD.Parsing.bootstrap_data(ld_stats)
     mv['varcovs'][-1].shape = (1,1)
-
 
     demo_func = moments.LD.Demographics1D.three_epoch
     # Set up the initial guess
@@ -112,10 +134,11 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
         p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose = 3, maxiter = maxiter)
     
     opt_params_dict = {
-    'Nb': opt_params[0]*param_sample['N0'],
-    'N_recover': opt_params[1]*param_sample['N0'], 
-    't_bottleneck_end': opt_params[3]*2*param_sample['N0'],
-    't_bottleneck_start': opt_params[2]*2*param_sample['N0']
+    'N0': opt_params[4],   
+    'Nb': opt_params[0]*opt_params[4],
+    'N_recover': opt_params[1]*opt_params[4], 
+    't_bottleneck_end': opt_params[3]*2*opt_params[4],
+    't_bottleneck_start': opt_params[2]*2*opt_params[4]
     }
 
     return opt_params_dict

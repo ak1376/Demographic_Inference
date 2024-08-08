@@ -62,7 +62,7 @@ def visualizing_results(results_obj, analysis, save_loc = "results"):
     # plt.suptitle(f'Relative Squared Error: {sum_relative_squared_errors[3]}', fontsize=16)
     plt.tight_layout()
     print(f'/{save_loc}/inference_results_{analysis}.png')
-    plt.savefig(f'experiments/{save_loc}/inference_results_{analysis}.png', format = 'png')
+    plt.savefig(f'{save_loc}/inference_results_{analysis}.png', format = 'png')
     plt.show()
 
 def feature_importance(multi_output_model, model_number, feature_names, target_names, save_loc = 'results'):

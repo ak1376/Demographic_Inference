@@ -8,8 +8,38 @@ import dadi.Demes
 import glob
 import demes
 from utils import save_windows_to_vcf
+import ray
 
 from parameter_inference import run_inference_dadi, run_inference_moments, run_inference_momentsLD
+
+@ray.remote
+def generate_window(ts, window_length, n_samples):
+    start = np.random.randint(0, n_samples)
+    end = start + window_length
+    return ts.keep_intervals([[start, end]])
+
+@ray.remote
+def get_random_windows_parallel(ts, window_length, num_windows):
+    """
+    Get random windows from the tree sequence in parallel.
+
+    Parameters:
+    - ts: tskit.TreeSequence object
+    - window_length: Length of each window (in base pairs)
+    - num_windows: Number of random windows to extract
+
+    Returns:
+    - windows: List of tskit.TreeSequence objects containing the random windows
+    """
+    n_samples = int(ts.sequence_length - window_length)
+
+    # Distribute the window creation tasks across multiple workers
+    futures = [generate_window.remote(ts, window_length, n_samples) for _ in range(num_windows)]
+
+    # Collect the results
+    windows = ray.get(futures)
+
+    return windows
 
 def delete_vcf_files(directory):
     # Get a list of all files in the directory
@@ -63,26 +93,27 @@ class Processor:
 
         return g
     
-    def get_random_windows(self, ts, window_length, num_windows):
-        """
-        Get random windows from the tree sequence.
+    # @ray.remote
+    # def get_random_windows(self, ts, window_length, num_windows):
+    #     """
+    #     Get random windows from the tree sequence.
 
-        Parameters:
-        - ts: tskit.TreeSequence object
-        - window_length: Length of each window (in base pairs)
-        - num_windows: Number of random windows to extract
+    #     Parameters:
+    #     - ts: tskit.TreeSequence object
+    #     - window_length: Length of each window (in base pairs)
+    #     - num_windows: Number of random windows to extract
 
-        Returns:
-        - windows: List of tskit.TreeSequence objects containing the random windows
-        """
-        windows = []
-        n_samples = int(ts.sequence_length - window_length)
-        for _ in range(num_windows):
-            start = np.random.randint(0, n_samples)
-            end = start + window_length
-            windows.append(ts.keep_intervals([[start, end]]))
+    #     Returns:
+    #     - windows: List of tskit.TreeSequence objects containing the random windows
+    #     """
+    #     windows = []
+    #     n_samples = int(ts.sequence_length - window_length)
+    #     for _ in range(num_windows):
+    #         start = np.random.randint(0, n_samples)
+    #         end = start + window_length
+    #         windows.append(ts.keep_intervals([[start, end]])) #TODO: Use genetic distance instead of base pairs
 
-        return windows
+    #     return windows
 
     def run_msprime_replicates(self, g):
         demog = msprime.Demography.from_demes(g)
@@ -95,12 +126,19 @@ class Processor:
         )
         ts = msprime.sim_mutations(ts, rate=self.mutation_rate)
         
-        self.folderpath = f'experiments/{self.experiment_directory}/sampled_genome_windows'
+        self.folderpath = f'{self.experiment_directory}/sampled_genome_windows'
         os.makedirs(self.folderpath, exist_ok=True)
 
         delete_vcf_files(self.folderpath)
 
-        windows = self.get_random_windows(ts, self.window_length, self.num_windows)
+
+        # Generate random windows in parallel
+        windows = get_random_windows_parallel.remote(ts, self.window_length, self.num_windows)
+
+        # Retrieve and print the windows
+        windows = ray.get(windows)
+
+        # windows = self.get_random_windows(ts, self.window_length, self.num_windows)
         
         for ii, ts_window in tqdm(enumerate(windows), total = len(windows)):
             vcf_name = os.path.join(self.folderpath,f"bottleneck_window.{ii}.vcf")
@@ -176,13 +214,15 @@ class Processor:
             model_sfs.append(sfs)
 
             # Now need to simulate the process with these generative parameters, window, and then save the windows as VCF files
-            # g = self.bottleneck_model(sampled_params)
-            # self.run_msprime_replicates(g)
-            # self.write_samples_and_rec_map()
+            g = self.bottleneck_model(sampled_params)
+            self.run_msprime_replicates(g)
+            self.write_samples_and_rec_map()
 
             model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi(sfs, p0 = [0.25, 0.75, 0.1, 0.05], lower_bound = [0.01, 0.01, 0.01, 0.01], upper_bound = [10, 10, 10, 10], sampled_params = sampled_params, num_samples = self.num_samples, maxiter = 100)
             model_sfs_moments, opt_theta_moments, opt_params_dict_moments = run_inference_moments(sfs, p0 = [0.25, 0.75, 0.1, 0.05], lower_bound = [0.01, 0.01, 0.01, 0.01], upper_bound = [10, 10, 10, 10], sampled_params = sampled_params, maxiter = 100)
-            # opt_params_momentsLD = run_inference_momentsLD(folderpath = self.folderpath, num_windows = self.num_windows, param_sample = sampled_params, p_guess = [0.25, 0.75, 0.1, 0.05, 20000], maxiter = 100)
+            
+            # Initialize ray
+            opt_params_momentsLD = run_inference_momentsLD(folderpath = self.folderpath, num_windows = self.num_windows, param_sample = sampled_params, p_guess = [0.25, 0.75, 0.1, 0.05, 20000], maxiter = 100)
 
             opt_params_dadi_list.append(opt_params_dict_dadi)
             model_sfs_dadi_list.append(model_sfs_dadi)
@@ -192,7 +232,7 @@ class Processor:
             model_sfs_moments_list.append(model_sfs_moments)
             opt_theta_moments_list.append(opt_theta_moments)
 
-            # opt_params_momentsLD_list.append(opt_params_momentsLD)
+            opt_params_momentsLD_list.append(opt_params_momentsLD)
         
         # Let's return dictionaries for now.
         # simulation_dict = {
@@ -216,10 +256,11 @@ class Processor:
             'opt_theta': opt_theta_moments_list
         }
 
-        # momentsLD_dict = {
-        #     'opt_params': opt_params_momentsLD_list
-        # }
+        momentsLD_dict = {
+            'simulated_params': sample_params_storage,
+            'opt_params': opt_params_momentsLD_list
+        }
 
-        # return simulation_dict, dadi_dict, moments_dict, momentsLD_dict
+        return dadi_dict, moments_dict, momentsLD_dict
 
-        return dadi_dict, moments_dict
+        # return dadi_dict, moments_dict

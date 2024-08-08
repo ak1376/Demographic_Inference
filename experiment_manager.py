@@ -31,34 +31,34 @@ class Experiment_Manager:
         self.create_directory(self.experiment_name)
 
         
-    def create_directory(self, folder_name, archive_subdir='archive'):
-        # Create a directory for the experiment
+    def create_directory(self, folder_name, base_dir='experiments', archive_subdir='archive'):
+        # Full paths for base and archive directories
+        base_path = os.path.join(base_dir, folder_name)
+        archive_path = os.path.join(base_dir, archive_subdir)
 
         # Ensure the archive subdirectory exists
-        if not os.path.exists(archive_subdir):
-            os.makedirs(f'experiments/{archive_subdir}', exist_ok=True)
+        os.makedirs(archive_path, exist_ok=True)
 
         # Check if the folder already exists
-        if os.path.exists(folder_name):
-            # Find a new name for the existing folder
+        if os.path.exists(base_path):
+            # Find a new name for the existing folder to move it to the archive
             i = 1
-            new_folder_name = f"experiments/{folder_name}_{i}"
-            while os.path.exists(new_folder_name):
+            new_folder_name = f"{folder_name}_{i}"
+            new_folder_path = os.path.join(archive_path, new_folder_name)
+            while os.path.exists(new_folder_path):
                 i += 1
                 new_folder_name = f"{folder_name}_{i}"
+                new_folder_path = os.path.join(archive_path, new_folder_name)
             
-            # Rename the existing folder
-            os.rename(folder_name, new_folder_name)
-            
-            # Move the renamed folder to the archive subdirectory
-            shutil.move(new_folder_name, os.path.join(archive_subdir, new_folder_name))
-            print(f"Renamed and moved existing folder to: {os.path.join(archive_subdir, new_folder_name)}")
+            # Rename and move the existing folder to the archive subdirectory
+            shutil.move(base_path, new_folder_path)
+            print(f"Renamed and moved existing folder to: {new_folder_path}")
         
         # Create the new directory
-        os.makedirs(f'experiments/{folder_name}', exist_ok=True)
-        print(f"Created new directory: {folder_name}")
+        os.makedirs(base_path, exist_ok=True)
+        print(f"Created new directory: {base_path}")
 
-        self.experiment_directory = folder_name
+        self.experiment_directory = base_path
 
     def run(self):
         '''
@@ -68,12 +68,12 @@ class Experiment_Manager:
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
 
-        dadi_dict, moments_dict = processor.run()
+        dadi_dict, moments_dict, momentsLD_dict = processor.run()
 
         # I want to save the results as PNG files within the results folder 
         visualizing_results(dadi_dict, "dadi", save_loc = self.experiment_directory)
         visualizing_results(moments_dict, "moments", save_loc = self.experiment_directory)
-
+        visualizing_results(momentsLD_dict, "MomentsLD", save_loc = self.experiment_directory)
         # PARAMETER INFERENCE IS COMPLETE. NOW IT'S TIME TO DO THE MACHINE LEARNING PART.
 
         # Probably not the most efficient, but placeholder for now
