@@ -88,7 +88,7 @@ def feature_importance(multi_output_model, model_number, feature_names, target_n
     plt.savefig(os.path.join(os.getcwd(), f'{save_loc}/feature_importance_output_{target_names[model_number]}.png'), format = 'png')
     plt.show()
 
-def visualize_model_predictions(y_test, y_pred, target_names, fileprefix='model_predictions'):
+def visualize_model_predictions(y_test, y_pred, target_names, folder_loc, fileprefix='model_predictions'):
     num_outputs = y_test.shape[1]
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # Create a 2x2 grid of subplots
 
@@ -105,14 +105,15 @@ def visualize_model_predictions(y_test, y_pred, target_names, fileprefix='model_
     plt.tight_layout()
 
     # Save the figure as a PDF
-    file_name = f'results/{fileprefix}.png'
+    file_name = f'{folder_loc}/{fileprefix}.png'
     plt.savefig(file_name, format='png')
     plt.show()
 
     print(f'Figure saved to {file_name}')
 
-def shap_values_plot(X_test, multi_output_model, feature_names, target_names, fileprefix='shap_values'):
-    num_outputs = len(multi_output_model.estimators_)
+def shap_values_plot(X_test, multi_output_model, feature_names, target_names, folder_loc, fileprefix='shap_values'):
+    # TODO: Fix this error message: 'XGBoost' object has no attribute 'estimators_'
+    num_outputs = len(multi_output_model.n_estimators_)
     
     if not os.path.exists('results'):
         os.makedirs('results')
@@ -133,7 +134,7 @@ def shap_values_plot(X_test, multi_output_model, feature_names, target_names, fi
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     for i, ax in enumerate(axes.flatten()):
         if i < num_outputs:
-            img = plt.imread(f'results/{fileprefix}_feature_{i}.png')
+            img = plt.imread(f'{folder_loc}/{fileprefix}_feature_{i}.png')
             ax.imshow(img)
             ax.axis('off')  # Hide axes
             ax.set_title(f'SHAP values for output {target_names[i]}', fontsize=14, pad=20)
@@ -180,23 +181,16 @@ def partial_dependence_plots(multi_output_model, X_test, index, features, featur
     # Show the plot
     plt.show()
 
-    
-# Function to calculate R²
-def calculate_r2(sample, opt):
-    sample = np.array(sample)
-    opt = np.array(opt)
-    ss_res = np.sum((sample - opt) ** 2)
-    ss_tot = np.sum((sample - np.mean(sample)) ** 2)
-    r2 = 1 - (ss_res / ss_tot)
-    return r2
+def relative_squared_error(y_true, y_pred):
 
-def calculate_mse(sample, opt):
+    # Squared difference between prediction and true value, normalized by the true value
+    relative_squared_errors = ((y_pred - y_true) / y_true) ** 2
 
-    if len(sample) != len(opt):
-        raise ValueError("The length of true values and predicted values must be the same.")
-    
-    mse = sum((sample - opt) ** 2 for true, pred in zip(sample, opt)) / len(sample)
-    return mse
+    # Sum the relative squared errors across all columns and take the square root
+    sum_relative_squared_errors = np.sqrt(np.sum(relative_squared_errors, axis = 0))
+
+    return sum_relative_squared_errors
+
 
 def save_windows_to_vcf(windows, prefix='window'):
     """
