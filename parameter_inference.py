@@ -36,7 +36,7 @@ def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
     ]
 
     preparation_time = time.time()
-    print(f"Preparation took {preparation_time - start_time:.2f} seconds")
+    # print(f"Preparation took {preparation_time - start_time:.2f} seconds")
 
     # Create a list of remote function calls
     futures = [
@@ -179,7 +179,6 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
         [mv["means"], mv["varcovs"]],
         [demo_func],
         rs=r_bins,
-        verbose=3,
         maxiter=maxiter,
     )
 
