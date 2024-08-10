@@ -1,45 +1,56 @@
 from experiment_manager import Experiment_Manager
-import ray 
+import ray
 import os
 import multiprocessing
+import warnings
+
+# Suppress the specific warning about delim_whitespace
+warnings.filterwarnings("ignore", message="The 'delim_whitespace' keyword in pd.read_csv is deprecated")
 
 
-os.chdir("Demographic_Inference") # Feel like this is too hacky
+os.chdir("Demographic_Inference")  # Feel like this is too hacky
 
 total_cores = multiprocessing.cpu_count()
 
 
-# Let's define 
-upper_bound_params = {'N0': 10000,
-                      'Nb': 2000, 
-                      'N_recover': 8000, 
-                      't_bottleneck_end': 1000, 
-                      't_bottleneck_start': 5000  # In generations            
-                     }
+# Let's define
+upper_bound_params = {
+    "N0": 10000,
+    "Nb": 2000,
+    "N_recover": 8000,
+    "t_bottleneck_end": 1000,
+    "t_bottleneck_start": 5000,  # In generations
+}
 
-lower_bound_params = {'N0': 8000, 
-                      'Nb': 1000, 
-                      'N_recover': 4000, 
-                      't_bottleneck_end': 800, 
-                      't_bottleneck_start': 2000 # In generations
-                     }
+lower_bound_params = {
+    "N0": 8000,
+    "Nb": 1000,
+    "N_recover": 4000,
+    "t_bottleneck_end": 800,
+    "t_bottleneck_start": 2000,  # In generations
+}
 
 
-num_simulations = 20
+num_simulations = 100
 num_samples = 20
 
 config_file = {
-    'upper_bound_params': upper_bound_params,
-    'lower_bound_params': lower_bound_params,
-    'num_sims': num_simulations,
-    'num_samples': num_samples,
-    'experiment_name': 'xgboost_bottleneck', 
-    'num_windows': 100
+    "upper_bound_params": upper_bound_params,
+    "lower_bound_params": lower_bound_params,
+    "num_sims": num_simulations,
+    "num_samples": num_samples,
+    "experiment_name": "xgboost_bottleneck",
+    "num_windows": 50,
+    "window_length": 1e5,
+    "maxiter": 15,
+    "genome_length": 1e6,
+    "mutation_rate": 1.5e-8,
+    "recombination_rate": 1.5e-8,
 }
 
-ray.init(num_cpus=os.cpu_count())  # Initialize Ray with all available CPU cores
+ray.init(
+    num_cpus=os.cpu_count(), local_mode=True
+)  # Initialize Ray with all available CPU cores
 xgboost_experiment = Experiment_Manager(config_file)
 xgboost_experiment.run()
 ray.shutdown()
-
-
