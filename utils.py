@@ -7,6 +7,43 @@ import shap
 from sklearn.inspection import PartialDependenceDisplay
 
 
+def extract_features(simulated_params, opt_params):
+    """
+    opt_params can come from any of the inference methods.
+    """
+
+    # Extracting parameters from the flattened lists
+    Nb_opt = [d["Nb"] for d in opt_params]
+    N_recover_opt = [d["N_recover"] for d in opt_params]
+    t_bottleneck_start_opt = [d["t_bottleneck_start"] for d in opt_params]
+    t_bottleneck_end_opt = [d["t_bottleneck_end"] for d in opt_params]
+
+    Nb_sample = [d["Nb"] for d in simulated_params]
+    N_recover_sample = [d["N_recover"] for d in simulated_params]
+    t_bottleneck_start_sample = [d["t_bottleneck_start"] for d in simulated_params]
+    t_bottleneck_end_sample = [d["t_bottleneck_end"] for d in simulated_params]
+
+    # Put all these features into a single 2D array
+    opt_params_array = np.column_stack(
+        (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt)
+    )
+
+    # Combine simulated parameters into targets
+    targets = np.column_stack(
+        (
+            Nb_sample,
+            N_recover_sample,
+            t_bottleneck_start_sample,
+            t_bottleneck_end_sample,
+        )
+    )
+
+    # Features are the optimized parameters
+    features = opt_params_array
+
+    return features, targets
+
+
 def visualizing_results(results_obj, analysis, save_loc="results"):
     # Extract simulated parameters
     simulated_params = results_obj["simulated_params"]
@@ -128,103 +165,103 @@ def visualize_model_predictions(
     print(f"Figure saved to {file_name}")
 
 
-def shap_values_plot(
-    X_test,
-    multi_output_model,
-    feature_names,
-    target_names,
-    folder_loc,
-    fileprefix="shap_values",
-):
-    # TODO: Fix this error message: 'XGBoost' object has no attribute 'estimators_'
-    num_outputs = len(multi_output_model.n_estimators)
+# def shap_values_plot(
+#     X_test,
+#     multi_output_model,
+#     feature_names,
+#     target_names,
+#     folder_loc,
+#     fileprefix="shap_values",
+# ):
+#     # TODO: Fix this error message: 'XGBoost' object has no attribute 'estimators_'
+#     num_outputs = len(multi_output_model.n_estimators)
 
-    if not os.path.exists("results"):
-        os.makedirs("results")
+#     if not os.path.exists("results"):
+#         os.makedirs("results")
 
-    # Save individual SHAP plots as images
-    for i in range(num_outputs):
-        output_model = multi_output_model.estimators_[i]
-        explainer = shap.Explainer(output_model)
-        shap_values = explainer.shap_values(X_test)
+#     # Save individual SHAP plots as images
+#     for i in range(num_outputs):
+#         output_model = multi_output_model.estimators_[i]
+#         explainer = shap.Explainer(output_model)
+#         shap_values = explainer.shap_values(X_test)
 
-        plt.figure()
-        shap.summary_plot(
-            shap_values,
-            X_test,
-            plot_type="bar",
-            feature_names=feature_names,
-            show=False,
-        )
-        plt.title(f"SHAP values for output {i}", pad=20)
-        plt.savefig(f"results/{fileprefix}_feature_{i}.png", format="png")
-        plt.close()
+#         plt.figure()
+#         shap.summary_plot(
+#             shap_values,
+#             X_test,
+#             plot_type="bar",
+#             feature_names=feature_names,
+#             show=False,
+#         )
+#         plt.title(f"SHAP values for output {i}", pad=20)
+#         plt.savefig(f"results/{fileprefix}_feature_{i}.png", format="png")
+#         plt.close()
 
-    # Create a 2x2 grid of subplots to display the saved images
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    for i, ax in enumerate(axes.flatten()):
-        if i < num_outputs:
-            img = plt.imread(f"{folder_loc}/{fileprefix}_feature_{i}.png")
-            ax.imshow(img)
-            ax.axis("off")  # Hide axes
-            ax.set_title(
-                f"SHAP values for output {target_names[i]}", fontsize=14, pad=20
-            )
-        else:
-            fig.delaxes(ax)  # Remove empty subplot
+#     # Create a 2x2 grid of subplots to display the saved images
+#     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+#     for i, ax in enumerate(axes.flatten()):
+#         if i < num_outputs:
+#             img = plt.imread(f"{folder_loc}/{fileprefix}_feature_{i}.png")
+#             ax.imshow(img)
+#             ax.axis("off")  # Hide axes
+#             ax.set_title(
+#                 f"SHAP values for output {target_names[i]}", fontsize=14, pad=20
+#             )
+#         else:
+#             fig.delaxes(ax)  # Remove empty subplot
 
-    # Adjust layout and save the combined figure as a PNG
-    plt.tight_layout()
-    combined_file_name = f"results/{fileprefix}.png"
-    plt.savefig(combined_file_name, format="png")
-    plt.show()
+#     # Adjust layout and save the combined figure as a PNG
+#     plt.tight_layout()
+#     combined_file_name = f"results/{fileprefix}.png"
+#     plt.savefig(combined_file_name, format="png")
+#     plt.show()
 
-    print(f"Figure saved to {combined_file_name}")
+#     print(f"Figure saved to {combined_file_name}")
 
 
-def partial_dependence_plots(
-    multi_output_model,
-    X_test,
-    index,
-    features,
-    feature_names,
-    target_names,
-    fileprefix="partial_dependence",
-):
-    output_model = multi_output_model.estimators_[index]
+# def partial_dependence_plots(
+#     multi_output_model,
+#     X_test,
+#     index,
+#     features,
+#     feature_names,
+#     target_names,
+#     fileprefix="partial_dependence",
+# ):
+#     output_model = multi_output_model.estimators_[index]
 
-    # Calculate the number of rows and columns for the grid
-    n_features = len(features)
-    n_cols = 2
-    n_rows = (n_features + 1) // n_cols
+#     # Calculate the number of rows and columns for the grid
+#     n_features = len(features)
+#     n_cols = 2
+#     n_rows = (n_features + 1) // n_cols
 
-    # Partial dependence plots for the specified output
-    fig, ax = plt.subplots(
-        n_rows, n_cols, figsize=(12, 10), constrained_layout=True
-    )  # Adjust the figure size
-    ax = ax.flatten()  # Flatten the axes array for easy indexing
+#     # Partial dependence plots for the specified output
+#     fig, ax = plt.subplots(
+#         n_rows, n_cols, figsize=(12, 10), constrained_layout=True
+#     )  # Adjust the figure size
+#     ax = ax.flatten()  # Flatten the axes array for easy indexing
 
-    # Create partial dependence plots and label each subplot
-    disp = PartialDependenceDisplay.from_estimator(
-        output_model, X_test, features, ax=ax, feature_names=feature_names
-    )
+#     # Create partial dependence plots and label each subplot
+#     disp = PartialDependenceDisplay.from_estimator(
+#         output_model, X_test, features, ax=ax, feature_names=feature_names
+#     )
 
-    # Set the title for each subplot
-    for i, axi in enumerate(ax):
-        if i < n_features:
-            axi.set_ylabel(feature_names[i])
-        else:
-            axi.set_visible(False)  # Hide any unused subplots
+#     # Set the title for each subplot
+#     for i, axi in enumerate(ax):
+#         if i < n_features:
+#             axi.set_ylabel(feature_names[i])
+#         else:
+#             axi.set_visible(False)  # Hide any unused subplots
 
-    plt.suptitle(f"Partial Dependence Plots for output {target_names[index]}")
-    plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to fit the title
+#     plt.suptitle(f"Partial Dependence Plots for output {target_names[index]}")
+#     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to fit the title
 
-    # Save the plot as a PNG
-    file_name = f"{fileprefix}_feature_{target_names[index]}.png"
-    plt.savefig(file_name, format="png")
+#     # Save the plot as a PNG
+#     file_name = f"{fileprefix}_feature_{target_names[index]}.png"
+#     plt.savefig(file_name, format="png")
 
-    # Show the plot
-    plt.show()
+#     # Show the plot
+#     plt.show()
 
 
 def relative_squared_error(y_true, y_pred):

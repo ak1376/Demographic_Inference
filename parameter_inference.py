@@ -5,12 +5,14 @@ from tqdm import tqdm
 import numpy as np
 import ray
 import time
+# type: ignore
+
 
 
 @ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
     start_time = time.time()
-    ld_stats = moments.LD.Parsing.compute_ld_statistics(
+    ld_stats = moments.LD.Parsing.compute_ld_statistics( # type: ignore
         vcf_file,
         rec_map_file=flat_map_path,
         pop_file=pop_file_path,
@@ -93,8 +95,8 @@ def run_inference_dadi(
         "N0": sampled_params["N0"],
         "Nb": opt_params[0] * sampled_params["N0"],
         "N_recover": opt_params[1] * sampled_params["N0"],
-        "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"],
-        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"],
+        "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"],  # type: ignore
+        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"], # type: ignore
     }
 
     model = model * opt_theta
@@ -168,13 +170,13 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
         ld_stats[i] = result
 
     print("computing mean and varcov matrix from LD statistics sums")
-    mv = moments.LD.Parsing.bootstrap_data(ld_stats)
+    mv = moments.LD.Parsing.bootstrap_data(ld_stats) # type: ignore
     mv["varcovs"][-1].shape = (1, 1)
 
-    demo_func = moments.LD.Demographics1D.three_epoch
+    demo_func = moments.LD.Demographics1D.three_epoch # type: ignore
     # Set up the initial guess
-    p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)
-    opt_params, LL = moments.LD.Inference.optimize_log_fmin(
+    p_guess = moments.LD.Util.perturb_params(p_guess, fold=1) # type: ignore
+    opt_params, LL = moments.LD.Inference.optimize_log_fmin( # type: ignore
         p_guess,
         [mv["means"], mv["varcovs"]],
         [demo_func],

@@ -10,7 +10,7 @@ warnings.filterwarnings(
 )
 
 
-os.chdir("Demographic_Inference")  # Feel like this is too hacky
+# os.chdir("Demographic_Inference")  # Feel like this is too hacky
 
 total_cores = multiprocessing.cpu_count()
 
@@ -33,7 +33,7 @@ lower_bound_params = {
 }
 
 
-num_simulations = 500
+num_simulations = 1000
 num_samples = 20
 
 config_file = {
@@ -41,21 +41,21 @@ config_file = {
     "lower_bound_params": lower_bound_params,
     "num_sims": num_simulations,
     "num_samples": num_samples,
-    "experiment_name": "xgboost_bottleneck",
+    "experiment_name": "linear_model_bottleneck",
     "dadi_analysis": True, 
     "moments_analysis": True,
-    "momentsLD_analysis": True,
+    "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e5,
-    "maxiter": 15,
-    "genome_length": 1e6,
+    "maxiter": 100,
+    "genome_length": 1e7,
     "mutation_rate": 1.5e-8,
     "recombination_rate": 1.5e-8,
 }
 
 ray.init(
-    num_cpus=os.cpu_count(), local_mode=True
+    num_cpus=os.cpu_count(), local_mode=False
 )  # Initialize Ray with all available CPU cores
-xgboost_experiment = Experiment_Manager(config_file)
-xgboost_experiment.run()
+linear_experiment = Experiment_Manager(config_file)
+linear_experiment.run()
 ray.shutdown()

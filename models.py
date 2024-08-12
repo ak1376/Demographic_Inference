@@ -4,6 +4,12 @@ import xgboost as xgb
 import numpy as np
 from utils import relative_squared_error
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import pytorch_lightning as pl
+from torch.optim import Adam
+
 
 class XGBoost:
     def __init__(
@@ -40,42 +46,6 @@ class XGBoost:
 
         self.xgb_model = multi_output_model
 
-    def extract_features(self, simulated_params, opt_params, train_percentage=0.8):
-        """
-        opt_params can come from any of the inference methods.
-        """
-
-        # Extracting parameters from the flattened lists
-        Nb_opt = [d["Nb"] for d in opt_params]
-        N_recover_opt = [d["N_recover"] for d in opt_params]
-        t_bottleneck_start_opt = [d["t_bottleneck_start"] for d in opt_params]
-        t_bottleneck_end_opt = [d["t_bottleneck_end"] for d in opt_params]
-
-        Nb_sample = [d["Nb"] for d in simulated_params]
-        N_recover_sample = [d["N_recover"] for d in simulated_params]
-        t_bottleneck_start_sample = [d["t_bottleneck_start"] for d in simulated_params]
-        t_bottleneck_end_sample = [d["t_bottleneck_end"] for d in simulated_params]
-
-        # Put all these features into a single 2D array
-        opt_params_array = np.column_stack(
-            (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt)
-        )
-
-        # Combine simulated parameters into targets
-        targets = np.column_stack(
-            (
-                Nb_sample,
-                N_recover_sample,
-                t_bottleneck_start_sample,
-                t_bottleneck_end_sample,
-            )
-        )
-
-        # Features are the optimized parameters
-        features = opt_params_array
-
-        return features, targets
-
     def train_and_validate(self, X_train, y_train, X_test, y_test):
         """
         Train the model
@@ -90,3 +60,18 @@ class XGBoost:
         validation_error = relative_squared_error(y_test, y_pred)
 
         return train_error, validation_error, y_pred
+
+
+class ShallowNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(ShallowNN, self).__init__()
+        self.layer1 = nn.Linear(input_size, hidden_size)
+        self.layer2 = nn.Linear(hidden_size, hidden_size)
+        self.output_layer = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        x = torch.relu(self.layer1(x))
+        x = torch.relu(self.layer2(x))
+        # x = (self.hidden_layer(x))
+        x = self.output_layer(x)
+        return x

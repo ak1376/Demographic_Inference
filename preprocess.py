@@ -10,6 +10,8 @@ import demes
 from utils import save_windows_to_vcf
 import ray
 
+# type: ignore
+
 from parameter_inference import (
     run_inference_dadi,
     run_inference_moments,
@@ -110,11 +112,12 @@ def process_single_simulation(
 ):
     sampled_params = sample_params_func()
     sfs = create_SFS_func(sampled_params, mode="pretrain")
-    
+
     # Simulate process and save windows as VCF files
-    g = bottleneck_model_func(sampled_params)
-    run_msprime_replicates_func(g)
-    samples_file, flat_map_file = write_samples_and_rec_map_func()
+    if run_inference_momentsLD_func:
+        g = bottleneck_model_func(sampled_params)
+        run_msprime_replicates_func(g)
+        samples_file, flat_map_file = write_samples_and_rec_map_func()
 
     # Initialize result dictionary
     results = {
@@ -133,11 +136,13 @@ def process_single_simulation(
             num_samples=num_samples,
             maxiter=maxiter,
         )
-        results.update({
-            "opt_params_dict_dadi": opt_params_dict_dadi,
-            "model_sfs_dadi": model_sfs_dadi,
-            "opt_theta_dadi": opt_theta_dadi,
-        })
+        results.update(
+            {
+                "opt_params_dict_dadi": opt_params_dict_dadi,
+                "model_sfs_dadi": model_sfs_dadi,
+                "opt_theta_dadi": opt_theta_dadi,
+            }
+        )
 
     if run_inference_moments_func:
         model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
@@ -150,11 +155,13 @@ def process_single_simulation(
                 maxiter=maxiter,
             )
         )
-        results.update({
-            "opt_params_dict_moments": opt_params_dict_moments,
-            "model_sfs_moments": model_sfs_moments,
-            "opt_theta_moments": opt_theta_moments,
-        })
+        results.update(
+            {
+                "opt_params_dict_moments": opt_params_dict_moments,
+                "model_sfs_moments": model_sfs_moments,
+                "opt_theta_moments": opt_theta_moments,
+            }
+        )
 
     if run_inference_momentsLD_func:
         opt_params_momentsLD = run_inference_momentsLD_func(
@@ -167,6 +174,7 @@ def process_single_simulation(
         results["opt_params_momentsLD"] = opt_params_momentsLD
 
     return results
+
 
 class Processor:
     def __init__(
@@ -372,20 +380,6 @@ class Processor:
             ray.init()
 
         # Create a list of futures to run simulations in parallel
-
-        # i,
-        # sample_params_func,
-        # create_SFS_func,
-        # bottleneck_model_func,
-        # run_msprime_replicates_func,
-        # write_samples_and_rec_map_func,
-        # run_inference_dadi_func=None,
-        # run_inference_moments_func=None,
-        # run_inference_momentsLD_func=None,
-        # folderpath=None,
-        # num_windows=None,
-        # num_samples=None,
-        # maxiter=None,
         futures = [
             process_single_simulation.remote(
                 i,
@@ -394,13 +388,25 @@ class Processor:
                 self.bottleneck_model,
                 self.run_msprime_replicates,
                 self.write_samples_and_rec_map,
-                run_inference_dadi_func=run_inference_dadi if self.experiment_config['dadi_analysis'] else None,
-                run_inference_moments_func=run_inference_moments if self.experiment_config['moments_analysis'] else None,
-                run_inference_momentsLD_func = run_inference_momentsLD if self.experiment_config['momentsLD_analysis'] else None,
-                folderpath=self.folderpath,
-                num_windows=self.num_windows,
-                num_samples=self.num_samples,
-                maxiter=self.maxiter,
+                run_inference_dadi_func=( #type: ignore
+                    run_inference_dadi
+                    if self.experiment_config["dadi_analysis"]
+                    else None
+                ),
+                run_inference_moments_func=( #type: ignore
+                    run_inference_moments
+                    if self.experiment_config["moments_analysis"]
+                    else None
+                ),
+                run_inference_momentsLD_func=(#type: ignore
+                    run_inference_momentsLD
+                    if self.experiment_config["momentsLD_analysis"]
+                    else None
+                ),
+                folderpath=self.folderpath,#type: ignore
+                num_windows=self.num_windows,#type: ignore
+                num_samples=self.num_samples,#type: ignore
+                maxiter=self.maxiter,#type: ignore
             )
             for i in range(self.num_sims)
         ]
@@ -413,39 +419,51 @@ class Processor:
             sample_params_storage.append(result["sampled_params"])
             model_sfs.append(result["sfs"])
 
-            if self.experiment_config['dadi_analysis']:
+            if self.experiment_config["dadi_analysis"]:
                 opt_params_dadi_list.append(result["opt_params_dict_dadi"])
                 model_sfs_dadi_list.append(result["model_sfs_dadi"])
                 opt_theta_dadi_list.append(result["opt_theta_dadi"])
 
-            if self.experiment_config['moments_analysis']:
+            if self.experiment_config["moments_analysis"]:
                 opt_params_moments_list.append(result["opt_params_dict_moments"])
                 model_sfs_moments_list.append(result["model_sfs_moments"])
                 opt_theta_moments_list.append(result["opt_theta_moments"])
 
-            if self.experiment_config['momentsLD_analysis']:
+            if self.experiment_config["momentsLD_analysis"]:
                 opt_params_momentsLD_list.append(result["opt_params_momentsLD"])
 
         # Create the output dictionaries
-        dadi_dict = {
-            "model_sfs": model_sfs,
-            "simulated_params": sample_params_storage,
-            "opt_params": opt_params_dadi_list,
-            "model_sfs": model_sfs_dadi_list,
-            "opt_theta": opt_theta_dadi_list,
-        } if self.experiment_config['dadi_analysis'] else {}
+        dadi_dict = (
+            {
+                "model_sfs": model_sfs,
+                "simulated_params": sample_params_storage,
+                "opt_params": opt_params_dadi_list,
+                "model_sfs": model_sfs_dadi_list,
+                "opt_theta": opt_theta_dadi_list,
+            }
+            if self.experiment_config["dadi_analysis"]
+            else {}
+        )
 
-        moments_dict = {
-            "model_sfs": model_sfs,
-            "simulated_params": sample_params_storage,
-            "opt_params": opt_params_moments_list,
-            "model_sfs": model_sfs_moments_list,
-            "opt_theta": opt_theta_moments_list,
-        } if self.experiment_config['moments_analysis'] else {}
+        moments_dict = (
+            {
+                "model_sfs": model_sfs,
+                "simulated_params": sample_params_storage,
+                "opt_params": opt_params_moments_list,
+                "model_sfs": model_sfs_moments_list,
+                "opt_theta": opt_theta_moments_list,
+            }
+            if self.experiment_config["moments_analysis"]
+            else {}
+        )
 
-        momentsLD_dict = {
-            "simulated_params": sample_params_storage,
-            "opt_params": opt_params_momentsLD_list,
-        } if self.experiment_config['momentsLD_analysis'] else {}
+        momentsLD_dict = (
+            {
+                "simulated_params": sample_params_storage,
+                "opt_params": opt_params_momentsLD_list,
+            }
+            if self.experiment_config["momentsLD_analysis"]
+            else {}
+        )
 
         return dadi_dict, moments_dict, momentsLD_dict
