@@ -413,17 +413,17 @@ class Processor:
             sample_params_storage.append(result["sampled_params"])
             model_sfs.append(result["sfs"])
 
-            if self.dadi_analysis:
+            if self.experiment_config['dadi_analysis']:
                 opt_params_dadi_list.append(result["opt_params_dict_dadi"])
                 model_sfs_dadi_list.append(result["model_sfs_dadi"])
                 opt_theta_dadi_list.append(result["opt_theta_dadi"])
 
-            if self.moments_analysis:
+            if self.experiment_config['moments_analysis']:
                 opt_params_moments_list.append(result["opt_params_dict_moments"])
                 model_sfs_moments_list.append(result["model_sfs_moments"])
                 opt_theta_moments_list.append(result["opt_theta_moments"])
 
-            if run_momentsLD:
+            if self.experiment_config['momentsLD_analysis']:
                 opt_params_momentsLD_list.append(result["opt_params_momentsLD"])
 
         # Create the output dictionaries
@@ -433,7 +433,7 @@ class Processor:
             "opt_params": opt_params_dadi_list,
             "model_sfs": model_sfs_dadi_list,
             "opt_theta": opt_theta_dadi_list,
-        } if run_dadi else {}
+        } if self.experiment_config['dadi_analysis'] else {}
 
         moments_dict = {
             "model_sfs": model_sfs,
@@ -441,11 +441,11 @@ class Processor:
             "opt_params": opt_params_moments_list,
             "model_sfs": model_sfs_moments_list,
             "opt_theta": opt_theta_moments_list,
-        } if run_moments else {}
+        } if self.experiment_config['moments_analysis'] else {}
 
         momentsLD_dict = {
             "simulated_params": sample_params_storage,
             "opt_params": opt_params_momentsLD_list,
-        } if run_momentsLD else {}
+        } if self.experiment_config['momentsLD_analysis'] else {}
 
         return dadi_dict, moments_dict, momentsLD_dict

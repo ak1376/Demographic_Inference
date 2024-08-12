@@ -44,7 +44,7 @@ config_file = {
     "experiment_name": "xgboost_bottleneck",
     "dadi_analysis": True, 
     "moments_analysis": True,
-    "momentsLD_analysis": False,
+    "momentsLD_analysis": True,
     "num_windows": 50,
     "window_length": 1e5,
     "maxiter": 15,
