@@ -38,6 +38,9 @@ class Experiment_Manager:
         self.mutation_rate = config_file["mutation_rate"]
         self.recombination_rate = config_file["recombination_rate"]
         self.genome_length = config_file["genome_length"]
+        self.dadi_analysis = config_file["dadi_analysis"]
+        self.moments_analysis = config_file["moments_analysis"]
+        self.momentsLD_analysis = config_file["momentsLD_analysis"]
 
         self.create_directory(self.experiment_name)
 

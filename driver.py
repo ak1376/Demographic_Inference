@@ -5,7 +5,9 @@ import multiprocessing
 import warnings
 
 # Suppress the specific warning about delim_whitespace
-warnings.filterwarnings("ignore", message="The 'delim_whitespace' keyword in pd.read_csv is deprecated")
+warnings.filterwarnings(
+    "ignore", message="The 'delim_whitespace' keyword in pd.read_csv is deprecated"
+)
 
 
 os.chdir("Demographic_Inference")  # Feel like this is too hacky
@@ -31,7 +33,7 @@ lower_bound_params = {
 }
 
 
-num_simulations = 100
+num_simulations = 500
 num_samples = 20
 
 config_file = {
@@ -40,6 +42,9 @@ config_file = {
     "num_sims": num_simulations,
     "num_samples": num_samples,
     "experiment_name": "xgboost_bottleneck",
+    "dadi_analysis": True, 
+    "moments_analysis": True,
+    "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e5,
     "maxiter": 15,
