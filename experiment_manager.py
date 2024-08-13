@@ -29,6 +29,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from pytorch_lightning.callbacks import TQDMProgressBar
 import matplotlib.pyplot as plt
+from sklearn.model_selection import LeaveOneOut, cross_val_score
+from sklearn.metrics import make_scorer
+
 
 
 class Experiment_Manager:
@@ -210,58 +213,36 @@ class Experiment_Manager:
             np.concatenate(features_list, axis=1) if features_list else np.array([])
         )
 
+        # I want to do cross validation rather than a traditional train/test split 
+        custom_scorer = make_scorer(relative_squared_error, greater_is_better=False)
+
+        # Define the Leave-One-Out Cross-Validation strategy
+        loo = LeaveOneOut()
+
         # Now do a train test split
-        X_train, X_test, y_train, y_test = train_test_split(
-            features, targets, train_size=0.8, random_state=295
-        )
+        # X_train, X_test, y_train, y_test = train_test_split(
+        #     features, targets, train_size=0.8, random_state=295
+        # )
 
         # Feature scaling
         feature_scaler = StandardScaler()
-        X_train_scaled = feature_scaler.fit_transform(X_train)  # Fit and transform the training data
-        X_test_scaled = feature_scaler.transform(X_test)  # Transform the validation data using the same scaler
+        features_scaled = feature_scaler.fit_transform(features)
 
         # Target scaling
         target_scaler = StandardScaler()
-        y_train_scaled = target_scaler.fit_transform(y_train)
-        y_test_scaled = target_scaler.transform(y_test)
+        targets_scaled = target_scaler.fit_transform(targets)
 
-        # LINEAR REGRESSION
+        # MODEL DEFINITIONS
+
+        ## LINEAR REGRESSION
         lin_mdl = LinearRegression()
 
-        # Train the model on the training data
-        lin_mdl.fit(X_train_scaled, y_train_scaled)
+        ## XGBOOST
+        xgb_model = XGBoost(feature_names, target_names)
 
-        # Make predictions on the test data
-        y_pred_lin_mdl_train = lin_mdl.predict(X_train_scaled)
-        train_error_lin_mdl = relative_squared_error(y_train_scaled, y_pred_lin_mdl_train)
-
-        y_pred_lin_mdl_test = lin_mdl.predict(X_test_scaled)
-        test_error_lin_mdl = relative_squared_error(y_test_scaled, y_pred_lin_mdl_test)
-
-        # XGBOOST MODEL
-        train_error_xgb, validation_error_xgb, y_pred_xgb = (
-            xgb_model.train_and_validate(X_train_scaled, y_train_scaled, X_test_scaled, y_test_scaled)
-        )
-
-        print("==============================")
-
-        print(f"The Linear Regression training error is: {train_error_lin_mdl}")
-        print(f"The Linear Regression validation error is: {test_error_lin_mdl}")
-        print("==============================")
-
-        print(f"The XGBoost training error is: {train_error_xgb}")
-        print(f"The XGBoost validation error is: {validation_error_xgb}")
-
-        visualize_model_predictions(
-            y_test_scaled,
-            y_pred_lin_mdl_test,
-            target_names=target_names,
-            folder_loc=f"{self.experiment_directory}",
-        )
-
+        ## SHALLOW NEURAL NETWORK
         # Define model hyperparameters
-        # input_size = 1  # Number of features
-        input_size = features.shape[1]  # Number of features
+        input_size = features_scaled.shape[1]  # Number of features
         hidden_size = 100  # Number of neurons in the hidden layer
         output_size = 4  # Number of output classes
 
@@ -276,19 +257,38 @@ class Experiment_Manager:
         print(f"Total parameters: {total_params}")
         print(f"Trainable parameters: {trainable_params}")
 
+        # Train the linear regression model
+        linear_mdl_scores = scores = cross_val_score(lin_mdl, features_scaled, targets_scaled, cv=loo, scoring=custom_scorer)
+        mean_lin_mdl_score = scores.mean()
+
+        loss_xgb, predictions_xgb, _ = xgb_model.train_and_validate(
+            features_scaled, targets_scaled, cross_val=True
+        )
+        print(f"The Linear Regression Cross Validation error is: {mean_lin_mdl_score}")
+        print("==============================")
+        print(f"The XGBoost Cross Validation error is: {loss_xgb}")
+        print("==============================")
+
+        visualize_model_predictions(
+            y_test_scaled,
+            y_pred_lin_mdl_test,
+            target_names=target_names,
+            folder_loc=f"{self.experiment_directory}",
+        )
+
         # Convert to PyTorch tensors
-        X_train_tensor = torch.tensor(X_train_scaled, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train_scaled, dtype=torch.float32)
-        X_val_tensor = torch.tensor(X_test_scaled, dtype=torch.float32)
-        y_val_tensor = torch.tensor(y_test_scaled, dtype=torch.float32)
+        # X_train_tensor = torch.tensor(X_train_scaled, dtype=torch.float32)
+        # y_train_tensor = torch.tensor(y_train_scaled, dtype=torch.float32)
+        # X_val_tensor = torch.tensor(X_test_scaled, dtype=torch.float32)
+        # y_val_tensor = torch.tensor(y_test_scaled, dtype=torch.float32)
 
         # Create PyTorch datasets
-        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-        val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        # train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        # val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
 
         # Define DataLoaders
-        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=32)
+        # train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        # val_loader = DataLoader(val_dataset, batch_size=32)
 
         # Number of epochs to train for
         num_epochs = 8000
