@@ -5,9 +5,6 @@ from tqdm import tqdm
 import numpy as np
 import ray
 import time
-# type: ignore
-
-
 
 @ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):

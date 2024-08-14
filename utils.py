@@ -5,9 +5,9 @@ import re
 import os
 import shap
 from sklearn.inspection import PartialDependenceDisplay
+from sklearn.preprocessing import StandardScaler
 
-
-def extract_features(simulated_params, opt_params):
+def extract_features(simulated_params, opt_params, normalization = True):
     """
     opt_params can come from any of the inference methods.
     """
@@ -38,13 +38,27 @@ def extract_features(simulated_params, opt_params):
         )
     )
 
-    # Features are the optimized parameters
-    features = opt_params_array
+    if normalization:
+        # Feature scaling
+        feature_scaler = StandardScaler()
+        features = feature_scaler.fit_transform(opt_params_array)
+
+        # Target scaling
+        target_scaler = StandardScaler()
+        targets = target_scaler.fit_transform(targets)
+
+    else:
+        # Features are the optimized parameters
+        features = opt_params_array
 
     return features, targets
 
 
-def visualizing_results(results_obj, analysis, save_loc="results"):
+def visualizing_results(results_obj, analysis, save_loc="results", outlier_indices=None):
+    ''' 
+    Results object should have the following structure:
+    - simulated_params: Numpy array with dimension (num_simulations, num_params). 
+    '''
     # Extract simulated parameters
     simulated_params = results_obj["simulated_params"]
 
@@ -61,6 +75,21 @@ def visualizing_results(results_obj, analysis, save_loc="results"):
     t_bottleneck_start_opt = [d["t_bottleneck_start"] for d in opt_params]
     t_bottleneck_end_opt = [d["t_bottleneck_end"] for d in opt_params]
 
+
+    if outlier_indices is not None:
+        # Remove outliers from the data
+        simulated_params = np.delete(simulated_params, outlier_indices, axis=0)
+        Nb_sample = np.delete(Nb_sample, outlier_indices)
+        N_recover_sample = np.delete(N_recover_sample, outlier_indices)
+        t_bottleneck_start_sample = np.delete(t_bottleneck_start_sample, outlier_indices)
+        t_bottleneck_end_sample = np.delete(t_bottleneck_end_sample, outlier_indices)
+
+        opt_params = np.delete(opt_params, outlier_indices, axis=0)
+        Nb_opt = np.delete(Nb_opt, outlier_indices)
+        N_recover_opt = np.delete(N_recover_opt, outlier_indices)
+        t_bottleneck_start_opt = np.delete(t_bottleneck_start_opt, outlier_indices)
+        t_bottleneck_end_opt = np.delete(t_bottleneck_end_opt, outlier_indices)
+
     # Plotting the results
     plt.figure(figsize=(12, 8))
 
@@ -70,7 +99,8 @@ def visualizing_results(results_obj, analysis, save_loc="results"):
     plt.xlabel("Simulated Nb")
     plt.ylabel("Optimized Nb")
     plt.title("Nb: Simulated vs Optimized")
-    # plt.suptitle(f'Relative Squared Error: {sum_relative_squared_errors[0]}', fontsize=16)
+    max_value = max(max(Nb_sample), max(Nb_opt))
+    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
 
     # Plot N_recover
     plt.subplot(2, 2, 2)
@@ -78,32 +108,34 @@ def visualizing_results(results_obj, analysis, save_loc="results"):
     plt.xlabel("Simulated N_recover")
     plt.ylabel("Optimized N_recover")
     plt.title("N_recover: Simulated vs Optimized")
-    # plt.suptitle(f'Relative Squared Error: {sum_relative_squared_errors[1]}', fontsize=16)
+    max_value = max(max(N_recover_sample), max(N_recover_opt))
+    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
 
     # Plot t_bottleneck_start
     plt.subplot(2, 2, 3)
-    plt.scatter(
-        t_bottleneck_start_sample, t_bottleneck_start_opt, alpha=0.5, color="red"
-    )
+    plt.scatter(t_bottleneck_start_sample, t_bottleneck_start_opt, alpha=0.5, color="red")
     plt.xlabel("Simulated t_bottleneck_start")
     plt.ylabel("Optimized t_bottleneck_start")
     plt.title("t_bottleneck_start: Simulated vs Optimized")
-    # plt.suptitle(f'Relative Squared Error: {sum_relative_squared_errors[2]}', fontsize=16)
+    max_value = max(max(t_bottleneck_start_sample), max(t_bottleneck_start_opt))
+    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
 
     # Plot t_bottleneck_end
     plt.subplot(2, 2, 4)
-    plt.scatter(
-        t_bottleneck_end_sample, t_bottleneck_end_opt, alpha=0.5, color="purple"
-    )
+    plt.scatter(t_bottleneck_end_sample, t_bottleneck_end_opt, alpha=0.5, color="purple")
     plt.xlabel("Simulated t_bottleneck_end")
     plt.ylabel("Optimized t_bottleneck_end")
     plt.title("t_bottleneck_end: Simulated vs Optimized")
-    # plt.suptitle(f'Relative Squared Error: {sum_relative_squared_errors[3]}', fontsize=16)
+    max_value = max(max(t_bottleneck_end_sample), max(t_bottleneck_end_opt))
+    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
+
     plt.tight_layout()
     print(f"/{save_loc}/inference_results_{analysis}.png")
-    plt.savefig(f"{save_loc}/inference_results_{analysis}.png", format="png")
+    if outlier_indices is not None:
+        plt.savefig(f"{save_loc}/inference_results_{analysis}_outliers_removed.png", format="png")
+    else:
+        plt.savefig(f"{save_loc}/inference_results_{analysis}.png", format="png")
     plt.show()
-
 
 def feature_importance(
     multi_output_model, model_number, feature_names, target_names, save_loc="results"
@@ -263,16 +295,15 @@ def visualize_model_predictions(
 #     # Show the plot
 #     plt.show()
 
-
 def relative_squared_error(y_true, y_pred):
 
     # Squared difference between prediction and true value, normalized by the true value
     relative_squared_errors = ((y_pred - y_true) / y_true) ** 2
 
     # Sum the relative squared errors across all columns and take the square root
-    sum_relative_squared_errors = np.sqrt(np.sum(relative_squared_errors, axis=0))
+    root_mse = np.sqrt(np.sum(np.sum(relative_squared_errors, axis=0)))
 
-    return sum_relative_squared_errors
+    return root_mse
 
 
 def save_windows_to_vcf(windows, prefix="window"):
@@ -288,3 +319,20 @@ def save_windows_to_vcf(windows, prefix="window"):
         with open(vcf_file, "w") as vcf_output:
             window_ts.write_vcf(vcf_output)
         print(f"Saved window {i+1} to {vcf_file}")
+
+
+def find_outlier_indices(data, threshold=3):
+    """
+    Find outliers in the data using the Z-score method.
+
+    Parameters:
+    - data: Numpy array containing the data
+    - threshold: Z-score threshold for identifying outliers
+
+    Returns:
+    - outliers: Numpy array containing the outliers
+    """
+    z_scores = np.abs((data - np.mean(data, axis = 0)) / np.std(data, axis = 0))
+    outliers_indices = np.where(z_scores > threshold)[0] # I only want the rows
+
+    return outliers_indices

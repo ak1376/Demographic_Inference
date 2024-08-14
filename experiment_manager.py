@@ -13,7 +13,10 @@ import numpy as np
 from torch.utils.data import DataLoader, random_split, TensorDataset
 import torch
 import torch.optim as optim
+from torch.optim.adam import Adam
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import pickle
+
 
 from preprocess import Processor, delete_vcf_files
 from utils import (
@@ -23,15 +26,15 @@ from utils import (
     # partial_dependence_plots,
     extract_features,
     relative_squared_error,
+    find_outlier_indices,  # FUNCTION FOR DEBUGGING PURPOSES
 )
 from models import XGBoost, ShallowNN
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from pytorch_lightning.callbacks import TQDMProgressBar
 import matplotlib.pyplot as plt
-from sklearn.model_selection import LeaveOneOut, cross_val_score
+from sklearn.model_selection import LeaveOneOut, cross_val_score, cross_val_predict
 from sklearn.metrics import make_scorer
-
 
 
 class Experiment_Manager:
@@ -97,21 +100,106 @@ class Experiment_Manager:
 
         dadi_dict, moments_dict, momentsLD_dict = processor.run()
 
+        # Now save the results using pickle -- all three dictionaries
+        if self.dadi_analysis:
+            with open(
+                os.path.join(self.experiment_directory, "dadi_dict.pkl"), "wb"
+            ) as f:
+                pickle.dump(dadi_dict, f)
+
+        if self.moments_analysis:
+            with open(
+                os.path.join(self.experiment_directory, "moments_dict.pkl"), "wb"
+            ) as f:
+                pickle.dump(moments_dict, f)
+
+        if self.momentsLD_analysis:
+            with open(
+                os.path.join(self.experiment_directory, "momentsLD_dict.pkl"), "wb"
+            ) as f:
+                pickle.dump(momentsLD_dict, f)
+
+        # TODO: Change this function so that I am not a priori assuming it's dadi
+        with open(
+            os.path.join(self.experiment_directory, "generative_params.pkl"), "wb"
+        ) as f:
+            pickle.dump(dadi_dict["simulated_params"], f)
+
+        # EVERYTHING BELOW IS UNOPTIMIZED AND/OR PLACEHOLDER CODE
+        # Note that the simulated params in both the dadi_dict and moments_dict are identical
+
+        # Initialize an empty list to hold feature arrays
+        features_list = []
         feature_names = []
 
-        # I want to save the results as PNG files within the results folder
+
+        # I want to now extract the features from the dictionaries (that we will be using for analysis)
         if self.dadi_analysis:
-            visualizing_results(dadi_dict, "dadi", save_loc=self.experiment_directory)
+            features_dadi, targets = extract_features(
+                dadi_dict["simulated_params"],
+                dadi_dict["opt_params"],
+                normalization=False,
+            )
+            features_list.append(features_dadi)
+            error_value = relative_squared_error(y_true=targets, y_pred=features_dadi)
+            print(f"The error value for dadi is: {error_value}")
+            outlier_indices_dadi = find_outlier_indices(features_dadi)
+            # features_dadi_no_outliers = np.delete(features_dadi, outlier_indices_dadi, axis=0)
+            # targets_no_outliers = np.delete(targets, outlier_indices_dadi, axis=0)
+            # error_value_no_outliers = relative_squared_error(y_true=targets_no_outliers, y_pred=features_dadi_no_outliers)
+            # print(f"The error value for dadi without outliers is: {error_value_no_outliers}")
+            
+            np.savetxt(
+                os.path.join(self.experiment_directory, "outlier_indices_dadi.csv"),
+                outlier_indices_dadi,
+                delimiter=",",
+            )
+
+            visualizing_results(
+                dadi_dict,
+                "dadi",
+                save_loc=self.experiment_directory,
+                outlier_indices=outlier_indices_dadi,
+            )
             feature_names_dadi = [
                 "Nb_opt_dadi",
                 "N_recover_opt_dadi",
                 "t_bottleneck_start_opt_dadi",
                 "t_bottleneck_end_opt_dadi",
             ]
+
             feature_names.append(feature_names_dadi)
+
+
         if self.moments_analysis:
+            features_moments, targets = extract_features(
+                moments_dict["simulated_params"],
+                moments_dict["opt_params"],
+                normalization=False,
+            )
+            features_list.append(features_moments)
+            error_value = relative_squared_error(
+                y_true=targets, y_pred=features_moments
+            )
+            print(f"The error value for moments is: {error_value}")
+
+            outlier_indices_moments = find_outlier_indices(features_moments)
+            # features_moments_no_outliers = np.delete(features_moments, outlier_indices_moments, axis=0)
+            # targets_no_outliers = np.delete(targets, outlier_indices_moments, axis=0)
+            # error_value_no_outliers = relative_squared_error(y_true=targets_no_outliers, y_pred=features_moments_no_outliers)
+            # print(f"The error value for moments without outliers is: {error_value_no_outliers}")
+
+            np.savetxt(
+                os.path.join(self.experiment_directory, "outlier_indices_moments.csv"),
+                outlier_indices_moments,
+                delimiter=",",
+            )
+
             visualizing_results(
-                moments_dict, "moments", save_loc=self.experiment_directory
+                moments_dict,
+                "moments",
+                save_loc=self.experiment_directory,
+                outlier_indices=outlier_indices_moments,
             )
             feature_names_moments = [
                 "Nb_opt_moments",
@@ -120,9 +208,36 @@ class Experiment_Manager:
                 "t_bottleneck_end_opt_moments",
             ]
             feature_names.append(feature_names_moments)
+
+
         if self.momentsLD_analysis:
+            features_momentsLD, targets = extract_features(
+                momentsLD_dict["simulated_params"],
+                momentsLD_dict["opt_params"],
+                normalization=False,
+            )
+            features_list.append(features_momentsLD)
+            error_value = relative_squared_error(
+                y_true=targets, y_pred=features_moments
+            )
+            print(f"The error value for MomentsLD is: {error_value}")
+            outlier_indices_momentsLD = find_outlier_indices(features_momentsLD)
+            # features_momentsLD_no_outliers = np.delete(features_momentsLD, outlier_indices_momentsLD, axis=0)
+            # targets_no_outliers = np.delete(targets, outlier_indices_momentsLD, axis=0)
+            # error_value_no_outliers = relative_squared_error(y_true=targets_no_outliers, y_pred=features_momentsLD_no_outliers)
+            # print(f"The error value for moments without outliers is: {error_value_no_outliers}")
+
+            np.savetxt(
+                os.path.join(self.experiment_directory, "outlier_indices_momentsLD.csv"),
+                outlier_indices_momentsLD,
+                delimiter=",",
+            )
+
             visualizing_results(
-                momentsLD_dict, "MomentsLD", save_loc=self.experiment_directory
+                momentsLD_dict,
+                "MomentsLD",
+                save_loc=self.experiment_directory,
+                outlier_indices=outlier_indices_momentsLD,
             )
             feature_names_momentsLD = [
                 "Nb_opt_momentsLD",
@@ -132,6 +247,11 @@ class Experiment_Manager:
             ]
             feature_names.append(feature_names_momentsLD)
 
+        # Concatenate all available features along axis 1
+        features = (
+            np.concatenate(features_list, axis=1) if features_list else np.array([])
+        )
+
         # Reorder the elements by the element number of each sublist
         feature_names_reordered = []
 
@@ -140,7 +260,15 @@ class Experiment_Manager:
             for sublist in feature_names:
                 feature_names_reordered.append(sublist[i])
 
-        # PARAMETER INFERENCE IS COMPLETE. NOW IT'S TIME TO DO THE MACHINE LEARNING PART.
+       # 
+       
+       
+       
+       
+       
+       
+       
+       # PARAMETER INFERENCE IS COMPLETE. NOW IT'S TIME TO DO THE MACHINE LEARNING PART.
 
         # Probably not the most efficient, but placeholder for now
 
@@ -149,21 +277,6 @@ class Experiment_Manager:
             i: feature_names_reordered[i] for i in range(len(feature_names_reordered))
         }
 
-        # feature_names = {
-        #     0: "Nb_opt_dadi",
-        #     1: "Nb_opt_moments",
-        #     2: "Nb_opt_momentsLD",
-        #     3: "N_recover_opt_dadi",
-        #     4: "N_recover_opt_moments",
-        #     5: "N_recover_opt_momentsLD",
-        #     6: "t_bottleneck_start_opt_dadi",
-        #     7: "t_bottleneck_start_opt_moments",
-        #     8: "t_bottleneck_start_opt_momentsLD",
-        #     9: "t_bottleneck_end_opt_dadi",
-        #     10: "t_bottleneck_end_opt_moments",
-        #     11: "t_bottleneck_end_opt_momentsLD",
-        # }
-
         target_names = {
             0: "Nb_sample",
             1: "N_recover_sample",
@@ -171,50 +284,8 @@ class Experiment_Manager:
             3: "t_bottleneck_end_sample",
         }
 
-        # EVERYTHING BELOW IS UNOPTIMIZED AND/OR PLACEHOLDER CODE
-
-        xgb_model = XGBoost(feature_names, target_names)
-        # Note that the simulated params in both the dadi_dict and moments_dict are identical
-
-        # Initialize an empty list to hold feature arrays
-        features_list = []
-
-        # Dynamically check and append features if the corresponding analysis is being done
-        if self.dadi_analysis:
-            features_dadi, targets = extract_features(
-                dadi_dict["simulated_params"], dadi_dict["opt_params"]
-            )
-            features_list.append(features_dadi)
-            error_value = relative_squared_error(y_true=targets, y_pred=features_dadi)
-            print(f"The error value for dadi is: {error_value}")
-
-        if self.moments_analysis:
-            features_moments, targets = extract_features(
-                moments_dict["simulated_params"], moments_dict["opt_params"]
-            )
-            features_list.append(features_moments)
-            error_value = relative_squared_error(
-                y_true=targets, y_pred=features_moments
-            )
-            print(f"The error value for moments is: {error_value}")
-
-        if self.momentsLD_analysis:
-            features_momentsLD, targets = extract_features(
-                momentsLD_dict["simulated_params"], momentsLD_dict["opt_params"]
-            )
-            features_list.append(features_momentsLD)
-            error_value = relative_squared_error(
-                y_true=targets, y_pred=features_moments
-            )
-            print(f"The error value for MomentsLD is: {error_value}")
-
-        # Concatenate all available features along axis 1
-        features = (
-            np.concatenate(features_list, axis=1) if features_list else np.array([])
-        )
-
-        # I want to do cross validation rather than a traditional train/test split 
-        custom_scorer = make_scorer(relative_squared_error, greater_is_better=False)
+        # I want to do cross validation rather than a traditional train/test split
+        # custom_scorer = make_scorer(relative_squared_error, greater_is_better=False)
 
         # Define the Leave-One-Out Cross-Validation strategy
         loo = LeaveOneOut()
@@ -238,17 +309,23 @@ class Experiment_Manager:
         lin_mdl = LinearRegression()
 
         ## XGBOOST
-        xgb_model = XGBoost(feature_names, target_names)
+        xgb_model = XGBoost(feature_names, target_names, loo=loo)
 
         ## SHALLOW NEURAL NETWORK
         # Define model hyperparameters
         input_size = features_scaled.shape[1]  # Number of features
         hidden_size = 100  # Number of neurons in the hidden layer
         output_size = 4  # Number of output classes
+        num_epochs = 1000
+        learning_rate = 3e-4
 
         # Instantiate the model
         model = ShallowNN(
-            input_size=input_size, hidden_size=hidden_size, output_size=output_size
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size,
+            loo=loo,
+            experiment_directory=self.experiment_directory,
         )
         # Calculate the number of parameters
         total_params = sum(p.numel() for p in model.parameters())
@@ -258,129 +335,102 @@ class Experiment_Manager:
         print(f"Trainable parameters: {trainable_params}")
 
         # Train the linear regression model
-        linear_mdl_scores = scores = cross_val_score(lin_mdl, features_scaled, targets_scaled, cv=loo, scoring=custom_scorer)
-        mean_lin_mdl_score = scores.mean()
-
-        loss_xgb, predictions_xgb, _ = xgb_model.train_and_validate(
-            features_scaled, targets_scaled, cross_val=True
+        linear_mdl_scores = cross_val_score(
+            lin_mdl,
+            features_scaled,
+            targets_scaled,
+            cv=loo,
+            scoring="neg_mean_squared_error",
         )
-        print(f"The Linear Regression Cross Validation error is: {mean_lin_mdl_score}")
-        print("==============================")
-        print(f"The XGBoost Cross Validation error is: {loss_xgb}")
-        print("==============================")
+        mean_lin_mdl_score = -1 * linear_mdl_scores.mean()
 
-        visualize_model_predictions(
-            y_test_scaled,
-            y_pred_lin_mdl_test,
-            target_names=target_names,
-            folder_loc=f"{self.experiment_directory}",
+        linear_mdl_predictions = cross_val_predict(
+            lin_mdl, features_scaled, targets_scaled, cv=loo
         )
 
-        # Convert to PyTorch tensors
-        # X_train_tensor = torch.tensor(X_train_scaled, dtype=torch.float32)
-        # y_train_tensor = torch.tensor(y_train_scaled, dtype=torch.float32)
-        # X_val_tensor = torch.tensor(X_test_scaled, dtype=torch.float32)
-        # y_val_tensor = torch.tensor(y_test_scaled, dtype=torch.float32)
+        # Convert the array to a list of dictionaries
+        param_names = ["Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
+        opt_params = [
+            {
+                param_names[j]: linear_mdl_predictions[i, j]
+                for j in range(linear_mdl_predictions.shape[1])
+            }
+            for i in range(linear_mdl_predictions.shape[0])
+        ]
 
-        # Create PyTorch datasets
-        # train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-        # val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        linear_mdl_obj = {}
+        linear_mdl_obj["model"] = lin_mdl
+        linear_mdl_obj["opt_params"] = opt_params
 
-        # Define DataLoaders
-        # train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-        # val_loader = DataLoader(val_dataset, batch_size=32)
+        # Convert the array to a list of dictionaries
+        # Extract the keys (assuming all dictionaries have the same keys)
 
-        # Number of epochs to train for
-        num_epochs = 8000
-        optimizer = optim.Adam(model.parameters(), lr=3e-4)  # Adam optimizer
-        criterion = torch.nn.MSELoss()
+        # keys = dadi_dict['simulated_params'][0].keys()
 
-        train_losses = []
-        val_losses = []
-        train_epoch_losses = []
-        val_epoch_losses = []
+        # # Create the array where each column corresponds to values of a specific key
+        # array = np.array([[d[key] for d in dadi_dict['simulated_params']] for key in keys]).T
 
-        train_predictions = []
-        train_targets = []
-        val_predictions = []
-        val_targets = []
+        simulated_params = [
+            {
+                param_names[j]: targets_scaled[i, j]
+                for j in range(linear_mdl_predictions.shape[1])
+            }
+            for i in range(linear_mdl_predictions.shape[0])
+        ]
 
-        for epoch in range(num_epochs):
-            model.train()  # Set model to training mode
-            running_train_loss = 0.0
+        linear_mdl_obj["simulated_params"] = simulated_params
 
-            # Training loop
-            for batch_idx, (inputs, targets) in enumerate(train_loader):
-                inputs = inputs.unsqueeze(1)  # Add a channel dimension
-                targets = targets.unsqueeze(1)  # Add a channel dimension
-                optimizer.zero_grad()  # Zero the parameter gradients
-                outputs = model(inputs)  # Forward pass
-                loss = criterion(outputs, targets)  # Compute loss
-                loss.backward()  # Backward pass
-                optimizer.step()  # Update weights
+        # targets
+        visualizing_results(
+            linear_mdl_obj, "linear_results", save_loc=self.experiment_directory
+        )
 
-                running_train_loss += loss.item()
-                train_losses.append(loss.item())  # Log batch training loss
+        # loss_xgb, predictions_xgb, _ = xgb_model.train_and_validate(
+        #     features_scaled, targets_scaled, cross_val=True
+        # )
 
-                # Store batch predictions and targets for training
-                train_predictions.append(outputs.detach().cpu())
-                train_targets.append(targets.detach().cpu())
+        (
+            average_val_loss_snn,
+            predictions_snn,
+            all_train_loss_curves_snn,
+            all_val_loss_curves_snn,
+        ) = model.cross_validate(
+            features_scaled,
+            targets_scaled,
+            num_epochs=num_epochs,
+            learning_rate=learning_rate,
+        )
 
-            avg_train_loss = running_train_loss / len(train_loader)
-            train_epoch_losses.append(avg_train_loss)  # Log epoch training loss
+        opt_params = [
+            {
+                param_names[j]: predictions_snn[i, j]
+                for j in range(predictions_snn.shape[1])
+            }
+            for i in range(predictions_snn.shape[0])
+        ]
 
-            # Validation loop
-            model.eval()
-            running_val_loss = 0.0
-            with torch.no_grad():
-                for batch_idx, (inputs, targets) in enumerate(val_loader):
-                    inputs = inputs.unsqueeze(1)  # Add a channel dimension
-                    targets = targets.unsqueeze(1)  # Add a channel dimension
-                    outputs = model(inputs)
-                    loss = criterion(outputs, targets)
+        snn_mdl_obj = {}
+        snn_mdl_obj["model"] = model
+        snn_mdl_obj["opt_params"] = opt_params
+        snn_mdl_obj["simulated_params"] = simulated_params
 
-                    running_val_loss += loss.item()
-                    val_losses.append(loss.item())  # Log batch validation loss
+        visualizing_results(
+            snn_mdl_obj, "snn_results", save_loc=self.experiment_directory
+        )
 
-                    # Store batch predictions and targets for validation
-                    val_predictions.append(outputs.detach().cpu())
-                    val_targets.append(targets.detach().cpu())
+        model.plot_loss_curves(all_train_loss_curves_snn, all_val_loss_curves_snn)
 
-            avg_val_loss = running_val_loss / len(val_loader)
-            val_epoch_losses.append(avg_val_loss)  # Log epoch validation loss
+        # CALCULATE THE RELATIVE LOSS IN PARAMETERS FOR EACH MODEL
+        linear_mdl_error = relative_squared_error(
+            targets_scaled, linear_mdl_predictions
+        )
+        # xgb_error = relative_squared_error(targets_scaled, predictions_xgb)
+        snn_error = relative_squared_error(targets_scaled, predictions_snn)
 
-            # Print average loss for the epoch
-            print(f"Epoch [{epoch+1}/{num_epochs}], "
-                f"Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
-
-        # Convert lists of batch predictions and targets to tensors
-        train_predictions = torch.cat(train_predictions, dim=0)
-        train_targets = torch.cat(train_targets, dim=0)
-        val_predictions = torch.cat(val_predictions, dim=0)
-        val_targets = torch.cat(val_targets, dim=0)
-
-        # Plot the loss curves
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_losses, label="Training Loss (Batch)")
-        plt.plot(val_losses, label="Validation Loss (Batch)")
-        plt.xlabel("Batch Number")
-        plt.ylabel("Log Loss")
-        plt.title("Training and Validation Loss Curves")
-        plt.yscale('log')  # Set y-axis to logarithmic scale
-        plt.legend()
-        plt.show()
-        plt.savefig(f"{self.experiment_directory}/loss_curves_shallow_nn.png")
-
-        # Optionally, plot the epoch average losses
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_epoch_losses, label="Training Loss (Epoch Average)")
-        plt.plot(val_epoch_losses, label="Validation Loss (Epoch Average)")
-        plt.xlabel("Epoch Number")
-        plt.ylabel("Log Average Loss")
-        plt.title("Training and Validation Loss Curves (Epoch Average)")
-        plt.yscale('log')  # Set y-axis to logarithmic scale
-        plt.legend()
-        plt.show()
-        plt.savefig(f"{self.experiment_directory}/epoch_loss_curves_shallow_nn.png")
+        # print(f"The Linear Regression Cross Validation error is: {mean_lin_mdl_score}")
+        # print("==============================")
+        # print(f"The XGBoost Cross Validation error is: {loss_xgb}")
+        # print("==============================")
+        # print(f"The Shallow Neural Network Cross Validation error is: {average_val_loss_snn}")
 
         print("Training complete!")
