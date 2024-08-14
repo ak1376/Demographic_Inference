@@ -21,7 +21,7 @@ upper_bound_params = {
     "Nb": 2000,
     "N_recover": 8000,
     "t_bottleneck_end": 1000,
-    "t_bottleneck_start": 5000,  # In generations
+    "t_bottleneck_start": 2000,  # In generations
 }
 
 lower_bound_params = {
@@ -29,7 +29,7 @@ lower_bound_params = {
     "Nb": 1000,
     "N_recover": 4000,
     "t_bottleneck_end": 800,
-    "t_bottleneck_start": 2000,  # In generations
+    "t_bottleneck_start": 1500,  # In generations
 }
 
 
