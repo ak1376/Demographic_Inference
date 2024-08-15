@@ -297,13 +297,12 @@ def visualize_model_predictions(
 
 def root_mean_squared_error(y_true, y_pred):
 
-    # Squared difference between prediction and true value, normalized by the true value
-    relative_squared_errors = ((y_pred - y_true) / y_true) ** 2
-
-    # Sum the relative squared errors across all columns and take the square root
-    root_mse = np.sqrt(np.sum(np.sum(relative_squared_errors, axis=0)))
-
-    return root_mse
+    relative_error = (y_pred - y_true) / y_true
+    squared_relative_error = np.square(relative_error)
+    mean_squared_relative_error = np.sum(np.mean(squared_relative_error, axis = 0))
+    rrmse_value = np.sqrt(mean_squared_relative_error)
+    
+    return rrmse_value
 
 
 def save_windows_to_vcf(windows, prefix="window"):

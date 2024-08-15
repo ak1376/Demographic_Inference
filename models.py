@@ -2,7 +2,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 import xgboost as xgb
 import numpy as np
-from utils import relative_squared_error
+from utils import root_mean_squared_error
 
 import torch
 import torch.nn as nn
@@ -96,10 +96,10 @@ class XGBoost:
             y_pred_test = self.xgb_model.predict(X_test)
 
             # Calculate training and validation errors
-            train_error = relative_squared_error(
+            train_error = root_mean_squared_error(
                 y_train, self.xgb_model.predict(X_train)
             )
-            validation_error = relative_squared_error(y_test, y_pred_test)
+            validation_error = root_mean_squared_error(y_test, y_pred_test)
 
             return train_error, validation_error, y_pred_test
 

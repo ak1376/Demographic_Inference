@@ -130,7 +130,7 @@ def process_single_simulation(
         model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi_func(
             sfs,
             p0=[0.25, 0.75, 0.1, 0.05],
-            lower_bound=[0.01, 0.01, 0.01, 0.01],
+            lower_bound=[0.001, 0.001, 0.001, 0.001],
             upper_bound=[10, 10, 10, 10],
             sampled_params=sampled_params,
             num_samples=num_samples,
@@ -149,7 +149,7 @@ def process_single_simulation(
             run_inference_moments_func(
                 sfs,
                 p0=[0.25, 0.75, 0.1, 0.05],
-                lower_bound=[0.01, 0.01, 0.01, 0.01],
+                lower_bound=[0.001, 0.001, 0.001, 0.001],
                 upper_bound=[10, 10, 10, 10],
                 sampled_params=sampled_params,
                 maxiter=maxiter,

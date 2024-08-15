@@ -51,13 +51,13 @@ def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
 
     return results
 
-
+#TODO: Get rid of sampled_params 
 def run_inference_dadi(
     sfs,
     p0,
     sampled_params,
     num_samples,
-    lower_bound=[0.01, 0.01, 0.01, 0.01],
+    lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[10, 10, 10, 10],
     maxiter=20,
 ):
@@ -105,7 +105,7 @@ def run_inference_moments(
     sfs,
     p0,
     sampled_params,
-    lower_bound=[0.01, 0.01, 0.01, 0.01],
+    lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[10, 10, 10, 10],
     maxiter=20,
 ):
@@ -117,7 +117,7 @@ def run_inference_moments(
     )
 
     model_func = moments.Demographics1D.three_epoch
-    opt_params = moments.Inference.optimize_log_fmin(
+    opt_params = moments.Inference.optimize_log_lbfgsb(
         p_guess,
         sfs,
         model_func,

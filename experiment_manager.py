@@ -352,12 +352,16 @@ class Experiment_Manager:
         # )
 
         # Feature scaling
-        feature_scaler = StandardScaler()
-        features_scaled = feature_scaler.fit_transform(features)
+        # feature_scaler = StandardScaler()
+        # features_scaled = feature_scaler.fit_transform(features)
 
-        # Target scaling
-        target_scaler = StandardScaler()
-        targets_scaled = target_scaler.fit_transform(resampled_targets)
+        # # Target scaling
+        # target_scaler = StandardScaler()
+        # targets_scaled = target_scaler.fit_transform(resampled_targets)
+
+        # If we don't want to do scaling. #TODO: option for later. 
+        features_scaled = features
+        targets_scaled = targets
 
         # MODEL DEFINITIONS
 
@@ -504,4 +508,4 @@ class Experiment_Manager:
     def inference(self, vcf_file):
 
         pass 
-    
+
