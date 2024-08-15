@@ -57,5 +57,6 @@ ray.init(
     num_cpus=os.cpu_count(), local_mode=False
 )  # Initialize Ray with all available CPU cores
 linear_experiment = Experiment_Manager(config_file)
-linear_experiment.run()
+linear_experiment.pretrain()
+# linear_experiment.inference()
 ray.shutdown()

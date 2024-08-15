@@ -295,7 +295,7 @@ def visualize_model_predictions(
 #     # Show the plot
 #     plt.show()
 
-def relative_squared_error(y_true, y_pred):
+def root_mean_squared_error(y_true, y_pred):
 
     # Squared difference between prediction and true value, normalized by the true value
     relative_squared_errors = ((y_pred - y_true) / y_true) ** 2
@@ -336,3 +336,31 @@ def find_outlier_indices(data, threshold=3):
     outliers_indices = np.where(z_scores > threshold)[0] # I only want the rows
 
     return outliers_indices
+
+
+def resample_to_match_row_count(arr, target_rows, return_indices=False):
+    # If the array already has the target number of rows, return it as is
+    if arr.shape[0] == target_rows:
+        if return_indices:
+            return arr, np.arange(arr.shape[0])
+        else:
+            return arr
+    
+    # Calculate the number of repetitions needed
+    num_repeats = target_rows // arr.shape[0]
+    remainder = target_rows % arr.shape[0]
+    
+    # Generate indices for repetition
+    indices = np.tile(np.arange(arr.shape[0]), num_repeats)
+    
+    # If there is a remainder, add additional indices
+    if remainder > 0:
+        indices = np.concatenate([indices, np.arange(remainder)])
+    
+    # Resample the array using the calculated indices
+    resampled_array = arr[indices, :]
+    
+    if return_indices:
+        return resampled_array, indices
+    else:
+        return resampled_array
