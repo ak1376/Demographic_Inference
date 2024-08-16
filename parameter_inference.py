@@ -88,6 +88,8 @@ def run_inference_dadi(
 
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
 
+    
+
     opt_params_dict = {
         "N0": sampled_params["N0"],
         "Nb": opt_params[0] * sampled_params["N0"],

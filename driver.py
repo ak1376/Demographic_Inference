@@ -15,7 +15,6 @@ warnings.filterwarnings(
 total_cores = multiprocessing.cpu_count()
 
 
-# Let's define
 upper_bound_params = {
     "N0": 10000,
     "Nb": 2000,
@@ -49,9 +48,9 @@ config_file = {
     "num_windows": 50,
     "window_length": 1e5,
     "maxiter": 100,
-    "genome_length": 1e7,
-    "mutation_rate": 1.5e-8,
-    "recombination_rate": 1.5e-8,
+    "genome_length": 1e8,
+    "mutation_rate": 1.26e-8,
+    "recombination_rate": 1.007e-8,
 }
 
 ray.init(

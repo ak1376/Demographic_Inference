@@ -16,6 +16,22 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ray
 
+def root_mean_squared_error(y_true, y_pred):
+    '''
+    This RMSE function calculates the relative error between predictions and true values,
+    then computes the root mean squared error using PyTorch.
+    '''
+    # Calculate the relative error
+    relative_error = (y_pred - y_true) / y_true
+    
+    # Square the relative error
+    squared_relative_error = torch.square(relative_error)
+    
+    # Sum the squared errors across the second dimension (axis=1) and then take the mean
+    rrmse_value = torch.sqrt(torch.mean(torch.sum(squared_relative_error, dim=1)))
+    
+    return rrmse_value
+
 
 class XGBoost:
     def __init__(
@@ -104,6 +120,13 @@ class XGBoost:
             return train_error, validation_error, y_pred_test
 
 
+import torch
+import torch.nn as nn
+from torch.optim import Adam
+import ray
+import numpy as np
+import matplotlib.pyplot as plt
+
 class ShallowNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, loo, experiment_directory):
         super(ShallowNN, self).__init__()
@@ -116,7 +139,6 @@ class ShallowNN(nn.Module):
     def forward(self, x):
         x = torch.relu(self.layer1(x))
         x = torch.relu(self.layer2(x))
-        # x = (self.hidden_layer(x))
         x = self.output_layer(x)
         return x
 
@@ -124,10 +146,6 @@ class ShallowNN(nn.Module):
     def train_and_evaluate(
         self, X_train, y_train, X_val, y_val, num_epochs=10, learning_rate=0.001
     ):
-        """
-        Train the model and return the training and validation loss curves.
-        This is a remote function that will be run in parallel using Ray.
-        """
         model = ShallowNN(
             input_size=X_train.shape[1],
             hidden_size=self.layer1.out_features,
@@ -150,19 +168,16 @@ class ShallowNN(nn.Module):
             train_loss.backward()
             optimizer.step()
 
-            # Evaluate on the validation set
             model.eval()
             with torch.no_grad():
                 val_outputs = model(X_val)
                 val_loss = criterion(val_outputs, y_val)
 
-            # Record the training and validation loss for this epoch
             train_loss_curve.append(train_loss.item())
             val_loss_curve.append(val_loss.item())
 
-            model.train()  # Return to training mode for the next epoch
+            model.train()
 
-        # Evaluate on the validation set and store predictions
         model.eval()
         with torch.no_grad():
             y_pred = model(X_val)
@@ -171,30 +186,23 @@ class ShallowNN(nn.Module):
         return train_loss_curve, val_loss_curve, y_pred.numpy(), val_loss
 
     def cross_validate(self, X, y, num_epochs=10, learning_rate=0.001):
-        """
-        Perform Leave-One-Out Cross-Validation using Ray for parallel processing,
-        return predictions, and record loss curves.
-        """
         loo = self.loo
         validation_losses = []
-        predictions = np.zeros_like(y)  # To store predictions for each sample
+        predictions = np.zeros_like(y)
         all_train_loss_curves = []
         all_val_loss_curves = []
 
         X_tensor = torch.tensor(X, dtype=torch.float32)
         y_tensor = torch.tensor(y, dtype=torch.float32)
 
-        total_splits = loo.get_n_splits(X)  # Get the total number of splits
+        total_splits = loo.get_n_splits(X)
 
-        # List to store Ray remote object references
         futures = []
 
-        # Submit Ray tasks for each fold
         for train_index, val_index in loo.split(X):
             X_train, X_val = X_tensor[train_index], X_tensor[val_index]
             y_train, y_val = y_tensor[train_index], y_tensor[val_index]
 
-            # Submit the training and evaluation task to Ray
             futures.append(
                 self.train_and_evaluate.remote(
                     self,
@@ -207,61 +215,61 @@ class ShallowNN(nn.Module):
                 )
             )
 
-        # Gather results from Ray tasks
         results = ray.get(futures)
 
-        for i, (train_loss_curve, val_loss_curve, y_pred, val_loss) in enumerate(
-            results
-        ):
-            # Store the loss curves and validation loss
+        for i, (train_loss_curve, val_loss_curve, y_pred, val_loss) in enumerate(results):
             all_train_loss_curves.append(train_loss_curve)
             all_val_loss_curves.append(val_loss_curve)
             validation_losses.append(val_loss)
-
-            # Store the predictions
             predictions[i] = y_pred
 
-        # Calculate the average validation loss across all folds
         average_val_loss = np.mean(validation_losses)
         print(f"Average Validation Loss (LOO-CV): {average_val_loss}")
 
         return average_val_loss, predictions, all_train_loss_curves, all_val_loss_curves
 
+    #TODO: Need to add num_epochs and learning_rate as arguments
+    def train_on_full_data(self, X, y, num_epochs=1000, learning_rate=3e-4):
+        model = ShallowNN(
+            input_size=X.shape[1],
+            hidden_size=self.layer1.out_features,
+            output_size=self.output_layer.out_features,
+            loo=self.loo,
+            experiment_directory=self.experiment_directory,
+        )
+
+        criterion = nn.MSELoss()
+        optimizer = Adam(model.parameters(), lr=learning_rate)
+
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        y_tensor = torch.tensor(y, dtype=torch.float32)
+
+        model.train()
+        for epoch in range(num_epochs):
+            optimizer.zero_grad()
+            outputs = model(X_tensor)
+            loss = criterion(outputs, y_tensor)
+            loss.backward()
+            optimizer.step()
+
+        # Save the trained model
+        model_path = f"{self.experiment_directory}/final_model.pth"
+        torch.save(model.state_dict(), model_path)
+        print(f"Model saved to {model_path}")
+
     def plot_loss_curves(self, all_train_loss_curves, all_val_loss_curves):
-        """
-        Plot only the average training and validation loss curves across all folds.
-        """
         def average_across_sublists(sublists):
-            """
-            Calculate the average of elements at each position across multiple sublists.
-            """
             return [sum(values) / len(values) for values in zip(*sublists)]
 
-        # Calculate the average loss curves
         avg_train_loss_curve = average_across_sublists(all_train_loss_curves)
         avg_val_loss_curve = average_across_sublists(all_val_loss_curves)
 
         plt.figure()
-
-        # Plot the average loss curves
-        plt.plot(
-            avg_train_loss_curve,
-            label="Average Train Loss Curve",
-            color="blue",
-            linewidth=2,
-        )
-        plt.plot(
-            avg_val_loss_curve,
-            label="Average Val Loss Curve",
-            color="red",
-            linewidth=2,
-        )
-
+        plt.plot(avg_train_loss_curve, label="Average Train Loss Curve", color="blue", linewidth=2)
+        plt.plot(avg_val_loss_curve, label="Average Val Loss Curve", color="red", linewidth=2)
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.title("Average Training and Validation Loss Curves (LOO-CV)")
         plt.legend()
         plt.show()
-        plt.savefig(
-            f"{self.experiment_directory}/shallow_nn_loss_curves.png", format="png"
-        )
+        plt.savefig(f"{self.experiment_directory}/shallow_nn_loss_curves.png", format="png")

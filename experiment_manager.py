@@ -361,7 +361,10 @@ class Experiment_Manager:
 
         # If we don't want to do scaling. #TODO: option for later. 
         features_scaled = features
-        targets_scaled = targets
+        try:
+            targets_scaled = resampled_targets
+        except UnboundLocalError as e:
+            targets_scaled = targets            
 
         # MODEL DEFINITIONS
 
@@ -394,19 +397,27 @@ class Experiment_Manager:
         print(f"Total parameters: {total_params}")
         print(f"Trainable parameters: {trainable_params}")
 
+
+        # Create a custom scorer using make_scorer
+        custom_scorer = make_scorer(root_mean_squared_error, greater_is_better=False)
+
         # Train the linear regression model
         linear_mdl_scores = cross_val_score(
             lin_mdl,
             features_scaled,
             targets_scaled,
             cv=loo,
-            scoring="neg_mean_squared_error",
+            scoring=custom_scorer
         )
+
         mean_lin_mdl_score = -1 * linear_mdl_scores.mean()
 
         linear_mdl_predictions = cross_val_predict(
             lin_mdl, features_scaled, targets_scaled, cv=loo
         )
+
+        # Optionally, retrain on the entire dataset
+        lin_mdl.fit(features_scaled, targets_scaled)
 
         # Convert the array to a list of dictionaries
         param_names = ["Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
@@ -448,13 +459,7 @@ class Experiment_Manager:
         # loss_xgb, predictions_xgb, _ = xgb_model.train_and_validate(
         #     features_scaled, targets_scaled, cross_val=True
         # )
-
-        (
-            average_val_loss_snn,
-            predictions_snn,
-            all_train_loss_curves_snn,
-            all_val_loss_curves_snn,
-        ) = model.cross_validate(
+        average_val_loss_snn, predictions_snn,all_train_loss_curves_snn, all_val_loss_curves_snn = model.cross_validate(
             features_scaled,
             targets_scaled,
             num_epochs=num_epochs,
@@ -469,6 +474,10 @@ class Experiment_Manager:
             for i in range(predictions_snn.shape[0])
         ]
 
+        model.train_on_full_data(torch.tensor(features_scaled, dtype = torch.float32), torch.tensor(targets_scaled, dtype = torch.float32), num_epochs=num_epochs, learning_rate=learning_rate)
+        # Load the saved model state dictionary
+        model.load_state_dict(torch.load('/sietch_colab/akapoor/experiments/linear_model_bottleneck/final_model.pth'))
+
         snn_mdl_obj = {}
         snn_mdl_obj["model"] = model
         snn_mdl_obj["opt_params"] = opt_params
@@ -480,6 +489,14 @@ class Experiment_Manager:
 
         model.plot_loss_curves(all_train_loss_curves_snn, all_val_loss_curves_snn)
 
+        # Let's do a check to see if the model has actually trained properly
+        model.eval() 
+        features_check = model(torch.tensor(features_scaled[0,:], dtype = torch.float32))
+        print(f"Features: {features_scaled[0,:]}")
+        print(f"Predictions: {features_check}")
+        print(f'Actual: {targets_scaled[0,:]}')
+        
+        
         # CALCULATE THE RELATIVE LOSS IN PARAMETERS FOR EACH MODEL
         linear_mdl_error = root_mean_squared_error(
             targets_scaled, linear_mdl_predictions
@@ -498,10 +515,10 @@ class Experiment_Manager:
         # print("==============================")
         # print(f"The Shallow Neural Network Cross Validation error is: {average_val_loss_snn}")
 
-        joblib.dump(model, f"{self.experiment_directory}/linear_regression_model.pkl")
-        torch.save(
-            model.state_dict(), f"{self.experiment_directory}/neural_network_model.pth"
-        )
+        joblib.dump(lin_mdl, f"{self.experiment_directory}/linear_regression_model.pkl")
+        # torch.save(
+        #     model.state_dict(), f"{self.experiment_directory}/neural_network_model.pth"
+        # )
 
         print("Training complete!")
 

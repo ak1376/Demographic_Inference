@@ -296,11 +296,12 @@ def visualize_model_predictions(
 #     plt.show()
 
 def root_mean_squared_error(y_true, y_pred):
-
+    '''
+    Note that this formula is a bit different than for the competition. This is because we have multiple simulations instead of 1 evaluation simulation. 
+    '''
     relative_error = (y_pred - y_true) / y_true
     squared_relative_error = np.square(relative_error)
-    mean_squared_relative_error = np.sum(np.mean(squared_relative_error, axis = 0))
-    rrmse_value = np.sqrt(mean_squared_relative_error)
+    rrmse_value = np.sqrt(np.mean(np.sum(squared_relative_error, axis = 1)))
     
     return rrmse_value
 

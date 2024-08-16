@@ -344,11 +344,14 @@ class Processor:
 
             demes_model = demography.to_demes()
 
+            # Need to calculate theta 
+            theta = 4*sampled_params['N0']*self.mutation_rate
+
             sfs = dadi.Demes.SFS(
                 demes_model,
                 sampled_demes=["A"],
                 sample_sizes=[2 * self.num_samples],
-                pts=4 * self.num_samples,
+                pts=4 * self.num_samples
             )
 
         else:
@@ -357,7 +360,7 @@ class Processor:
             """
             pass
 
-        return sfs
+        return theta * sfs
 
     def run(self):
 
@@ -433,6 +436,7 @@ class Processor:
                 opt_params_momentsLD_list.append(result["opt_params_momentsLD"])
 
         # Create the output dictionaries
+
         dadi_dict = (
             {
                 "model_sfs": model_sfs,
