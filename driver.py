@@ -32,7 +32,7 @@ lower_bound_params = {
 }
 
 
-num_simulations = 20
+num_simulations = 1000
 num_samples = 20
 #TODO: Add an option where I can specify some text to place in a readme for this experiment. 
 # TODO: Add an option whether I want to do feature and target standardization.

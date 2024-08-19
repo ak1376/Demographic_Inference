@@ -98,8 +98,8 @@ class Experiment_Manager:
         """
 
         ray.init(
-        num_cpus=os.cpu_count(), local_mode=False
-        ) # This is a placeholder for now.
+            num_cpus=os.cpu_count(), local_mode=False
+        )  # This is a placeholder for now.
 
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
@@ -363,14 +363,14 @@ class Experiment_Manager:
         # target_scaler = StandardScaler()
         # targets_scaled = target_scaler.fit_transform(resampled_targets)
 
-        # If we don't want to do scaling. #TODO: option for later. 
+        # If we don't want to do scaling. #TODO: option for later.
         features_scaled = features
 
-        #TODO: Remove this try/except block later.
+        # TODO: Remove this try/except block later.
         try:
             targets_scaled = resampled_targets
         except UnboundLocalError as e:
-            targets_scaled = targets 
+            targets_scaled = targets
 
         ## LINEAR REGRESSION
         lin_mdl = LinearRegression()
@@ -433,56 +433,49 @@ class Experiment_Manager:
         #     features_scaled, targets_scaled, cross_val=True
         # )
 
-        ray.shutdown()           
+        ray.shutdown()
 
         # MODEL DEFINITIONS
         # Initialize Ray with both CPU and GPU resources
-        ray.init(num_cpus=os.cpu_count(), num_gpus=1, local_mode=False)
+        ray.init(num_cpus=os.cpu_count(), num_gpus=3, local_mode=False)
 
         ## SHALLOW NEURAL NETWORK
         # Define model hyperparameters
-        #TODO: This should be in the config file
+        # TODO: This should be in the config file
         input_size = features_scaled.shape[1]  # Number of features
         hidden_size = 50  # Number of neurons in the hidden layer
         output_size = 4  # Number of output classes
-        num_epochs = 100
+        num_epochs = 8000
         learning_rate = 3e-4
         num_layers = 4
 
+        model_config = {
+            "input_size": input_size,
+            "hidden_size": hidden_size,
+            "output_size": output_size,
+            "num_layers": num_layers
+        }
+
         # Set the device to GPU if available, otherwise use CPU
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-        # Instantiate the model
-        model = ShallowNN(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            output_size=output_size,
-            loo=loo,
-            experiment_directory=self.experiment_directory,
-            num_layers = num_layers, 
-            device = device
-        )
-
-        model = model.to(device)
-        # Calculate the number of parameters
-        total_params = sum(p.numel() for p in model.parameters())
-        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-        print(f"Total parameters: {total_params}")
-        print(f"Trainable parameters: {trainable_params}")
-
+        import time
+        start_time = time.time()
         (
-            average_val_loss_snn,
+            average_val_loss,
             predictions_snn,
             all_train_loss_curves_snn,
             all_val_loss_curves_snn,
-        ) = model.cross_validate(
-            features_scaled,
-            targets_scaled,
+        ) = ShallowNN.cross_validate(
+            X=features_scaled,
+            y=targets_scaled,
+            model_config=model_config,
             num_epochs=num_epochs,
             learning_rate=learning_rate,
         )
+        end_time = time.time()
+
+        print(f'Time taken for cross validation: {end_time - start_time}')
 
         opt_params = [
             {
@@ -493,7 +486,6 @@ class Experiment_Manager:
         ]
 
         snn_mdl_obj = {}
-        snn_mdl_obj["model"] = model
         snn_mdl_obj["opt_params"] = opt_params
         snn_mdl_obj["simulated_params"] = simulated_params
 
@@ -501,7 +493,11 @@ class Experiment_Manager:
             snn_mdl_obj, "snn_results", save_loc=self.experiment_directory
         )
 
-        model.plot_loss_curves(all_train_loss_curves_snn, all_val_loss_curves_snn)
+        ShallowNN.plot_loss_curves(
+            all_train_loss_curves_snn,
+            all_val_loss_curves_snn,
+            save_path=f"{self.experiment_directory}/loss_curves.png",
+        )
 
         # CALCULATE THE RELATIVE LOSS IN PARAMETERS FOR EACH MODEL
         linear_mdl_error = root_mean_squared_error(
@@ -516,8 +512,15 @@ class Experiment_Manager:
             file.write(f"SNN Error: {snn_error}\n")
 
         # Retrain the neural network on the entire dataset
-        model.train_on_full_data(
-            features_scaled, targets_scaled, num_epochs=num_epochs, learning_rate=learning_rate
+        model = ShallowNN.train_on_full_data(
+            X=features_scaled,
+            y=targets_scaled,
+            input_size=model_config["input_size"],
+            hidden_size=model_config["hidden_size"],
+            output_size=model_config["output_size"],
+            num_layers=model_config["num_layers"],
+            num_epochs=num_epochs,
+            learning_rate=learning_rate
         )
 
         # print(f"The Linear Regression Cross Validation error is: {mean_lin_mdl_score}")
@@ -535,5 +538,4 @@ class Experiment_Manager:
 
     def inference(self, vcf_file):
 
-        pass 
-
+        pass
