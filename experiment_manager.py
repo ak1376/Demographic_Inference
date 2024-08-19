@@ -16,7 +16,7 @@ import torch.optim as optim
 from torch.optim.adam import Adam
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pickle
-
+import ray
 
 from preprocess import Processor, delete_vcf_files
 from utils import (
@@ -96,6 +96,10 @@ class Experiment_Manager:
         """
         This should do the preprocessing, inference, etc.
         """
+
+        ray.init(
+        num_cpus=os.cpu_count(), local_mode=False
+        ) # This is a placeholder for now.
 
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
@@ -361,38 +365,15 @@ class Experiment_Manager:
 
         # If we don't want to do scaling. #TODO: option for later. 
         features_scaled = features
-        targets_scaled = targets
 
-        # MODEL DEFINITIONS
+        #TODO: Remove this try/except block later.
+        try:
+            targets_scaled = resampled_targets
+        except UnboundLocalError as e:
+            targets_scaled = targets 
 
         ## LINEAR REGRESSION
         lin_mdl = LinearRegression()
-
-        ## XGBOOST
-        xgb_model = XGBoost(feature_names, target_names, loo=loo)
-
-        ## SHALLOW NEURAL NETWORK
-        # Define model hyperparameters
-        input_size = features_scaled.shape[1]  # Number of features
-        hidden_size = 100  # Number of neurons in the hidden layer
-        output_size = 4  # Number of output classes
-        num_epochs = 1000
-        learning_rate = 3e-4
-
-        # Instantiate the model
-        model = ShallowNN(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            output_size=output_size,
-            loo=loo,
-            experiment_directory=self.experiment_directory,
-        )
-        # Calculate the number of parameters
-        total_params = sum(p.numel() for p in model.parameters())
-        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-        print(f"Total parameters: {total_params}")
-        print(f"Trainable parameters: {trainable_params}")
 
         # Train the linear regression model
         linear_mdl_scores = cross_val_score(
@@ -407,6 +388,9 @@ class Experiment_Manager:
         linear_mdl_predictions = cross_val_predict(
             lin_mdl, features_scaled, targets_scaled, cv=loo
         )
+
+        # Train the linear regression model on the entire dataset
+        lin_mdl.fit(features_scaled, targets_scaled)
 
         # Convert the array to a list of dictionaries
         param_names = ["Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
@@ -448,6 +432,45 @@ class Experiment_Manager:
         # loss_xgb, predictions_xgb, _ = xgb_model.train_and_validate(
         #     features_scaled, targets_scaled, cross_val=True
         # )
+
+        ray.shutdown()           
+
+        # MODEL DEFINITIONS
+        # Initialize Ray with both CPU and GPU resources
+        ray.init(num_cpus=os.cpu_count(), num_gpus=1, local_mode=False)
+
+        ## SHALLOW NEURAL NETWORK
+        # Define model hyperparameters
+        #TODO: This should be in the config file
+        input_size = features_scaled.shape[1]  # Number of features
+        hidden_size = 50  # Number of neurons in the hidden layer
+        output_size = 4  # Number of output classes
+        num_epochs = 100
+        learning_rate = 3e-4
+        num_layers = 4
+
+        # Set the device to GPU if available, otherwise use CPU
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+        # Instantiate the model
+        model = ShallowNN(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size,
+            loo=loo,
+            experiment_directory=self.experiment_directory,
+            num_layers = num_layers, 
+            device = device
+        )
+
+        model = model.to(device)
+        # Calculate the number of parameters
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        print(f"Total parameters: {total_params}")
+        print(f"Trainable parameters: {trainable_params}")
 
         (
             average_val_loss_snn,
@@ -492,13 +515,18 @@ class Experiment_Manager:
             file.write(f"Linear Model Error: {linear_mdl_error}\n")
             file.write(f"SNN Error: {snn_error}\n")
 
+        # Retrain the neural network on the entire dataset
+        model.train_on_full_data(
+            features_scaled, targets_scaled, num_epochs=num_epochs, learning_rate=learning_rate
+        )
+
         # print(f"The Linear Regression Cross Validation error is: {mean_lin_mdl_score}")
         # print("==============================")
         # print(f"The XGBoost Cross Validation error is: {loss_xgb}")
         # print("==============================")
         # print(f"The Shallow Neural Network Cross Validation error is: {average_val_loss_snn}")
 
-        joblib.dump(model, f"{self.experiment_directory}/linear_regression_model.pkl")
+        joblib.dump(lin_mdl, f"{self.experiment_directory}/linear_regression_model.pkl")
         torch.save(
             model.state_dict(), f"{self.experiment_directory}/neural_network_model.pth"
         )

@@ -9,10 +9,9 @@ warnings.filterwarnings(
     "ignore", message="The 'delim_whitespace' keyword in pd.read_csv is deprecated"
 )
 
-
 # os.chdir("Demographic_Inference")  # Feel like this is too hacky
 
-total_cores = multiprocessing.cpu_count()
+# total_cores = multiprocessing.cpu_count()
 
 
 # Let's define
@@ -33,7 +32,7 @@ lower_bound_params = {
 }
 
 
-num_simulations = 1000
+num_simulations = 20
 num_samples = 20
 #TODO: Add an option where I can specify some text to place in a readme for this experiment. 
 # TODO: Add an option whether I want to do feature and target standardization.
@@ -42,7 +41,7 @@ config_file = {
     "lower_bound_params": lower_bound_params,
     "num_sims": num_simulations,
     "num_samples": num_samples,
-    "experiment_name": "linear_model_bottleneck",
+    "experiment_name": "linear_model_bottleneck_bigger",
     "dadi_analysis": True, 
     "moments_analysis": True,
     "momentsLD_analysis": False,
@@ -50,13 +49,10 @@ config_file = {
     "window_length": 1e5,
     "maxiter": 100,
     "genome_length": 1e7,
-    "mutation_rate": 1.5e-8,
-    "recombination_rate": 1.5e-8,
+    "mutation_rate": 1.26e-8,
+    "recombination_rate": 1.007e-8,
 }
 
-ray.init(
-    num_cpus=os.cpu_count(), local_mode=False
-)  # Initialize Ray with all available CPU cores
 linear_experiment = Experiment_Manager(config_file)
 linear_experiment.pretrain()
 # linear_experiment.inference()

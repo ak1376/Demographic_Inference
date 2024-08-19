@@ -105,22 +105,37 @@ class XGBoost:
 
 
 class ShallowNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, loo, experiment_directory):
+    def __init__(self, input_size, hidden_size, output_size, loo, experiment_directory, num_layers = 3, device="cpu"):
         super(ShallowNN, self).__init__()
-        self.layer1 = nn.Linear(input_size, hidden_size)
-        self.layer2 = nn.Linear(hidden_size, hidden_size)
-        self.output_layer = nn.Linear(hidden_size, output_size)
+        self.num_layers = num_layers
         self.loo = loo
         self.experiment_directory = experiment_directory
+        self.device = device
+        
+        # Create a list of layers
+        layers = []
+        
+        # First layer (input to first hidden layer)
+        layers.append(nn.Linear(input_size, hidden_size))
+        layers.append(nn.ReLU())
+        
+        # Hidden layers (loop through to add layers dynamically)
+        for _ in range(num_layers - 1):
+            layers.append(nn.Linear(hidden_size, hidden_size))
+            layers.append(nn.ReLU())
+        
+        # Output layer
+        layers.append(nn.Linear(hidden_size, output_size))
+        
+        # Use nn.Sequential to combine the layers
+        self.network = nn.Sequential(*layers)
+
+        self.network = self.network.to(self.device)
 
     def forward(self, x):
-        x = torch.relu(self.layer1(x))
-        x = torch.relu(self.layer2(x))
-        # x = (self.hidden_layer(x))
-        x = self.output_layer(x)
-        return x
+        return self.network(x)
 
-    @ray.remote
+    @ray.remote(num_gpus=1)
     def train_and_evaluate(
         self, X_train, y_train, X_val, y_val, num_epochs=10, learning_rate=0.001
     ):
@@ -130,11 +145,14 @@ class ShallowNN(nn.Module):
         """
         model = ShallowNN(
             input_size=X_train.shape[1],
-            hidden_size=self.layer1.out_features,
-            output_size=self.output_layer.out_features,
+            hidden_size=self.network[0].cpu().out_features,
+            output_size=self.network[-1].cpu().out_features,
             loo=self.loo,
             experiment_directory=self.experiment_directory,
+            num_layers=self.num_layers
         )
+
+        model = model.to(self.device)
 
         criterion = nn.MSELoss()
         optimizer = Adam(model.parameters(), lr=learning_rate)
@@ -143,6 +161,12 @@ class ShallowNN(nn.Module):
         val_loss_curve = []
 
         model.train()
+        X_train = X_train.to(self.device)
+        y_train = y_train.to(self.device)
+
+        X_val = X_val.to(self.device)
+        y_val = y_val.to(self.device)
+
         for epoch in range(num_epochs):
             optimizer.zero_grad()
             outputs = model(X_train)
@@ -157,8 +181,8 @@ class ShallowNN(nn.Module):
                 val_loss = criterion(val_outputs, y_val)
 
             # Record the training and validation loss for this epoch
-            train_loss_curve.append(train_loss.item())
-            val_loss_curve.append(val_loss.item())
+            train_loss_curve.append(train_loss.cpu().item())
+            val_loss_curve.append(val_loss.cpu().item())
 
             model.train()  # Return to training mode for the next epoch
 
@@ -168,21 +192,25 @@ class ShallowNN(nn.Module):
             y_pred = model(X_val)
             val_loss = criterion(y_pred, y_val).item()
 
-        return train_loss_curve, val_loss_curve, y_pred.numpy(), val_loss
+        return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
 
     def cross_validate(self, X, y, num_epochs=10, learning_rate=0.001):
         """
         Perform Leave-One-Out Cross-Validation using Ray for parallel processing,
         return predictions, and record loss curves.
         """
+
+        num_epochs = num_epochs
+        learning_rate = learning_rate
+
         loo = self.loo
         validation_losses = []
         predictions = np.zeros_like(y)  # To store predictions for each sample
         all_train_loss_curves = []
         all_val_loss_curves = []
 
-        X_tensor = torch.tensor(X, dtype=torch.float32)
-        y_tensor = torch.tensor(y, dtype=torch.float32)
+        X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
+        y_tensor = torch.tensor(y, dtype=torch.float32).to(self.device)
 
         total_splits = loo.get_n_splits(X)  # Get the total number of splits
 
@@ -226,6 +254,39 @@ class ShallowNN(nn.Module):
         print(f"Average Validation Loss (LOO-CV): {average_val_loss}")
 
         return average_val_loss, predictions, all_train_loss_curves, all_val_loss_curves
+    
+
+    #TODO: Need to add num_epochs and learning_rate as arguments
+    def train_on_full_data(self, X, y, num_epochs=1000, learning_rate=3e-4):
+        model = ShallowNN(
+            input_size=X.shape[1],
+            hidden_size=self.network[0].cpu().out_features,
+            output_size=self.network[-1].cpu().out_features,
+            loo=self.loo,
+            experiment_directory=self.experiment_directory,
+        )
+
+        model = model.to(self.device)
+
+        criterion = nn.MSELoss()
+        optimizer = Adam(model.parameters(), lr=learning_rate)
+
+        X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
+        y_tensor = torch.tensor(y, dtype=torch.float32).to(self.device)
+
+        model.train()
+        for epoch in range(num_epochs):
+            optimizer.zero_grad()
+            outputs = model(X_tensor)
+            loss = criterion(outputs, y_tensor)
+            loss.backward()
+            optimizer.step()
+
+        # Save the trained model
+        model_path = f"{self.experiment_directory}/final_model.pth"
+        torch.save(model.state_dict(), model_path)
+        print(f"Model saved to {model_path}")
+
 
     def plot_loss_curves(self, all_train_loss_curves, all_val_loss_curves):
         """
@@ -258,7 +319,8 @@ class ShallowNN(nn.Module):
         )
 
         plt.xlabel("Epoch")
-        plt.ylabel("Loss")
+        plt.ylabel("Log Loss")
+        plt.yscale("log")
         plt.title("Average Training and Validation Loss Curves (LOO-CV)")
         plt.legend()
         plt.show()
