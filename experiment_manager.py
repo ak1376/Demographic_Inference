@@ -18,7 +18,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pickle
 import ray
 
-from preprocess import Processor, delete_vcf_files
+from preprocess import Processor, FeatureExtractor
 from utils import (
     visualizing_results,
     visualize_model_predictions,
@@ -28,6 +28,9 @@ from utils import (
     root_mean_squared_error,
     find_outlier_indices,  # FUNCTION FOR DEBUGGING PURPOSES
     resample_to_match_row_count,
+    save_dict_to_pickle,
+    process_and_save_data,
+    calculate_model_errors,
 )
 from models import XGBoost, ShallowNN
 from sklearn.linear_model import LinearRegression
@@ -46,7 +49,8 @@ class Experiment_Manager:
 
         self.upper_bound_params = config_file["upper_bound_params"]
         self.lower_bound_params = config_file["lower_bound_params"]
-        self.num_sims = config_file["num_sims"]
+        self.num_sims_pretrain = config_file["num_sims_pretrain"]
+        self.num_sims_inference = config_file["num_sims_inference"]
         self.num_samples = config_file["num_samples"]
         self.experiment_name = config_file["experiment_name"]
         self.num_windows = config_file["num_windows"]
@@ -58,8 +62,13 @@ class Experiment_Manager:
         self.dadi_analysis = config_file["dadi_analysis"]
         self.moments_analysis = config_file["moments_analysis"]
         self.momentsLD_analysis = config_file["momentsLD_analysis"]
-
+        self.seed = config_file["seed"]
+        self.normalization = config_file["normalization"]
+        self.remove_outliers = config_file["remove_outliers"]
+        self.neural_net_hyperparameters = config_file["neural_net_hyperparameters"]
         self.create_directory(self.experiment_name)
+
+        np.random.seed(self.seed)
 
     def create_directory(
         self, folder_name, base_dir="experiments", archive_subdir="archive"
@@ -103,239 +112,64 @@ class Experiment_Manager:
 
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
+        extractor = FeatureExtractor(self.experiment_directory)
 
-        dadi_dict, moments_dict, momentsLD_dict = processor.run()
+        # Now I want to define training, validation, and testing indices:
 
-        # Now save the results using pickle -- all three dictionaries
-        if self.dadi_analysis:
-            with open(
-                os.path.join(self.experiment_directory, "dadi_dict.pkl"), "wb"
-            ) as f:
-                pickle.dump(dadi_dict, f)
+        # Generate all indices and shuffle them
+        all_indices = np.arange(self.num_sims_pretrain)
+        np.random.shuffle(all_indices)
 
-        if self.moments_analysis:
-            with open(
-                os.path.join(self.experiment_directory, "moments_dict.pkl"), "wb"
-            ) as f:
-                pickle.dump(moments_dict, f)
+        # Split into training and validation indices
+        n_train = int(0.8 * self.num_sims_pretrain)
 
-        if self.momentsLD_analysis:
-            with open(
-                os.path.join(self.experiment_directory, "momentsLD_dict.pkl"), "wb"
-            ) as f:
-                pickle.dump(momentsLD_dict, f)
+        training_indices = all_indices[:n_train]
+        validation_indices = all_indices[n_train:]
+        testing_indices = np.arange(self.num_sims_inference)
 
-        # TODO: Change this function so that I am not a priori assuming it's dadi
-        with open(
-            os.path.join(self.experiment_directory, "generative_params.pkl"), "wb"
-        ) as f:
-            pickle.dump(dadi_dict["simulated_params"], f)
+        for stage, indices in [
+            ("training", training_indices),
+            ("validation", validation_indices),
+            ("testing", testing_indices),
+        ]:
 
-        # EVERYTHING BELOW IS UNOPTIMIZED AND/OR PLACEHOLDER CODE
-        # Note that the simulated params in both the dadi_dict and moments_dict are identical
+            # Your existing process_and_save_data function
 
-        # Initialize an empty list to hold feature arrays
-        features_list = []
-        feature_names = []
-        targets_list = []
-
-        # I want to now extract the features from the dictionaries (that we will be using for analysis)
-        if self.dadi_analysis:
-            features_dadi, targets = extract_features(
-                dadi_dict["simulated_params"],
-                dadi_dict["opt_params"],
-                normalization=False,
+            # Call the remote function and get the ObjectRef
+            result_ref = process_and_save_data.remote(
+                processor, indices, stage, self.experiment_directory
             )
-            error_value = root_mean_squared_error(y_true=targets, y_pred=features_dadi)
-            print(f"The error value for dadi is: {error_value}")
-            outlier_indices_dadi = find_outlier_indices(features_dadi)
 
-            # TODO: Add a flag in the driver to specify whether we want to remove outliers from the pretraining process
-            remove_outliers = True
-            if remove_outliers:
-                # Remove the outliers from the features and targets
-                features_dadi = np.delete(
-                    features_dadi, np.unique(outlier_indices_dadi), axis=0
+            # Use ray.get() to retrieve the actual result
+            dadi_dict, moments_dict, momentsLD_dict = ray.get(result_ref)
+
+            # Process each dictionary
+            if extractor.dadi_analysis:
+                extractor.process_batch(dadi_dict, "dadi", stage, normalization=self.normalization)
+            if extractor.moments_analysis:
+                extractor.process_batch(
+                    moments_dict, "moments", stage, normalization=self.normalization
                 )
-                targets = np.delete(targets, outlier_indices_dadi, axis=0)
-
-            features_list.append(features_dadi)
-            targets_list.append(targets)
-
-            # features_dadi_no_outliers = np.delete(features_dadi, outlier_indices_dadi, axis=0)
-            # targets_no_outliers = np.delete(targets, outlier_indices_dadi, axis=0)
-            # error_value_no_outliers = relative_squared_error(y_true=targets_no_outliers, y_pred=features_dadi_no_outliers)
-            # print(f"The error value for dadi without outliers is: {error_value_no_outliers}")
-
-            np.savetxt(
-                os.path.join(self.experiment_directory, "outlier_indices_dadi.csv"),
-                outlier_indices_dadi,
-                delimiter=",",
-            )
-
-            visualizing_results(
-                dadi_dict,
-                "dadi",
-                save_loc=self.experiment_directory,
-                outlier_indices=outlier_indices_dadi,
-            )
-            feature_names_dadi = [
-                "Nb_opt_dadi",
-                "N_recover_opt_dadi",
-                "t_bottleneck_start_opt_dadi",
-                "t_bottleneck_end_opt_dadi",
-            ]
-
-            feature_names.append(feature_names_dadi)
-
-        if self.moments_analysis:
-            features_moments, targets = extract_features(
-                moments_dict["simulated_params"],
-                moments_dict["opt_params"],
-                normalization=False,
-            )
-            error_value = root_mean_squared_error(
-                y_true=targets, y_pred=features_moments
-            )
-            print(f"The error value for moments is: {error_value}")
-
-            outlier_indices_moments = find_outlier_indices(features_moments)
-
-            remove_outliers = True
-            if remove_outliers:
-                # Remove the outliers from the features and targets
-                features_moments = np.delete(
-                    features_moments, np.unique(outlier_indices_moments), axis=0
+            if extractor.momentsLD_analysis:
+                extractor.process_batch(
+                    momentsLD_dict, "momentsLD", stage, normalization=self.normalization
                 )
-                targets = np.delete(targets, outlier_indices_moments, axis=0)
 
-            features_list.append(features_moments)
-            targets_list.append(targets)
+        # After processing all stages, finalize the processing
 
-            # features_moments_no_outliers = np.delete(features_moments, outlier_indices_moments, axis=0)
-            # targets_no_outliers = np.delete(targets, outlier_indices_moments, axis=0)
-            # error_value_no_outliers = relative_squared_error(y_true=targets_no_outliers, y_pred=features_moments_no_outliers)
-            # print(f"The error value for moments without outliers is: {error_value_no_outliers}")
-
-            np.savetxt(
-                os.path.join(self.experiment_directory, "outlier_indices_moments.csv"),
-                outlier_indices_moments,
-                delimiter=",",
-            )
-
-            visualizing_results(
-                moments_dict,
-                "moments",
-                save_loc=self.experiment_directory,
-                outlier_indices=outlier_indices_moments,
-            )
-            feature_names_moments = [
-                "Nb_opt_moments",
-                "N_recover_opt_moments",
-                "t_bottleneck_start_opt_moments",
-                "t_bottleneck_end_opt_moments",
-            ]
-            feature_names.append(feature_names_moments)
-
-        if self.momentsLD_analysis:
-            features_momentsLD, targets = extract_features(
-                momentsLD_dict["simulated_params"],
-                momentsLD_dict["opt_params"],
-                normalization=False,
-            )
-
-            error_value = root_mean_squared_error(
-                y_true=targets, y_pred=features_moments
-            )
-            print(f"The error value for MomentsLD is: {error_value}")
-            outlier_indices_momentsLD = find_outlier_indices(features_momentsLD)
-
-            remove_outliers = True
-            if remove_outliers:
-                # Remove the outliers from the features and targets
-                features_momentsLD = np.delete(
-                    features_momentsLD, np.unique(outlier_indices_momentsLD), axis=0
-                )
-                targets = np.delete(targets, outlier_indices_moments, axis=0)
-
-            features_list.append(features_momentsLD)
-            targets_list.append(targets)
-
-            # features_momentsLD_no_outliers = np.delete(features_momentsLD, outlier_indices_momentsLD, axis=0)
-            # targets_no_outliers = np.delete(targets, outlier_indices_momentsLD, axis=0)
-            # error_value_no_outliers = relative_squared_error(y_true=targets_no_outliers, y_pred=features_momentsLD_no_outliers)
-            # print(f"The error value for moments without outliers is: {error_value_no_outliers}")
-
-            np.savetxt(
-                os.path.join(
-                    self.experiment_directory, "outlier_indices_momentsLD.csv"
-                ),
-                outlier_indices_momentsLD,
-                delimiter=",",
-            )
-
-            visualizing_results(
-                momentsLD_dict,
-                "MomentsLD",
-                save_loc=self.experiment_directory,
-                outlier_indices=outlier_indices_momentsLD,
-            )
-            feature_names_momentsLD = [
-                "Nb_opt_momentsLD",
-                "N_recover_opt_momentsLD",
-                "t_bottleneck_start_opt_momentsLD",
-                "t_bottleneck_end_opt_momentsLD",
-            ]
-            feature_names.append(feature_names_momentsLD)
-
-        # I need to do resampling if I am removing outliers
-        if remove_outliers:
-            # Filter out empty arrays (if we are not using all three dictionaries)
-            non_empty_features_list = [arr for arr in features_list if arr.size > 0]
-
-            # Find the maximum number of rows in the non-empty arrays
-            if non_empty_features_list:
-                max_rows = max(arr.shape[0] for arr in non_empty_features_list)
-            else:
-                max_rows = 0  # Handle case where all arrays are empty
-
-            # Resample only the non-empty arrays to match the maximum number of rows
-            resampled_features_list = []
-
-            for arr in non_empty_features_list:
-                if arr.size > 0:
-                    # Resample the features array
-                    resampled_arr, resampling_indices = resample_to_match_row_count(
-                        arr, max_rows, return_indices=True
-                    )
-                    resampled_features_list.append(resampled_arr)
-
-                if arr.shape[0] != max_rows:
-                    resampled_targets = targets[resampling_indices]
-
-        # Concatenate all resampled features along axis 1
-        features = (
-            np.concatenate(resampled_features_list, axis=1)
-            if resampled_features_list
-            else np.array([])
+        features, targets, feature_names = extractor.finalize_processing(
+            remove_outliers=self.remove_outliers
         )
-
-        # Reorder the elements by the element number of each sublist
-        feature_names_reordered = []
-
-        # Assume all sublists have the same length
-        for i in range(len(feature_names[0])):
-            for sublist in feature_names:
-                feature_names_reordered.append(sublist[i])
-
-        # PARAMETER INFERENCE IS COMPLETE. NOW IT'S TIME TO DO THE MACHINE LEARNING PART.
-
-        # Probably not the most efficient, but placeholder for now
-
-        # Convert the list to a dictionary with 0, 1, 2, ... as keys
-        feature_names = {
-            i: feature_names_reordered[i] for i in range(len(feature_names_reordered))
-        }
+        training_features, validation_features, testing_features = (
+            features["training"],
+            features["validation"],
+            features["testing"],
+        )
+        training_targets, validation_targets, testing_targets = (
+            targets["training"],
+            targets["validation"],
+            targets["testing"],
+        )
 
         target_names = {
             0: "Nb_sample",
@@ -344,85 +178,57 @@ class Experiment_Manager:
             3: "t_bottleneck_end_sample",
         }
 
+        preprocessing_results_obj = {}
+
+        preprocessing_results_obj["training"] = {}
+        preprocessing_results_obj["validation"] = {}
+        preprocessing_results_obj["testing"] = {}
+
+        preprocessing_results_obj["training"]["predictions"] = training_features
+        preprocessing_results_obj["training"]["targets"] = training_targets
+
+        preprocessing_results_obj["validation"]["predictions"] = validation_features
+        preprocessing_results_obj["validation"]["targets"] = validation_targets
+
+        preprocessing_results_obj["testing"]["predictions"] = testing_features
+        preprocessing_results_obj["testing"]["targets"] = testing_targets
+
+        visualizing_results(
+            preprocessing_results_obj,
+            save_loc=self.experiment_directory,
+            analysis=f"preprocessing_results",
+        )
+
         # I want to do cross validation rather than a traditional train/test split
         # custom_scorer = make_scorer(relative_squared_error, greater_is_better=False)
 
-        # Define the Leave-One-Out Cross-Validation strategy
-        loo = LeaveOneOut()
-
-        # Now do a train test split
-        # X_train, X_test, y_train, y_test = train_test_split(
-        #     features, targets, train_size=0.8, random_state=295
-        # )
-
-        # Feature scaling
-        # feature_scaler = StandardScaler()
-        # features_scaled = feature_scaler.fit_transform(features)
-
-        # # Target scaling
-        # target_scaler = StandardScaler()
-        # targets_scaled = target_scaler.fit_transform(resampled_targets)
-
-        # If we don't want to do scaling. #TODO: option for later.
-        features_scaled = features
-
-        # TODO: Remove this try/except block later.
-        try:
-            targets_scaled = resampled_targets
-        except UnboundLocalError as e:
-            targets_scaled = targets
-
         ## LINEAR REGRESSION
-        lin_mdl = LinearRegression()
+        linear_mdl = LinearRegression()
+        linear_mdl.fit(training_features, training_targets)
 
-        # Train the linear regression model
-        linear_mdl_scores = cross_val_score(
-            lin_mdl,
-            features_scaled,
-            targets_scaled,
-            cv=loo,
-            scoring="neg_mean_squared_error",
-        )
-        mean_lin_mdl_score = -1 * linear_mdl_scores.mean()
-
-        linear_mdl_predictions = cross_val_predict(
-            lin_mdl, features_scaled, targets_scaled, cv=loo
-        )
-
-        # Train the linear regression model on the entire dataset
-        lin_mdl.fit(features_scaled, targets_scaled)
-
-        # Convert the array to a list of dictionaries
-        param_names = ["Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
-        opt_params = [
-            {
-                param_names[j]: linear_mdl_predictions[i, j]
-                for j in range(linear_mdl_predictions.shape[1])
-            }
-            for i in range(linear_mdl_predictions.shape[0])
-        ]
+        training_predictions = linear_mdl.predict(training_features)
+        validation_predictions = linear_mdl.predict(validation_features)
+        testing_predictions = linear_mdl.predict(testing_features)
 
         linear_mdl_obj = {}
-        linear_mdl_obj["model"] = lin_mdl
-        linear_mdl_obj["opt_params"] = opt_params
+        linear_mdl_obj["model"] = linear_mdl
 
-        # Convert the array to a list of dictionaries
-        # Extract the keys (assuming all dictionaries have the same keys)
+        linear_mdl_obj["training"] = {}
+        linear_mdl_obj["validation"] = {}
+        linear_mdl_obj["testing"] = {}
 
-        # keys = dadi_dict['simulated_params'][0].keys()
+        linear_mdl_obj["training"]["predictions"] = training_predictions
+        linear_mdl_obj["training"]["targets"] = training_targets
 
-        # # Create the array where each column corresponds to values of a specific key
-        # array = np.array([[d[key] for d in dadi_dict['simulated_params']] for key in keys]).T
+        linear_mdl_obj["validation"]["predictions"] = validation_predictions
+        linear_mdl_obj["validation"]["targets"] = validation_targets
 
-        simulated_params = [
-            {
-                param_names[j]: targets_scaled[i, j]
-                for j in range(linear_mdl_predictions.shape[1])
-            }
-            for i in range(linear_mdl_predictions.shape[0])
-        ]
+        linear_mdl_obj["testing"]["predictions"] = testing_predictions
+        linear_mdl_obj["testing"]["targets"] = testing_targets
 
-        linear_mdl_obj["simulated_params"] = simulated_params
+        # root_mean_squared_error(y_true = linear_mdl_obj['training']['targets'], y_pred = linear_mdl_obj['training']['predictions'])
+        # root_mean_squared_error(y_true = linear_mdl_obj['validation']['targets'], y_pred = linear_mdl_obj['validation']['predictions'])
+        # root_mean_squared_error(y_true = linear_mdl_obj['testing']['targets'], y_pred = linear_mdl_obj['testing']['predictions'])
 
         # targets
         visualizing_results(
@@ -442,85 +248,89 @@ class Experiment_Manager:
         ## SHALLOW NEURAL NETWORK
         # Define model hyperparameters
         # TODO: This should be in the config file
-        input_size = features_scaled.shape[1]  # Number of features
-        hidden_size = 50  # Number of neurons in the hidden layer
+        input_size = training_features.shape[1]  # Number of features
+        hidden_size = 500  # Number of neurons in the hidden layer
         output_size = 4  # Number of output classes
-        num_epochs = 8000
+        num_epochs = 1000
         learning_rate = 3e-4
         num_layers = 4
 
-        model_config = {
-            "input_size": input_size,
-            "hidden_size": hidden_size,
-            "output_size": output_size,
-            "num_layers": num_layers
-        }
+        # model_config = {
+        #     "input_size": input_size,
+        #     "hidden_size": hidden_size,
+        #     "output_size": output_size,
+        #     "num_layers": num_layers,
+        # }
 
         # Set the device to GPU if available, otherwise use CPU
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         import time
+
         start_time = time.time()
-        (
-            average_val_loss,
-            predictions_snn,
-            all_train_loss_curves_snn,
-            all_val_loss_curves_snn,
-        ) = ShallowNN.cross_validate(
-            X=features_scaled,
-            y=targets_scaled,
-            model_config=model_config,
-            num_epochs=num_epochs,
-            learning_rate=learning_rate,
+        snn_model, train_losses, val_losses = ShallowNN.train_and_validate(
+            X_train=training_features,
+            y_train=training_targets,
+            X_val=validation_features,
+            y_val=validation_targets,
+            input_size=self.neural_net_hyperparameters['input_size'],
+            hidden_size=self.neural_net_hyperparameters['hidden_size'],
+            output_size=self.neural_net_hyperparameters['output_size'],
+            num_layers=self.neural_net_hyperparameters['num_layers'],
+            num_epochs=self.neural_net_hyperparameters['num_epochs'],
+            learning_rate=self.neural_net_hyperparameters['learning_rate']
+
         )
         end_time = time.time()
 
-        print(f'Time taken for cross validation: {end_time - start_time}')
+        print(f"Time taken for training: {end_time - start_time}")
 
-        opt_params = [
-            {
-                param_names[j]: predictions_snn[i, j]
-                for j in range(predictions_snn.shape[1])
-            }
-            for i in range(predictions_snn.shape[0])
-        ]
+        training_predictions = snn_model.predict(training_features)
+        validation_predictions = snn_model.predict(validation_features)
+        testing_predictions = snn_model.predict(testing_features)
 
         snn_mdl_obj = {}
-        snn_mdl_obj["opt_params"] = opt_params
-        snn_mdl_obj["simulated_params"] = simulated_params
+        snn_mdl_obj["training"] = {}
+        snn_mdl_obj["validation"] = {}
+        snn_mdl_obj["testing"] = {}
+
+        snn_mdl_obj["training"]["predictions"] = training_predictions
+        snn_mdl_obj["training"]["targets"] = training_targets
+
+        snn_mdl_obj["validation"]["predictions"] = validation_predictions
+        snn_mdl_obj["validation"]["targets"] = validation_targets
+
+        snn_mdl_obj["testing"]["predictions"] = testing_predictions
+        snn_mdl_obj["testing"]["targets"] = testing_targets
 
         visualizing_results(
             snn_mdl_obj, "snn_results", save_loc=self.experiment_directory
         )
 
         ShallowNN.plot_loss_curves(
-            all_train_loss_curves_snn,
-            all_val_loss_curves_snn,
+            train_losses=train_losses,
+            val_losses=val_losses,
             save_path=f"{self.experiment_directory}/loss_curves.png",
         )
 
-        # CALCULATE THE RELATIVE LOSS IN PARAMETERS FOR EACH MODEL
-        linear_mdl_error = root_mean_squared_error(
-            targets_scaled, linear_mdl_predictions
+        # Calculate errors for each model separately
+        preprocessing_errors = calculate_model_errors(
+            preprocessing_results_obj, "preprocessing"
         )
-        # xgb_error = relative_squared_error(targets_scaled, predictions_xgb)
-        snn_error = root_mean_squared_error(targets_scaled, predictions_snn)
+        linear_errors = calculate_model_errors(linear_mdl_obj, "linear")
+        snn_errors = calculate_model_errors(snn_mdl_obj, "snn")
 
-        # Write the errors to a text file
-        with open(f"{self.experiment_directory}/model_errors.txt", "w") as file:
-            file.write(f"Linear Model Error: {linear_mdl_error}\n")
-            file.write(f"SNN Error: {snn_error}\n")
+        # Combine all errors if needed
+        all_errors = {**preprocessing_errors, **linear_errors, **snn_errors}
 
-        # Retrain the neural network on the entire dataset
-        model = ShallowNN.train_on_full_data(
-            X=features_scaled,
-            y=targets_scaled,
-            input_size=model_config["input_size"],
-            hidden_size=model_config["hidden_size"],
-            output_size=model_config["output_size"],
-            num_layers=model_config["num_layers"],
-            num_epochs=num_epochs,
-            learning_rate=learning_rate
+        # Print results
+        with open(f"{self.experiment_directory}/model_errors.txt", "w") as f:
+            for model, datasets in all_errors.items():
+                f.write(f"\n{model.upper()} Model Errors:\n")
+                for dataset, error in datasets.items():
+                    f.write(f"  {dataset.capitalize()} RMSE: {error:.4f}\n")
+        print(
+            f"Results have been saved to {self.experiment_directory}/model_errors.txt"
         )
 
         # print(f"The Linear Regression Cross Validation error is: {mean_lin_mdl_score}")
@@ -529,9 +339,12 @@ class Experiment_Manager:
         # print("==============================")
         # print(f"The Shallow Neural Network Cross Validation error is: {average_val_loss_snn}")
 
-        joblib.dump(lin_mdl, f"{self.experiment_directory}/linear_regression_model.pkl")
+        joblib.dump(
+            linear_mdl, f"{self.experiment_directory}/linear_regression_model.pkl"
+        )
         torch.save(
-            model.state_dict(), f"{self.experiment_directory}/neural_network_model.pth"
+            snn_model.state_dict(),
+            f"{self.experiment_directory}/neural_network_model.pth",
         )
 
         print("Training complete!")

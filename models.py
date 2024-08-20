@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ray
 from sklearn.model_selection import LeaveOneOut
+import torch.nn.utils as utils
 
 
 class XGBoost:
@@ -23,7 +24,7 @@ class XGBoost:
         self,
         feature_names,
         target_names,
-        objective="reg:squarederror",  # TODO: Investigate whether it makes sense to change this objective function to be trained in the same way as the GHIST is evaluated?
+        objective="reg:squarederror", 
         n_estimators=100,
         learning_rate=0.1,
         max_depth=5,
@@ -108,19 +109,23 @@ class XGBoost:
 @ray.remote(num_gpus=1)
 class ModelActor:
     def __init__(self, model_config):
-        self.model = ShallowNN(**model_config)
+        self.model = ShallowNN(**model_config) #type: ignore
         self.model = self.model.cuda()
 
         total_params = sum(p.numel() for p in self.model.parameters())
-        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        trainable_params = sum(
+            p.numel() for p in self.model.parameters() if p.requires_grad
+        )
 
         print(f"Total parameters: {total_params}")
         print(f"Trainable parameters: {trainable_params}")
 
-    def train_and_evaluate(self, X_train, y_train, X_val, y_val, num_epochs, learning_rate):
+    def train_and_evaluate(
+        self, X_train, y_train, X_val, y_val, num_epochs, learning_rate
+    ):
         criterion = nn.MSELoss()
         optimizer = Adam(self.model.parameters(), lr=learning_rate)
-        
+
         train_loss_curve = []
         val_loss_curve = []
 
@@ -149,104 +154,119 @@ class ModelActor:
         self.model.eval()
         with torch.no_grad():
             y_pred = self.model(X_val)
-        
-        return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
 
+        return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
 
 
 class ShallowNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_layers=3):
         super(ShallowNN, self).__init__()
         self.num_layers = num_layers
-        
+
         layers = []
+
+        # First layer (input to first hidden layer)
         layers.append(nn.Linear(input_size, hidden_size))
+        # layers.append(nn.BatchNorm1d(hidden_size))  # BatchNorm after the first layer
         layers.append(nn.ReLU())
-        
+
+        # Hidden layers (loop through to add layers dynamically)
         for _ in range(num_layers - 1):
             layers.append(nn.Linear(hidden_size, hidden_size))
+            # layers.append(nn.BatchNorm1d(hidden_size))  # BatchNorm after each hidden layer
             layers.append(nn.ReLU())
-        
+
+        # Output layer
         layers.append(nn.Linear(hidden_size, output_size))
-        
+
+        # Combine the layers into a sequential container
         self.network = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.network(x)
 
-    @staticmethod
-    def cross_validate(X, y, model_config, num_epochs=10, learning_rate=0.001):
-        loo = LeaveOneOut()
-        X_tensor = torch.tensor(X, dtype=torch.float32)
-        y_tensor = torch.tensor(y, dtype=torch.float32)
-        
-        futures = []
+    def predict(self, X):
+        """
+        Make predictions using the trained model.
 
-        # Initialize lists to store results
-        all_predictions = []
-        all_train_losses = []
-        all_val_losses = []
-        
-        for train_index, val_index in loo.split(X):
-            actor = ModelActor.remote(model_config)
-            X_train, X_val = X_tensor[train_index], X_tensor[val_index]
-            y_train, y_val = y_tensor[train_index], y_tensor[val_index]
-            
-            futures.append(actor.train_and_evaluate.remote(X_train, y_train, X_val, y_val, num_epochs, learning_rate))
-        
-        results = ray.get(futures)
-        
-        all_train_loss_curves, all_val_loss_curves, predictions, validation_losses = zip(*results)
+        Args:
+        X (numpy.ndarray or torch.Tensor): Input data for prediction.
 
-        # Store results
-        all_predictions.append(predictions)
-        all_train_losses.append(all_train_loss_curves)
-        all_val_losses.append(all_val_loss_curves)
-        
-        average_val_loss = np.mean(validation_losses)
-        print(f"Average Validation Loss (LOOCV): {average_val_loss}")
-        
-        predictions = np.array(predictions).squeeze()
-        
-        return average_val_loss, predictions, all_train_loss_curves, all_val_loss_curves
+        Returns:
+        numpy.ndarray: Predicted outputs.
+        """
+        self.eval()  # Set the model to evaluation mode
+        with torch.no_grad():
+            if isinstance(X, np.ndarray):
+                X = torch.tensor(X, dtype=torch.float32)
+            if X.device != next(self.parameters()).device:
+                X = X.to(next(self.parameters()).device)
+            predictions = self(X)
+
+        return predictions.cpu().numpy()
 
     @staticmethod
-    def train_on_full_data(X, y, input_size, hidden_size, output_size, num_layers=3, num_epochs=1000, learning_rate=3e-4):
+    def train_and_validate(
+        X_train,
+        y_train,
+        X_val,
+        y_val,
+        input_size,
+        hidden_size,
+        output_size,
+        num_layers=3,
+        num_epochs=1000,
+        learning_rate=3e-4
+        # weight_decay=1e-4
+    ):
         model = ShallowNN(input_size, hidden_size, output_size, num_layers).cuda()
         criterion = nn.MSELoss()
         optimizer = Adam(model.parameters(), lr=learning_rate)
 
-        X_tensor = torch.tensor(X, dtype=torch.float32).cuda()
-        y_tensor = torch.tensor(y, dtype=torch.float32).cuda()
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32).cuda()
+        y_train_tensor = torch.tensor(y_train, dtype=torch.float32).cuda()
+        X_val_tensor = torch.tensor(X_val, dtype=torch.float32).cuda()
+        y_val_tensor = torch.tensor(y_val, dtype=torch.float32).cuda()
 
-        model.train()
+        train_losses = []
+        val_losses = []
+
         for epoch in range(num_epochs):
+            # Training
+            model.train()
             optimizer.zero_grad()
-            outputs = model(X_tensor)
-            loss = criterion(outputs, y_tensor)
-            loss.backward()
-            optimizer.step()
-            
-            if (epoch + 1) % 100 == 0:
-                print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}")
+            train_outputs = model(X_train_tensor)
+            train_loss = criterion(train_outputs, y_train_tensor)
+            train_loss.backward()
+            # utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
 
-        return model
+            optimizer.step()
+
+            # Validation
+            model.eval()
+            with torch.no_grad():
+                val_outputs = model(X_val_tensor)
+                val_loss = criterion(val_outputs, y_val_tensor)
+            
+            train_losses.append(train_loss.item())
+            val_losses.append(val_loss.item())
+
+            if (epoch + 1) % 100 == 0:
+                print(
+                    f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss.item():.4f}, Val Loss: {val_loss.item():.4f}"
+                )
+
+        return model, train_losses, val_losses
 
     @staticmethod
-    def plot_loss_curves(all_train_loss_curves, all_val_loss_curves, save_path):
-        def average_across_sublists(sublists):
-            return [sum(values) / len(values) for values in zip(*sublists)]
-
-        avg_train_loss_curve = average_across_sublists(all_train_loss_curves)
-        avg_val_loss_curve = average_across_sublists(all_val_loss_curves)
-
-        plt.figure()
-        plt.plot(avg_train_loss_curve, label="Average Train Loss", color="blue", linewidth=2)
-        plt.plot(avg_val_loss_curve, label="Average Val Loss", color="red", linewidth=2)
+    def plot_loss_curves(train_losses, val_losses, save_path):
+        plt.figure(figsize=(10, 6))
+        plt.plot(train_losses, label="Train Loss", color="blue", linewidth=2)
+        plt.plot(val_losses, label="Validation Loss", color="red", linewidth=2)
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.yscale("log")
-        plt.title("Average Training and Validation Loss Curves (LOOCV)")
+        plt.title("Training and Validation Loss Curves")
         plt.legend()
         plt.savefig(save_path)
         plt.close()

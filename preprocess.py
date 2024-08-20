@@ -7,10 +7,14 @@ import dadi
 import dadi.Demes
 import glob
 import demes
-from utils import save_windows_to_vcf
+from utils import (
+    extract_features,
+    visualizing_results,
+    root_mean_squared_error,
+    find_outlier_indices,
+)
 import ray
-
-# type: ignore
+from sklearn.utils import resample
 
 from parameter_inference import (
     run_inference_dadi,
@@ -94,6 +98,7 @@ def delete_vcf_files(directory):
 
     print(f"Deleted {len(files)} files from {directory}")
 
+
 @ray.remote
 def process_single_simulation(
     i,
@@ -176,6 +181,197 @@ def process_single_simulation(
     return results
 
 
+# def extract_and_process_features(simulated_params, opt_params, analysis_type, stage, experiment_directory, remove_outliers=True):
+#     if not simulated_params or not opt_params:
+#         print(f"Skipping {analysis_type} {stage} due to empty data")
+#         return None, None, None
+
+#     features, targets = extract_features(simulated_params, opt_params, normalization=False)
+#     # error_value = root_mean_squared_error(y_true=targets, y_pred=features)
+#     # print(f"The error value for {analysis_type} {stage} is: {error_value}")
+
+#     outlier_indices = find_outlier_indices(features)
+#     np.savetxt(os.path.join(experiment_directory, f"outlier_indices_{analysis_type}_{stage}.csv"), outlier_indices, delimiter=",")
+
+#     if remove_outliers:
+#         features = np.delete(features, np.unique(outlier_indices), axis=0)
+#         targets = np.delete(targets, outlier_indices, axis=0)
+
+#     visualizing_results({
+#         "simulated_params": simulated_params,
+#         "opt_params": opt_params
+#     }, f"{analysis_type}_{stage}", save_loc=experiment_directory, outlier_indices=outlier_indices)
+
+#     feature_names = [
+#         f"Nb_opt_{analysis_type}",
+#         f"N_recover_opt_{analysis_type}",
+#         f"t_bottleneck_start_opt_{analysis_type}",
+#         f"t_bottleneck_end_opt_{analysis_type}"
+#     ]
+
+#     return features, targets, feature_names
+
+
+class FeatureExtractor:
+    def __init__(
+        self,
+        experiment_directory,
+        dadi_analysis=True,
+        moments_analysis=True,
+        momentsLD_analysis=True,
+    ):
+        self.experiment_directory = experiment_directory
+        self.dadi_analysis = dadi_analysis
+        self.moments_analysis = moments_analysis
+        self.momentsLD_analysis = momentsLD_analysis
+        self.features = {stage: {} for stage in ["training", "validation", "testing"]}
+        self.targets = {stage: {} for stage in ["training", "validation", "testing"]}
+        self.feature_names = {}
+
+    def process_batch(self, batch_data, analysis_type, stage, normalization=False):
+        if (
+            not batch_data
+            or "simulated_params" not in batch_data
+            or "opt_params" not in batch_data
+        ):
+            print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
+            return
+
+        features, targets = extract_features(
+            batch_data["simulated_params"],
+            batch_data["opt_params"],
+            normalization=normalization,
+        )
+
+        if analysis_type not in self.features[stage]:
+            self.features[stage][analysis_type] = []
+            self.targets[stage][analysis_type] = []
+
+        self.features[stage][analysis_type].extend(features)
+        self.targets[stage][analysis_type].extend(targets)
+
+        if analysis_type not in self.feature_names:
+            self.feature_names[analysis_type] = [
+                f"Nb_opt_{analysis_type}",
+                f"N_recover_opt_{analysis_type}",
+                f"t_bottleneck_start_opt_{analysis_type}",
+                f"t_bottleneck_end_opt_{analysis_type}",
+            ]
+
+        # error_value = root_mean_squared_error(targets, features)
+        # print(f"Batch error value for {analysis_type} {stage}: {error_value}")
+
+        # visualizing_results(batch_data, save_loc = self.experiment_directory, analysis=f"{analysis_type}_{stage}")
+
+    def finalize_processing(self, remove_outliers=True):
+        """
+        This function will create the numpy array of features and targets across all analysis types and stages. If the user specifies to remove outliers, it will remove them from the data and then resample the rows for concatenation
+        """
+        for stage in self.features:
+            for analysis_type in self.features[stage]:
+                features = np.array(self.features[stage][analysis_type])
+                targets = np.array(self.targets[stage][analysis_type])
+
+                outlier_indices = find_outlier_indices(features)
+                np.savetxt(
+                    os.path.join(
+                        self.experiment_directory,
+                        f"outlier_indices_{analysis_type}_{stage}.csv",
+                    ),
+                    outlier_indices,
+                    delimiter=",",
+                )
+
+                # Remove outliers
+                if remove_outliers:
+                    features = np.delete(features, outlier_indices, axis=0)
+                    targets = np.delete(targets, outlier_indices, axis=0)
+                    # self.resample_features_and_targets(stage)
+
+                self.features[stage][analysis_type] = features
+                self.targets[stage][analysis_type] = targets
+
+                # error_value = root_mean_squared_error(targets, features)
+                # print(f"Final error value for {analysis_type} {stage}: {error_value}")
+
+        concatenated_features, concatenated_targets = (
+            self.concatenate_features_and_targets()
+        )
+        return concatenated_features, concatenated_targets, self.feature_names
+
+    def concatenate_features_and_targets(self):
+        concatenated_features = {}
+        concatenated_targets = {}
+        concatenated_feature_names = []
+
+        # Concatenate feature names only once
+        for analysis_type in sorted(self.feature_names.keys()): #type: ignore
+            concatenated_feature_names.extend(self.feature_names[analysis_type])
+
+        for stage in self.features:
+            all_features = []
+            all_targets = []
+            for analysis_type in sorted(
+                self.features[stage].keys()
+            ):  # Sort to ensure consistent order
+                all_features.append(self.features[stage][analysis_type])
+                all_targets.append(self.targets[stage][analysis_type])
+
+            # Find the minimum number of samples across all analysis types
+            min_samples = min(len(features) for features in all_features)
+
+            # Resample features and targets to have the same number of samples
+            resampled_features = []
+            resampled_targets = []
+            for features, targets in zip(all_features, all_targets):
+                if len(features) > min_samples:
+                    resampled_features.append(
+                        resample(features, n_samples=min_samples, random_state=42)
+                    )
+                    resampled_targets.append(
+                        resample(targets, n_samples=min_samples, random_state=42)
+                    )
+                else:
+                    resampled_features.append(features)
+                    resampled_targets.append(targets)
+
+            # Concatenate the resampled features and targets
+            concatenated_features[stage] = np.hstack(resampled_features)
+            concatenated_targets[stage] = resampled_targets[
+                0
+            ]  # Assuming targets are the same for all analysis types
+
+            # print(f"Stage: {stage}")
+            # print(f"  Concatenated features shape: {concatenated_features[stage].shape}")
+            # print(f"  Concatenated targets shape: {concatenated_targets[stage].shape}")
+
+        self.feature_names = concatenated_feature_names
+        return concatenated_features, concatenated_targets
+
+    def resample_features_and_targets(self, stage):
+
+        analysis_types = list(self.features[stage].keys())
+        if len(analysis_types) < 2:
+            return  # No need to resample if there's only one or no analysis type
+
+        # Find the minimum number of samples across all analysis types
+        min_samples = min(len(self.features[stage][at]) for at in analysis_types)
+
+        for analysis_type in analysis_types:
+            features = np.array(self.features[stage][analysis_type])
+            targets = np.array(self.targets[stage][analysis_type])
+
+            if len(features) > min_samples:
+                # Randomly sample without replacement
+                indices = np.random.choice(len(features), min_samples, replace=False)
+                self.features[stage][analysis_type] = features[indices]
+                self.targets[stage][analysis_type] = targets[indices]
+
+        # Print the number of samples after resampling
+        # for analysis_type in analysis_types:
+        #     print(f"Samples for {stage}:{analysis_type} after resampling: {len(self.features[stage][analysis_type])}")
+
+
 class Processor:
     def __init__(
         self,
@@ -196,7 +392,8 @@ class Processor:
         self.ts_storage = []
         self.sfs = []
 
-        self.num_sims = self.experiment_config["num_sims"]
+        self.num_sims_pretrain = self.experiment_config["num_sims_pretrain"]
+        self.num_sims_inference = self.experiment_config["num_sims_inference"]
 
         self.num_samples = self.experiment_config["num_samples"]
         self.L = self.experiment_config["genome_length"]
@@ -359,7 +556,7 @@ class Processor:
 
         return sfs
 
-    def run(self):
+    def run(self, indices_of_interest):
 
         # Initialize lists to store results
         sample_params_storage = []
@@ -388,29 +585,28 @@ class Processor:
                 self.bottleneck_model,
                 self.run_msprime_replicates,
                 self.write_samples_and_rec_map,
-                run_inference_dadi_func=( #type: ignore
+                run_inference_dadi_func=(  # type: ignore
                     run_inference_dadi
                     if self.experiment_config["dadi_analysis"]
                     else None
                 ),
-                run_inference_moments_func=( #type: ignore
+                run_inference_moments_func=(  # type: ignore
                     run_inference_moments
                     if self.experiment_config["moments_analysis"]
                     else None
                 ),
-                run_inference_momentsLD_func=(#type: ignore
+                run_inference_momentsLD_func=(  # type: ignore
                     run_inference_momentsLD
                     if self.experiment_config["momentsLD_analysis"]
                     else None
                 ),
-                folderpath=self.folderpath,#type: ignore
-                num_windows=self.num_windows,#type: ignore
-                num_samples=self.num_samples,#type: ignore
-                maxiter=self.maxiter,#type: ignore
+                folderpath=self.folderpath,  # type: ignore
+                num_windows=self.num_windows,  # type: ignore
+                num_samples=self.num_samples,  # type: ignore
+                maxiter=self.maxiter,  # type: ignore
             )
-            for i in range(self.num_sims)
+            for i in range(len(indices_of_interest))
         ]
-
         # Collect the results
         results = ray.get(futures)
 

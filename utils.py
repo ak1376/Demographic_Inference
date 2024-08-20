@@ -6,8 +6,11 @@ import os
 import shap
 from sklearn.inspection import PartialDependenceDisplay
 from sklearn.preprocessing import StandardScaler
+import pickle
+import ray
 
-def extract_features(simulated_params, opt_params, normalization = True):
+
+def extract_features(simulated_params, opt_params, normalization=True):
     """
     opt_params can come from any of the inference methods.
     """
@@ -54,88 +57,101 @@ def extract_features(simulated_params, opt_params, normalization = True):
     return features, targets
 
 
-def visualizing_results(results_obj, analysis, save_loc="results", outlier_indices=None):
-    ''' 
-    Results object should have the following structure:
-    - simulated_params: Numpy array with dimension (num_simulations, num_params). 
-    '''
-    # Extract simulated parameters
-    simulated_params = results_obj["simulated_params"]
+def visualizing_results(
+    linear_mdl_obj, analysis, save_loc="results", outlier_indices=None
+):
+    stages = ["training", "validation", "testing"]
+    params = ["Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
+    main_colors = ["blue", "green", "red", "purple"]
 
-    t_bottleneck_start_sample = [d["t_bottleneck_start"] for d in simulated_params]
-    t_bottleneck_end_sample = [d["t_bottleneck_end"] for d in simulated_params]
-    Nb_sample = [d["Nb"] for d in simulated_params]
-    N_recover_sample = [d["N_recover"] for d in simulated_params]
+    # Define color shades for each stage
+    color_shades = {
+        "blue": [
+            "#1e90ff",
+            "#4169e1",
+            "#0000cd",
+        ],  # Dodger blue, Royal blue, Medium blue
+        "green": [
+            "#90ee90",
+            "#32cd32",
+            "#006400",
+        ],  # Light green, Lime green, Dark green
+        "red": ["#ff6347", "#dc143c", "#8b0000"],  # Tomato, Crimson, Dark red
+        "purple": ["#da70d6", "#9370db", "#4b0082"],  # Orchid, Medium purple, Indigo
+    }
 
-    # Extract optimized parameters
-    opt_params = results_obj["opt_params"]
+    plt.figure(figsize=(20, 15))
 
-    Nb_opt = [d["Nb"] for d in opt_params]
-    N_recover_opt = [d["N_recover"] for d in opt_params]
-    t_bottleneck_start_opt = [d["t_bottleneck_start"] for d in opt_params]
-    t_bottleneck_end_opt = [d["t_bottleneck_end"] for d in opt_params]
+    for i, param in enumerate(params):
+        plt.subplot(2, 2, i + 1)
 
+        for j, stage in enumerate(stages):
+            predictions = linear_mdl_obj[stage]["predictions"][:, i]
+            targets = linear_mdl_obj[stage]["targets"][:, i]
 
-    if outlier_indices is not None:
-        # Remove outliers from the data
-        simulated_params = np.delete(simulated_params, outlier_indices, axis=0)
-        Nb_sample = np.delete(Nb_sample, outlier_indices)
-        N_recover_sample = np.delete(N_recover_sample, outlier_indices)
-        t_bottleneck_start_sample = np.delete(t_bottleneck_start_sample, outlier_indices)
-        t_bottleneck_end_sample = np.delete(t_bottleneck_end_sample, outlier_indices)
+            if outlier_indices is not None:
+                predictions = np.delete(predictions, outlier_indices)
+                targets = np.delete(targets, outlier_indices)
 
-        opt_params = np.delete(opt_params, outlier_indices, axis=0)
-        Nb_opt = np.delete(Nb_opt, outlier_indices)
-        N_recover_opt = np.delete(N_recover_opt, outlier_indices)
-        t_bottleneck_start_opt = np.delete(t_bottleneck_start_opt, outlier_indices)
-        t_bottleneck_end_opt = np.delete(t_bottleneck_end_opt, outlier_indices)
+            plt.scatter(
+                targets,
+                predictions,
+                alpha=0.5,
+                color=color_shades[main_colors[i]][j],
+                label=f"{stage.capitalize()}",
+            )
 
-    # Plotting the results
-    plt.figure(figsize=(12, 8))
+        plt.xlabel(f"True {param}")
+        plt.ylabel(f"Predicted {param}")
+        plt.title(f"{param}: True vs Predicted")
 
-    # Plot Nb
-    plt.subplot(2, 2, 1)
-    plt.scatter(Nb_sample, Nb_opt, alpha=0.5, color="blue")
-    plt.xlabel("Simulated Nb")
-    plt.ylabel("Optimized Nb")
-    plt.title("Nb: Simulated vs Optimized")
-    max_value = max(max(Nb_sample), max(Nb_opt))
-    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
+        max_value = max(
+            max(linear_mdl_obj[stage]["targets"][:, i].max() for stage in stages),
+            max(linear_mdl_obj[stage]["predictions"][:, i].max() for stage in stages),
+        )
+        min_value = min(
+            min(linear_mdl_obj[stage]["targets"][:, i].min() for stage in stages),
+            min(linear_mdl_obj[stage]["predictions"][:, i].min() for stage in stages),
+        )
+        plt.plot(
+            [min_value, max_value],
+            [min_value, max_value],
+            color="black",
+            linestyle="--",
+        )
 
-    # Plot N_recover
-    plt.subplot(2, 2, 2)
-    plt.scatter(N_recover_sample, N_recover_opt, alpha=0.5, color="green")
-    plt.xlabel("Simulated N_recover")
-    plt.ylabel("Optimized N_recover")
-    plt.title("N_recover: Simulated vs Optimized")
-    max_value = max(max(N_recover_sample), max(N_recover_opt))
-    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
-
-    # Plot t_bottleneck_start
-    plt.subplot(2, 2, 3)
-    plt.scatter(t_bottleneck_start_sample, t_bottleneck_start_opt, alpha=0.5, color="red")
-    plt.xlabel("Simulated t_bottleneck_start")
-    plt.ylabel("Optimized t_bottleneck_start")
-    plt.title("t_bottleneck_start: Simulated vs Optimized")
-    max_value = max(max(t_bottleneck_start_sample), max(t_bottleneck_start_opt))
-    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
-
-    # Plot t_bottleneck_end
-    plt.subplot(2, 2, 4)
-    plt.scatter(t_bottleneck_end_sample, t_bottleneck_end_opt, alpha=0.5, color="purple")
-    plt.xlabel("Simulated t_bottleneck_end")
-    plt.ylabel("Optimized t_bottleneck_end")
-    plt.title("t_bottleneck_end: Simulated vs Optimized")
-    max_value = max(max(t_bottleneck_end_sample), max(t_bottleneck_end_opt))
-    plt.plot([0, max_value], [0, max_value], color="black", linestyle="--")
+        plt.legend()
 
     plt.tight_layout()
-    print(f"/{save_loc}/inference_results_{analysis}.png")
+
+    filename = f"{save_loc}/{analysis}"
     if outlier_indices is not None:
-        plt.savefig(f"{save_loc}/inference_results_{analysis}_outliers_removed.png", format="png")
-    else:
-        plt.savefig(f"{save_loc}/inference_results_{analysis}.png", format="png")
+        filename += "_outliers_removed"
+    filename += ".png"
+
+    plt.savefig(filename, format="png", dpi=300)
+    print(f"Saved figure to: {filename}")
     plt.show()
+
+
+def calculate_model_errors(model_obj, model_name):
+    """
+    Calculate RMSE for a single model across training, validation, and testing datasets.
+
+    :param model_obj: Dictionary containing model predictions and targets for each dataset
+    :param model_name: String name of the model (for labeling the output)
+    :return: Dictionary of RMSE values for the model across datasets
+    """
+    datasets = ["training", "validation", "testing"]
+    errors = {}
+
+    for dataset in datasets:
+        errors[dataset] = root_mean_squared_error(
+            model_obj[dataset]["targets"], model_obj[dataset]["predictions"]
+        )
+
+    return {model_name: errors}
+
 
 def feature_importance(
     multi_output_model, model_number, feature_names, target_names, save_loc="results"
@@ -295,14 +311,33 @@ def visualize_model_predictions(
 #     # Show the plot
 #     plt.show()
 
+
 def root_mean_squared_error(y_true, y_pred):
-    '''
-    Note that this formula is a bit different than for the competition. This is because we have multiple simulations instead of 1 evaluation simulation. 
-    '''
+    """
+    Calculate the root mean squared error, with special handling for 8-column predictions.
+    If y_pred has 8 columns, it concatenates the values in the second group of 4 columns
+    with the values in the first group of 4 columns.
+
+    :param y_true: True values (numpy array)
+    :param y_pred: Predicted values (numpy array)
+    :return: Root mean squared error value
+    """
+    # Check if y_pred has 8 columns
+    if y_pred.shape[1] == 8:
+        # Concatenate the second group of 4 columns with the first group
+        y_pred = np.concatenate([y_pred[:, :4], y_pred[:, 4:]], axis=0)
+        # Repeat y_true to match the new y_pred shape
+        y_true = np.tile(y_true, (2, 1))
+
+    # Ensure y_true and y_pred have the same shape
+    assert (
+        y_true.shape == y_pred.shape
+    ), "Shapes of y_true and y_pred must match after processing"
+
     relative_error = (y_pred - y_true) / y_true
     squared_relative_error = np.square(relative_error)
-    rrmse_value = np.sqrt(np.mean(np.sum(squared_relative_error, axis = 1)))
-    
+    rrmse_value = np.sqrt(np.mean(np.sum(squared_relative_error, axis=1)))
+
     return rrmse_value
 
 
@@ -332,8 +367,8 @@ def find_outlier_indices(data, threshold=3):
     Returns:
     - outliers: Numpy array containing the outliers
     """
-    z_scores = np.abs((data - np.mean(data, axis = 0)) / np.std(data, axis = 0))
-    outliers_indices = np.where(z_scores > threshold)[0] # I only want the rows
+    z_scores = np.abs((data - np.mean(data, axis=0)) / np.std(data, axis=0))
+    outliers_indices = np.where(z_scores > threshold)[0]  # I only want the rows
 
     return outliers_indices
 
@@ -345,22 +380,58 @@ def resample_to_match_row_count(arr, target_rows, return_indices=False):
             return arr, np.arange(arr.shape[0])
         else:
             return arr
-    
+
     # Calculate the number of repetitions needed
     num_repeats = target_rows // arr.shape[0]
     remainder = target_rows % arr.shape[0]
-    
+
     # Generate indices for repetition
     indices = np.tile(np.arange(arr.shape[0]), num_repeats)
-    
+
     # If there is a remainder, add additional indices
     if remainder > 0:
         indices = np.concatenate([indices, np.arange(remainder)])
-    
+
     # Resample the array using the calculated indices
     resampled_array = arr[indices, :]
-    
+
     if return_indices:
         return resampled_array, indices
     else:
         return resampled_array
+
+
+def save_dict_to_pickle(data_dict, filename, directory):
+    """Save a dictionary to a pickle file."""
+    filepath = os.path.join(directory, filename)
+    with open(filepath, "wb") as f:
+        pickle.dump(data_dict, f)
+    print(f"Saved: {filepath}")
+
+
+@ray.remote
+def process_and_save_data(processor, indices, data_type, experiment_directory):
+    """Process data and save results to pickle files."""
+    dadi_dict, moments_dict, momentsLD_dict = processor.run(indices)
+
+    for name, data in [
+        ("dadi", dadi_dict),
+        ("moments", moments_dict),
+        ("momentsLD", momentsLD_dict),
+    ]:
+        filename = f"{name}_dict_{data_type}.pkl"
+        save_dict_to_pickle(data, filename, experiment_directory)
+
+    # Save ground truth (generative parameters)
+    ground_truth = (
+        dadi_dict.get("simulated_params")
+        or moments_dict.get("simulated_params")
+        or momentsLD_dict.get("simulated_params")
+    )
+    if ground_truth is not None:
+        filename = f"ground_truth_{data_type}.pkl"
+        save_dict_to_pickle(ground_truth, filename, experiment_directory)
+    else:
+        print(f"Warning: No ground truth found for {data_type}")
+
+    return dadi_dict, moments_dict, momentsLD_dict
