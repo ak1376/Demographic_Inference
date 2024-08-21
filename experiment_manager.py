@@ -119,7 +119,7 @@ class Experiment_Manager:
         """
 
         ray.init(
-            num_cpus=os.cpu_count(), local_mode=False
+            num_cpus=25, local_mode=False
         )  # This is a placeholder for now.
 
         # First step: define the processor

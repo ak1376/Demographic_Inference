@@ -1,4 +1,4 @@
-from models import ShallowNN, ModelActor
+from models import ShallowNN
 import ray
 import os
 from utils import visualizing_results, calculate_model_errors
@@ -25,8 +25,9 @@ class Trainer:
             output_size=self.model_config['output_size'],
             num_layers=self.model_config['num_layers'],
             num_epochs=self.model_config['num_epochs'],
-            learning_rate=self.model_config['learning_rate']
-
+            learning_rate=self.model_config['learning_rate'],
+            weight_decay=self.model_config['weight_decay'],
+            dropout_rate=self.model_config['dropout_rate']
         )
 
         if visualize:
