@@ -58,9 +58,12 @@ def extract_features(simulated_params, opt_params, normalization=True):
 
 
 def visualizing_results(
-    linear_mdl_obj, analysis, save_loc="results", outlier_indices=None
+    linear_mdl_obj, analysis, save_loc="results", outlier_indices=None, stages=None
 ):
-    stages = ["training", "validation", "testing"]
+    # Default to all stages if not specified
+    if stages is None:
+        stages = ["training", "validation", "testing"]
+
     params = ["Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
     main_colors = ["blue", "green", "red", "purple"]
 
@@ -134,7 +137,7 @@ def visualizing_results(
     plt.show()
 
 
-def calculate_model_errors(model_obj, model_name):
+def calculate_model_errors(model_obj, model_name, datasets):
     """
     Calculate RMSE for a single model across training, validation, and testing datasets.
 
@@ -142,7 +145,7 @@ def calculate_model_errors(model_obj, model_name):
     :param model_name: String name of the model (for labeling the output)
     :return: Dictionary of RMSE values for the model across datasets
     """
-    datasets = ["training", "validation", "testing"]
+    # datasets = ["training", "validation", "testing"]
     errors = {}
 
     for dataset in datasets:

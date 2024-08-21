@@ -3,6 +3,9 @@ import ray
 import os
 import multiprocessing
 import warnings
+# import time
+import pickle
+from train import Trainer
 
 # Suppress the specific warning about delim_whitespace
 warnings.filterwarnings(
@@ -16,19 +19,19 @@ warnings.filterwarnings(
 
 # Let's define
 upper_bound_params = {
-    "N0": 15000,
-    "Nb": 7000,
-    "N_recover": 9000,
+    "N0": 10000,
+    "Nb": 2000,
+    "N_recover": 8000,
     "t_bottleneck_end": 1000,
-    "t_bottleneck_start": 3000,  # In generations
+    "t_bottleneck_start": 2000,  # In generations
 }
 
 lower_bound_params = {
-    "N0": 10000,
+    "N0": 8000,
     "Nb": 1000,
-    "N_recover": 8000,
-    "t_bottleneck_end": 400,
-    "t_bottleneck_start": 1100,  # In generations
+    "N_recover": 4000,
+    "t_bottleneck_end": 800,
+    "t_bottleneck_start": 1500,  # In generations
 }
 
 
@@ -42,7 +45,7 @@ hidden_size = 100  # Number of neurons in the hidden layer
 output_size = 4  # Number of output classes
 num_epochs = 5000
 learning_rate = 3e-4
-num_layers = 10
+num_layers = 4
 
 model_config = {
     "input_size": input_size,
@@ -78,7 +81,21 @@ config_file = {
 }
 
 linear_experiment = Experiment_Manager(config_file)
-linear_experiment.pretrain()
+# linear_experiment.obtaining_features()
+preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/experiments/neural_net_linear_regression_keep/processing_results_obj.pkl")
+
+training_features = preprocessing_results_obj["training"]["predictions"]
+training_targets = preprocessing_results_obj["training"]["targets"]
+validation_features = preprocessing_results_obj["validation"]["predictions"]
+validation_targets = preprocessing_results_obj["validation"]["targets"]
+
+# testing_features = preprocessing_results_obj["testing"]["predictions"]
+# testing_targets = preprocessing_results_obj["testing"]["targets"]
+
+trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config)
+snn_model, train_losses, val_losses = trainer.train(training_features, training_targets, validation_features, validation_targets, visualize = True)
+trainer.predict(snn_model, training_features, validation_features, training_targets, validation_targets, visualize = True)
+
 # linear_experiment.inference()
 ray.shutdown()
 
