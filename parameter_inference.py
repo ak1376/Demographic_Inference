@@ -5,7 +5,8 @@ from tqdm import tqdm
 import numpy as np
 import ray
 import time
-
+from dadi.Godambe import get_godambe
+from moments.Godambe import _get_godambe
 
 @ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
@@ -131,6 +132,21 @@ def run_inference_moments(
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
 
+    uncerts = moments.Godambe.FIM_uncert(
+    model_func, opt_params, sfs)
+
+    # Let's extract the hessian
+    # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
+    H = _get_godambe(model_func, all_boot = [], p0 = opt_params, data = sfs, eps = 1e-6, log=False, just_hess=True)
+    FIM = -1*H
+
+    # Get the indices of the upper triangular part (including the diagonal)
+    upper_tri_indices = np.triu_indices(FIM.shape[0])
+
+    # Extract the upper triangular elements
+    upper_triangular = FIM[upper_tri_indices]
+
+
     # opt_params_dict = {
     #     'N0': N0_opt,
     #     'Nb': opt_params[0]*N0_opt,
@@ -145,6 +161,7 @@ def run_inference_moments(
         "N_recover": opt_params[1] * sampled_params["N0"],
         "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"], #type: ignore
         "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"], #type: ignore
+        "upper_triangular_FIM": upper_triangular
     }
 
     model = model * opt_theta

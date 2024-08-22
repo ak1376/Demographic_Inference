@@ -18,25 +18,41 @@ warnings.filterwarnings(
 
 
 # Let's define
+# upper_bound_params = {
+#     "N0": 15000,
+#     "Nb": 7000,
+#     "N_recover": 9000,
+#     "t_bottleneck_end": 1000,
+#     "t_bottleneck_start": 3000,  # In generations
+# }
+
+# lower_bound_params = {
+#     "N0": 10000,
+#     "Nb": 1000,
+#     "N_recover": 8000,
+#     "t_bottleneck_end": 400,
+#     "t_bottleneck_start": 1100,  # In generations
+# }
+
 upper_bound_params = {
-    "N0": 15000,
-    "Nb": 7000,
-    "N_recover": 9000,
+    "N0": 10000,
+    "Nb": 2000,
+    "N_recover": 8000,
     "t_bottleneck_end": 1000,
-    "t_bottleneck_start": 3000,  # In generations
+    "t_bottleneck_start": 2000,  # In generations
 }
 
 lower_bound_params = {
-    "N0": 10000,
+    "N0": 8000,
     "Nb": 1000,
-    "N_recover": 8000,
-    "t_bottleneck_end": 400,
-    "t_bottleneck_start": 1100,  # In generations
+    "N_recover": 4000,
+    "t_bottleneck_end": 800,
+    "t_bottleneck_start": 1500,  # In generations
 }
 
 
-num_simulations_pretrain = 50_000
-num_simulations_inference = 50_000
+num_simulations_pretrain = 10
+num_simulations_inference = 10
 num_samples = 20
 
 # Neural Net Hyperparameters
@@ -66,7 +82,7 @@ config_file = {
     "num_sims_pretrain": num_simulations_pretrain,
     "num_sims_inference": num_simulations_inference,
     "num_samples": num_samples,
-    "experiment_name": "harder_prior_50k_simulations",
+    "experiment_name": "godambe",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
@@ -83,9 +99,9 @@ config_file = {
 }
 
 linear_experiment = Experiment_Manager(config_file)
-# preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/archive/harder_prior_7/preprocessing_results_obj.pkl")
-# linear_experiment.obtaining_features()
-preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/archive/harder_prior_50k_simulations_2/preprocessing_results_obj.pkl")
+linear_experiment.obtaining_features()
+# preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/archive/harder_prior_50k_simulations_2/preprocessing_results_obj.pkl")
+preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/godambe/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]
 training_targets = preprocessing_results_obj["training"]["targets"]
 validation_features = preprocessing_results_obj["validation"]["predictions"]

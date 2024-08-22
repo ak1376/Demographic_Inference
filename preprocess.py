@@ -116,7 +116,7 @@ def process_single_simulation(
     maxiter=None,
 ):
     sampled_params = sample_params_func()
-    sfs = create_SFS_func(sampled_params, mode="pretrain")
+    sfs = create_SFS_func(sampled_params, num_samples)
 
     # Simulate process and save windows as VCF files
     if run_inference_momentsLD_func:
@@ -521,38 +521,32 @@ class Processor:
 
         return sampled_params
 
-    def create_SFS(self, sampled_params, mode="pretrain"):
+    @staticmethod
+    def create_SFS(sampled_params, num_samples = 100):
         """
         If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
 
         """
 
-        if mode == "pretrain":
-            demography = msprime.Demography()
-            demography.add_population(
-                name="A", initial_size=sampled_params["N_recover"]
-            )
-            demography.add_population_parameters_change(
-                sampled_params["t_bottleneck_end"], initial_size=sampled_params["Nb"]
-            )
-            demography.add_population_parameters_change(
-                sampled_params["t_bottleneck_start"], initial_size=sampled_params["N0"]
-            )
+        demography = msprime.Demography()
+        demography.add_population(
+            name="A", initial_size=sampled_params["N_recover"]
+        )
+        demography.add_population_parameters_change(
+            sampled_params["t_bottleneck_end"], initial_size=sampled_params["Nb"]
+        )
+        demography.add_population_parameters_change(
+            sampled_params["t_bottleneck_start"], initial_size=sampled_params["N0"]
+        )
 
-            demes_model = demography.to_demes()
+        demes_model = demography.to_demes()
 
-            sfs = dadi.Demes.SFS(
-                demes_model,
-                sampled_demes=["A"],
-                sample_sizes=[2 * self.num_samples],
-                pts=4 * self.num_samples,
-            )
-
-        else:
-            """
-            Fill this in later. This is for inference mode on the GHIST data.
-            """
-            pass
+        sfs = dadi.Demes.SFS(
+            demes_model,
+            sampled_demes=["A"],
+            sample_sizes=[2 * num_samples],
+            pts=4 * num_samples,
+        )
 
         return sfs
 
