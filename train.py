@@ -6,11 +6,12 @@ from utils import visualizing_results, calculate_model_errors
 
 
 class Trainer: 
-    def __init__(self, experiment_directory, model_config):
+    def __init__(self, experiment_directory, model_config, use_FIM = True):
         self.experiment_directory = experiment_directory
         self.model_config = model_config
         self.num_epochs=self.model_config['num_epochs']
         self.learning_rate=self.model_config['learning_rate']
+        self.use_FIM = use_FIM
         ray.init(num_cpus=os.cpu_count(), num_gpus=3, local_mode=False)
 
 
@@ -27,7 +28,8 @@ class Trainer:
             num_epochs=self.model_config['num_epochs'],
             learning_rate=self.model_config['learning_rate'],
             weight_decay=self.model_config['weight_decay'],
-            dropout_rate=self.model_config['dropout_rate']
+            dropout_rate=self.model_config['dropout_rate'],
+            use_FIM=self.use_FIM
         )
 
         if visualize:
@@ -40,8 +42,14 @@ class Trainer:
         return snn_model, train_losses, val_losses
     
     def predict(self, snn_model, training_data, validation_data, training_targets, validation_targets, visualize = True):
-        training_predictions = snn_model.predict(training_data)
-        validation_predictions = snn_model.predict(validation_data)
+
+        if self.use_FIM == False:
+            training_predictions = snn_model.predict(training_data[:,:8])
+            validation_predictions = snn_model.predict(validation_data[:,:8])
+
+        else:
+            training_predictions = snn_model.predict(training_data)
+            validation_predictions = snn_model.predict(validation_data)
 
         snn_mdl_obj = {}
         snn_mdl_obj["training"] = {}

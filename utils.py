@@ -26,10 +26,30 @@ def extract_features(simulated_params, opt_params, normalization=True):
     t_bottleneck_start_sample = [d["t_bottleneck_start"] for d in simulated_params]
     t_bottleneck_end_sample = [d["t_bottleneck_end"] for d in simulated_params]
 
+    #TODO: Make this a bit more elegant and streamlined.
+    if "upper_triangular_FIM" in opt_params[0]:
+        upper_triangular_FIM = [d["upper_triangular_FIM"] for d in opt_params]
+
+        # Add the FIM values to the features
+        opt_params_array = np.column_stack(
+            (
+                Nb_opt,
+                N_recover_opt,
+                t_bottleneck_start_opt,
+                t_bottleneck_end_opt,
+                upper_triangular_FIM,
+            )
+        )
+
     # Put all these features into a single 2D array
-    opt_params_array = np.column_stack(
-        (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt)
-    )
+    if "upper_triangular_FIM" in opt_params[0]:
+        opt_params_array = np.column_stack(
+            (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt, upper_triangular_FIM)
+        )
+    else:
+        opt_params_array = np.column_stack(
+            (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt)
+        )
 
     # Combine simulated parameters into targets
     targets = np.column_stack(
@@ -150,7 +170,7 @@ def calculate_model_errors(model_obj, model_name, datasets):
 
     for dataset in datasets:
         errors[dataset] = root_mean_squared_error(
-            model_obj[dataset]["targets"], model_obj[dataset]["predictions"]
+            model_obj[dataset]["targets"], model_obj[dataset]["predictions"][:, :4] # The :4 is to only consider the first 4 columns which are the parameters of interest. For moments I also get the upper triangle of the FIM, and those aren't parameters we are inferring. 
         )
 
     return {model_name: errors}

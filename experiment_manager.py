@@ -119,7 +119,7 @@ class Experiment_Manager:
         """
 
         ray.init(
-            num_cpus=25, local_mode=True
+            num_cpus=25, local_mode=False
         )  # This is a placeholder for now.
 
         # First step: define the processor
@@ -264,8 +264,6 @@ class Experiment_Manager:
         visualizing_results(
             linear_mdl_obj, "linear_results", save_loc=self.experiment_directory, stages=["training", "validation"]
         )
-
-        # ALL THIS BELOW CODE SHOULD BE GOING IN A DIFFERENT OBJECT: TRAINER OBJECT
 
         ray.shutdown()
 

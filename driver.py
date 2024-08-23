@@ -51,17 +51,23 @@ lower_bound_params = {
 }
 
 
-num_simulations_pretrain = 10
-num_simulations_inference = 10
+num_simulations_pretrain = 1000
+num_simulations_inference = 1000
 num_samples = 20
 
 # Neural Net Hyperparameters
-input_size = 8  # Number of features
+
+use_FIM = False
+if use_FIM == False:
+    input_size = 8  # Number of features. This includes the FIM upper triangular matrix. 
+else:
+    input_size = 18
+
 hidden_size = 1000  # Number of neurons in the hidden layer
 output_size = 4  # Number of output classes
-num_epochs = 5000
+num_epochs = 1000
 learning_rate = 3e-4
-num_layers = 5
+num_layers = 3
 
 model_config = {
     "input_size": input_size,
@@ -71,7 +77,7 @@ model_config = {
     "learning_rate": learning_rate,
     "num_layers": num_layers,
     "dropout_rate": 0,
-    "weight_decay": 1e-4
+    "weight_decay": 0
 }
 
 
@@ -82,7 +88,7 @@ config_file = {
     "num_sims_pretrain": num_simulations_pretrain,
     "num_sims_inference": num_simulations_inference,
     "num_samples": num_samples,
-    "experiment_name": "godambe",
+    "experiment_name": "without_FIM",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
@@ -99,9 +105,9 @@ config_file = {
 }
 
 linear_experiment = Experiment_Manager(config_file)
-linear_experiment.obtaining_features()
-# preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/archive/harder_prior_50k_simulations_2/preprocessing_results_obj.pkl")
-preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/godambe/preprocessing_results_obj.pkl")
+# linear_experiment.obtaining_features()
+# preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/harder_prior_50k_simulation/preprocessing_results_obj.pkl")
+preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/with_FIM/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]
 training_targets = preprocessing_results_obj["training"]["targets"]
 validation_features = preprocessing_results_obj["validation"]["predictions"]
@@ -110,7 +116,7 @@ validation_targets = preprocessing_results_obj["validation"]["targets"]
 testing_features = preprocessing_results_obj["testing"]["predictions"]
 testing_targets = preprocessing_results_obj["testing"]["targets"]
 
-trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config)
+trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config, use_FIM=use_FIM)
 snn_model, train_losses, val_losses = trainer.train(training_features, training_targets, validation_features, validation_targets, visualize = True)
 trainer.predict(snn_model, training_features, validation_features, training_targets, validation_targets, visualize = True)
 

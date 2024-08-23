@@ -255,8 +255,9 @@ class FeatureExtractor:
                 f"Nb_opt_{analysis_type}",
                 f"N_recover_opt_{analysis_type}",
                 f"t_bottleneck_start_opt_{analysis_type}",
-                f"t_bottleneck_end_opt_{analysis_type}",
+                f"t_bottleneck_end_opt_{analysis_type}"
             ]
+            
 
         # error_value = root_mean_squared_error(targets, features)
         # print(f"Batch error value for {analysis_type} {stage}: {error_value}")

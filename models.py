@@ -158,6 +158,11 @@ class XGBoost:
 
     #     return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
 
+# Hook function to inspect BatchNorm outputs
+def inspect_batchnorm_output(module, input, output):
+    print(f'BatchNorm Output Mean: {output.mean().item()}')
+    print(f'BatchNorm Output Variance: {output.var().item()}')
+
 
 class ShallowNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_layers=3, dropout_rate=0.1, weight_decay=1e-4):
@@ -170,12 +175,14 @@ class ShallowNN(nn.Module):
 
         # First layer (input to first hidden layer)
         layers.append(nn.Linear(input_size, hidden_size))
+        # layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
         layers.append(nn.ReLU())
         layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
 
         # Hidden layers (loop through to add layers dynamically)
         for _ in range(num_layers - 1):
             layers.append(nn.Linear(hidden_size, hidden_size))
+            # layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
 
@@ -187,6 +194,26 @@ class ShallowNN(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+    
+    def predict(self, X):
+        """
+        Make predictions using the trained model.
+
+        Args:
+        X (numpy.ndarray or torch.Tensor): Input data for prediction.
+
+        Returns:
+        numpy.ndarray: Predicted outputs.
+        """
+        self.eval()  # Set the model to evaluation mode
+        with torch.no_grad():
+            if isinstance(X, np.ndarray):
+                X = torch.tensor(X, dtype=torch.float32)
+            if X.device != next(self.parameters()).device:
+                X = X.to(next(self.parameters()).device)
+            predictions = self(X)
+
+        return predictions.cpu().numpy()
 
     @staticmethod
     def train_and_validate(
@@ -202,7 +229,8 @@ class ShallowNN(nn.Module):
         learning_rate=3e-4,
         weight_decay=1e-4,
         dropout_rate=0.1,
-        batch_size=64
+        batch_size=64,
+        use_FIM = True
     ):
         model = ShallowNN(input_size, hidden_size, output_size, num_layers, dropout_rate=dropout_rate, weight_decay=weight_decay).cuda()
         criterion = nn.MSELoss()
@@ -214,12 +242,19 @@ class ShallowNN(nn.Module):
         X_val_tensor = torch.tensor(X_val, dtype=torch.float32).cuda()
         y_val_tensor = torch.tensor(y_val, dtype=torch.float32).cuda()
 
+        if use_FIM == False:
+            X_train_tensor = X_train_tensor[:,:8]
+            X_val_tensor = X_val_tensor[:,:8]
+
         # Create DataLoader for mini-batch training
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
         train_losses = []
         val_losses = []
+
+        # running_mean_mean = []
+        # running_var_mean = []
         
         for epoch in range(num_epochs):
             model.train()
@@ -233,6 +268,14 @@ class ShallowNN(nn.Module):
                 # Store training loss for the batch
                 train_losses.append(train_loss.item())
 
+                # **Monitoring BatchNorm Statistics**
+                # Register the hook to all BatchNorm layers in the model
+                # for layer in model.modules():
+                #     if isinstance(layer, nn.BatchNorm1d) or isinstance(layer, nn.BatchNorm2d):
+                #         layer.register_forward_hook(inspect_batchnorm_output)
+
+
+
                 # Validate on the full validation set
                 model.eval()
                 with torch.no_grad():
@@ -242,7 +285,7 @@ class ShallowNN(nn.Module):
                 # Store validation loss for the batch
                 val_losses.append(val_loss)
 
-            if (epoch) % 10 == 0:
+            if (epoch) % 100 == 0:
                 print(
                     f"Epoch {epoch+1}/{num_epochs}, Last Batch Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}"
                 )
