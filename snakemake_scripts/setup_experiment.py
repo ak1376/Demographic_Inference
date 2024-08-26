@@ -9,21 +9,24 @@ def save_config(experiment_directory, experiment_config):
     with open(f"{experiment_directory}/config.json", "w") as json_file:
         json.dump(experiment_config, json_file, indent=4)  # indent=4 makes the JSON file more readable
 
+    with open(f"{experiment_directory}/model_config.json", "w") as json_file:
+        json.dump(experiment_config["neural_net_hyperparameters"], json_file, indent=4)  # indent=4 makes the JSON file more readable        
+
 def create_experiment(config):
     return Experiment_Manager(config)
 
 def main(output_dir=None):
     upper_bound_params = {
     "N0": 10000,
-    "Nb": 2000,
-    "N_recover": 8000,
+    "Nb": 5000,
+    "N_recover": 7000,
     "t_bottleneck_end": 1000,
     "t_bottleneck_start": 2000
     }
     lower_bound_params = {
     "N0": 8000,
-    "Nb": 1000,
-    "N_recover": 4000,
+    "Nb": 4000,
+    "N_recover": 6000,
     "t_bottleneck_end": 800,
     "t_bottleneck_start": 1500
     }
@@ -44,7 +47,7 @@ def main(output_dir=None):
         "num_sims_pretrain": 1000,
         "num_sims_inference": 1000,
         "num_samples": 20,
-        "experiment_name": "snakemake_test",
+        "experiment_name": "snakemake",
         "dadi_analysis": True,
         "moments_analysis": True,
         "momentsLD_analysis": False,
@@ -94,6 +97,8 @@ if __name__ == "__main__":
         config_file, experiment_obj_file = main(output_dir)
         
         # Verify that the output files match the expected paths
+        print(config_file)
+        print(args.config_file)
         assert config_file == args.config_file, f"Config file mismatch: {config_file} != {args.config_file}"
         assert experiment_obj_file == args.experiment_obj_file, f"Experiment object file mismatch: {experiment_obj_file} != {args.experiment_obj_file}"
     else:
