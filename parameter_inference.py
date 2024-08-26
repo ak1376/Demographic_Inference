@@ -132,8 +132,8 @@ def run_inference_moments(
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
 
-    uncerts = moments.Godambe.FIM_uncert(
-    model_func, opt_params, sfs)
+    # uncerts = moments.Godambe.FIM_uncert(
+    # model_func, opt_params, sfs)
 
     # Let's extract the hessian
     # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))

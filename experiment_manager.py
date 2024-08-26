@@ -8,13 +8,7 @@ The experiment manager should import the following modules:
 
 import os
 import shutil
-from tqdm import tqdm
 import numpy as np
-from torch.utils.data import DataLoader, random_split, TensorDataset
-import torch
-import torch.optim as optim
-from torch.optim.adam import Adam
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pickle
 import ray
 import time
@@ -23,26 +17,11 @@ import json
 from preprocess import Processor, FeatureExtractor
 from utils import (
     visualizing_results,
-    visualize_model_predictions,
-    # shap_values_plot,
-    # partial_dependence_plots,
-    extract_features,
-    root_mean_squared_error,
-    find_outlier_indices,  # FUNCTION FOR DEBUGGING PURPOSES
-    resample_to_match_row_count,
-    save_dict_to_pickle,
     process_and_save_data,
     calculate_model_errors,
 )
-from models import XGBoost, ShallowNN
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from pytorch_lightning.callbacks import TQDMProgressBar
-import matplotlib.pyplot as plt
-from sklearn.model_selection import LeaveOneOut, cross_val_score, cross_val_predict
-from sklearn.metrics import make_scorer
 import joblib
-from train import Trainer
 
 
 class Experiment_Manager:
