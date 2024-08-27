@@ -1,7 +1,6 @@
 # obtain_features.py
 
 import numpy as np
-import ray
 import time
 import pickle
 import joblib
@@ -10,21 +9,40 @@ from preprocess import Processor, FeatureExtractor
 from utils import process_and_save_data, visualizing_results, calculate_model_errors
 import json
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
+
 def obtain_features(experiment_config, experiment_directory, num_sims_pretrain, num_sims_inference, normalization = False, remove_outliers = True):
+
+    # print(f'Normalization option: {normalization}')
 
     # Load the experiment config
     with open(experiment_config, 'r') as f:
         experiment_config = json.load(f)
     
+    
+    print(f'MomentsLD flag: {experiment_config["momentsLD_analysis"]}')
+    print(f'Dadi flag: {experiment_config["dadi_analysis"]}')
+    print(f'Moments flag: {experiment_config["moments_analysis"]}')
+
     # Load the experiment object to get the experiment directory
     with open(f'{experiment_directory}/experiment_obj.pkl', 'rb') as f:
         experiment_obj = pickle.load(f)
     experiment_directory = experiment_obj.experiment_directory
 
-    ray.init(num_cpus=25, local_mode=False)
 
     processor = Processor(experiment_config, experiment_directory)
     extractor = FeatureExtractor(experiment_directory)
+    print(f'MomentsLD flag: {extractor.momentsLD_analysis}')
 
     all_indices = np.arange(num_sims_pretrain)
     np.random.shuffle(all_indices)
@@ -39,19 +57,22 @@ def obtain_features(experiment_config, experiment_directory, num_sims_pretrain, 
         ("validation", validation_indices),
         ("testing", testing_indices),
     ]:
-        result_ref = process_and_save_data.remote(
+        result_ref = process_and_save_data(
             processor, indices, stage, experiment_directory
         )
 
-        start = time.time()
-        dadi_dict, moments_dict, momentsLD_dict = ray.get(result_ref)
-        end = time.time()
-        print(f"Time taken for processing {stage} data: {end - start}")
+        dadi_dict, moments_dict, momentsLD_dict = result_ref[0], result_ref[1], result_ref[2]
 
+        # print(f'Dadi flag: {extractor.dadi_analysis}')
+        # print(f'Moments flag: {extractor.moments_analysis}')
+        # print(f'MomentsLD flag: {extractor.momentsLD_analysis}')
+        
         if extractor.dadi_analysis:
             extractor.process_batch(dadi_dict, "dadi", stage, normalization=normalization)
         if extractor.moments_analysis:
             extractor.process_batch(moments_dict, "moments", stage, normalization=normalization)
+       
+        print(f'MomentsLD flag: {experiment_config["momentsLD_analysis"]}')
         if extractor.momentsLD_analysis:
             extractor.process_batch(momentsLD_dict, "momentsLD", stage, normalization=normalization)
 
@@ -110,8 +131,6 @@ def obtain_features(experiment_config, experiment_directory, num_sims_pretrain, 
         linear_mdl_obj, "linear_results", save_loc=experiment_directory, stages=["training", "validation"]
     )
 
-    ray.shutdown()
-
     preprocessing_errors = calculate_model_errors(
         preprocessing_results_obj, "preprocessing", datasets=["training", "validation"]
     )
@@ -136,8 +155,8 @@ if __name__ == "__main__":
     parser.add_argument('--experiment_directory', type=str, required=True)
     parser.add_argument('--num_sims_pretrain', type=int, required=True)
     parser.add_argument('--num_sims_inference', type=int, required=True)
-    parser.add_argument('--normalization', type=bool, required=True)
-    parser.add_argument('--remove_outliers', type=bool, required=True)
+    parser.add_argument('--normalization', type=str2bool, default=True)
+    parser.add_argument('--remove_outliers', type=str2bool, default=True)
     args = parser.parse_args()
 
     obtain_features(

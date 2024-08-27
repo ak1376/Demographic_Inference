@@ -3,11 +3,8 @@ import numpy as np
 import xgboost as xgb
 import re
 import os
-import shap
-from sklearn.inspection import PartialDependenceDisplay
 from sklearn.preprocessing import StandardScaler
 import pickle
-import ray
 
 
 def extract_features(simulated_params, opt_params, normalization=True):
@@ -432,7 +429,6 @@ def save_dict_to_pickle(data_dict, filename, directory):
     print(f"Saved: {filepath}")
 
 
-@ray.remote
 def process_and_save_data(processor, indices, data_type, experiment_directory):
     """Process data and save results to pickle files."""
     dadi_dict, moments_dict, momentsLD_dict = processor.run(indices)

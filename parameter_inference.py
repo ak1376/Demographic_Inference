@@ -8,7 +8,6 @@ import time
 from dadi.Godambe import get_godambe
 from moments.Godambe import _get_godambe
 
-@ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
     start_time = time.time()
     ld_stats = moments.LD.Parsing.compute_ld_statistics(  # type: ignore
@@ -41,17 +40,10 @@ def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
 
     # Create a list of remote function calls
     futures = [
-        get_LD_stats.remote(vcf_file, r_bins, flat_map_path, pop_file_path)
+        get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path)
         for vcf_file in vcf_files
     ]
-
-    # Execute the function in parallel and collect the results
-    results = ray.get(futures)
-
-    execution_time = time.time()
-    print(f"Execution took {execution_time - preparation_time:.2f} seconds")
-
-    return results
+    return futures
 
 
 # TODO: Get rid of sampled_params
@@ -111,6 +103,7 @@ def run_inference_moments(
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[10, 10, 10, 10],
     maxiter=20,
+    use_FIM=False
 ):
     """
     This should do the parameter inference for moments
@@ -135,17 +128,21 @@ def run_inference_moments(
     # uncerts = moments.Godambe.FIM_uncert(
     # model_func, opt_params, sfs)
 
-    # Let's extract the hessian
-    # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
-    H = _get_godambe(model_func, all_boot = [], p0 = opt_params, data = sfs, eps = 1e-6, log=False, just_hess=True)
-    FIM = -1*H
+    if use_FIM:
 
-    # Get the indices of the upper triangular part (including the diagonal)
-    upper_tri_indices = np.triu_indices(FIM.shape[0])
+        # Let's extract the hessian
+        # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
+        H = _get_godambe(model_func, all_boot = [], p0 = opt_params, data = sfs, eps = 1e-6, log=False, just_hess=True)
+        FIM = -1*H
 
-    # Extract the upper triangular elements
-    upper_triangular = FIM[upper_tri_indices]
+        # Get the indices of the upper triangular part (including the diagonal)
+        upper_tri_indices = np.triu_indices(FIM.shape[0]) #type: ignore
 
+        # Extract the upper triangular elements
+        upper_triangular = FIM[upper_tri_indices] #type: ignore
+
+    else:
+        upper_triangular = None
 
     # opt_params_dict = {
     #     'N0': N0_opt,
@@ -163,6 +160,9 @@ def run_inference_moments(
         "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"], #type: ignore
         "upper_triangular_FIM": upper_triangular
     }
+
+    if opt_params_dict["upper_triangular_FIM"] is None:
+        del opt_params_dict["upper_triangular_FIM"]
 
     model = model * opt_theta
 

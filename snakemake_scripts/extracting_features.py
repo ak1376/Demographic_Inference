@@ -7,10 +7,10 @@ def getting_the_features(preprocessing_results_filepath, experiment_directory):
         preprocessing_results_obj = pickle.load(file)
 
 
-    print(f"TRAINING FEATURES SHAPE: {preprocessing_results_obj['training']['predictions'].shape}")
-    print(f"TRAINING TARGETS SHAPE: {preprocessing_results_obj['training']['targets'].shape}")
-    print(f"VALIDATION FEATURES SHAPE: {preprocessing_results_obj['validation']['predictions'].shape}")
-    print(f"VALIDATION TARGETS SHAPE: {preprocessing_results_obj['validation']['targets'].shape}")
+    # print(f"TRAINING FEATURES SHAPE: {preprocessing_results_obj['training']['predictions'].shape}")
+    # print(f"TRAINING TARGETS SHAPE: {preprocessing_results_obj['training']['targets'].shape}")
+    # print(f"VALIDATION FEATURES SHAPE: {preprocessing_results_obj['validation']['predictions'].shape}")
+    # print(f"VALIDATION TARGETS SHAPE: {preprocessing_results_obj['validation']['targets'].shape}")
 
 
     training_features = preprocessing_results_obj["training"]["predictions"]
@@ -39,10 +39,8 @@ def getting_the_features(preprocessing_results_filepath, experiment_directory):
         }
     }
 
-    print(f'Training features shape: {features["training"]["features"].shape}')
-    print(f'Validation features shape: {features["validation"]["features"].shape}')
-
-
+    # print(f'Training features shape: {features["training"]["features"].shape}')
+    # print(f'Validation features shape: {features["validation"]["features"].shape}')
 
     # Now save the dictionary as a pickle
     with open(f"{experiment_directory}/features_and_targets.pkl", "wb") as file:

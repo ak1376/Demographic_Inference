@@ -2,8 +2,6 @@
 The experiment manager should import the following modules:
 - Processor object
 - delete_vcf_files function
-
-
 """
 
 import os
@@ -97,10 +95,6 @@ class Experiment_Manager:
         This should do the dadi and moments inference (input to the ML models)
         """
 
-        ray.init(
-            num_cpus=25, local_mode=False
-        )  # This is a placeholder for now.
-
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
         extractor = FeatureExtractor(self.experiment_directory)
@@ -128,14 +122,14 @@ class Experiment_Manager:
 
 
             # Call the remote function and get the ObjectRef
-            result_ref = process_and_save_data.remote(
+            result_ref = process_and_save_data(
                 processor, indices, stage, self.experiment_directory
             )
 
             start = time.time() 
 
             # Use ray.get() to retrieve the actual result
-            dadi_dict, moments_dict, momentsLD_dict = ray.get(result_ref)
+            dadi_dict, moments_dict, momentsLD_dict = result_ref[0], result_ref[1], result_ref[2]
 
             end = time.time()
 
@@ -243,8 +237,6 @@ class Experiment_Manager:
         visualizing_results(
             linear_mdl_obj, "linear_results", save_loc=self.experiment_directory, stages=["training", "validation"]
         )
-
-        ray.shutdown()
 
         # Calculate errors for each model separately
         preprocessing_errors = calculate_model_errors(

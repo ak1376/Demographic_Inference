@@ -13,7 +13,6 @@ from utils import (
     root_mean_squared_error,
     find_outlier_indices,
 )
-import ray
 from sklearn.utils import resample
 
 from parameter_inference import (
@@ -22,41 +21,37 @@ from parameter_inference import (
     run_inference_momentsLD,
 )
 
-
-@ray.remote
 def generate_window(ts, window_length, n_samples):
-    start = np.random.randint(0, n_samples)
+    start = np.random.randint(0, n_samples- window_length)
     end = start + window_length
     return ts.keep_intervals([[start, end]])
 
 
-@ray.remote
-def get_random_windows_parallel(ts, window_length, num_windows):
-    """
-    Get random windows from the tree sequence in parallel.
+# def get_random_windows_parallel(ts, window_length, num_windows):
+#     """
+#     Get random windows from the tree sequence in parallel.
 
-    Parameters:
-    - ts: tskit.TreeSequence object
-    - window_length: Length of each window (in base pairs)
-    - num_windows: Number of random windows to extract
+#     Parameters:
+#     - ts: tskit.TreeSequence object
+#     - window_length: Length of each window (in base pairs)
+#     - num_windows: Number of random windows to extract
 
-    Returns:
-    - windows: List of tskit.TreeSequence objects containing the random windows
-    """
-    n_samples = int(ts.sequence_length - window_length)
+#     Returns:
+#     - windows: List of tskit.TreeSequence objects containing the random windows
+#     """
+#     n_samples = int(ts.sequence_length - window_length)
 
-    # Distribute the window creation tasks across multiple workers
-    futures = [
-        generate_window.remote(ts, window_length, n_samples) for _ in range(num_windows)
-    ]
+#     # Distribute the window creation tasks across multiple workers
+#     futures = [
+#         generate_window.remote(ts, window_length, n_samples) for _ in range(num_windows)
+#     ]
 
-    # Collect the results
-    windows = ray.get(futures)
+#     # Collect the results
+#     windows = ray.get(futures)
 
-    return windows
+#     return windows
 
 
-@ray.remote
 def process_window(ts_window, folderpath, ii):
     vcf_name = os.path.join(folderpath, f"bottleneck_window.{ii}.vcf")
 
@@ -68,25 +63,25 @@ def process_window(ts_window, folderpath, ii):
     return vcf_name  # Optionally return the filename or any other relevant information
 
 
-def parallel_process_windows(windows, folderpath):
-    # Initialize Ray if not already initialized
-    if not ray.is_initialized():
-        ray.init(num_cpus=os.cpu_count())
+# def parallel_process_windows(windows, folderpath):
+#     # Initialize Ray if not already initialized
+#     if not ray.is_initialized():
+#         ray.init(num_cpus=os.cpu_count())
 
-    # Create a list to store futures
-    futures = []
+#     # Create a list to store futures
+#     futures = []
 
-    # Launch tasks in parallel
-    for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
-        future = process_window.remote(ts_window, folderpath, ii)
-        futures.append(future)
+#     # Launch tasks in parallel
+#     for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
+#         future = process_window.remote(ts_window, folderpath, ii)
+#         futures.append(future)
 
-    # Collect results (this will block until all tasks are done)
-    results = ray.get(futures)
+#     # Collect results (this will block until all tasks are done)
+#     results = ray.get(futures)
 
-    # Optionally, print or return results
-    print("All windows have been processed.")
-    return results
+#     # Optionally, print or return results
+#     print("All windows have been processed.")
+#     return results
 
 
 def delete_vcf_files(directory):
@@ -99,7 +94,6 @@ def delete_vcf_files(directory):
     print(f"Deleted {len(files)} files from {directory}")
 
 
-@ray.remote
 def process_single_simulation(
     i,
     sample_params_func,
@@ -478,22 +472,18 @@ class Processor:
         # delete_vcf_files(self.folderpath)
 
         # Generate random windows in parallel
-        windows = get_random_windows_parallel.remote(
-            ts, self.window_length, self.num_windows
-        )
 
-        # Retrieve and print the windows
-        windows = ray.get(windows)
+        windows = [generate_window(ts, self.window_length, self.L) for _ in range(self.num_windows)]
 
         # windows = self.get_random_windows(ts, self.window_length, self.num_windows)
 
-        parallel_process_windows(windows, self.folderpath)
+        # parallel_process_windows(windows, self.folderpath)
 
-        # for ii, ts_window in tqdm(enumerate(windows), total = len(windows)):
-        #     vcf_name = os.path.join(self.folderpath,f"bottleneck_window.{ii}.vcf")
-        #     with open(vcf_name, "w+") as fout:
-        #         ts_window.write_vcf(fout, allow_position_zero=True)
-        #     os.system(f"gzip {vcf_name}")
+        for ii, ts_window in tqdm(enumerate(windows), total = len(windows)):
+            vcf_name = os.path.join(self.folderpath,f"bottleneck_window.{ii}.vcf")
+            with open(vcf_name, "w+") as fout:
+                ts_window.write_vcf(fout, allow_position_zero=True)
+            os.system(f"gzip {vcf_name}")
 
     def write_samples_and_rec_map(self):
 
@@ -567,61 +557,87 @@ class Processor:
 
         opt_params_momentsLD_list = []
 
-        # Initialize Ray if not already initialized
-        if not ray.is_initialized():
-            ray.init()
-
         # Create a list of futures to run simulations in parallel
-        futures = [
-            process_single_simulation.remote(
-                i,
-                self.sample_params,
-                self.create_SFS,
-                self.bottleneck_model,
-                self.run_msprime_replicates,
-                self.write_samples_and_rec_map,
-                run_inference_dadi_func=(  # type: ignore
-                    run_inference_dadi
-                    if self.experiment_config["dadi_analysis"]
-                    else None
-                ),
-                run_inference_moments_func=(  # type: ignore
-                    run_inference_moments
-                    if self.experiment_config["moments_analysis"]
-                    else None
-                ),
-                run_inference_momentsLD_func=(  # type: ignore
-                    run_inference_momentsLD
-                    if self.experiment_config["momentsLD_analysis"]
-                    else None
-                ),
-                folderpath=self.folderpath,  # type: ignore
-                num_windows=self.num_windows,  # type: ignore
-                num_samples=self.num_samples,  # type: ignore
-                maxiter=self.maxiter,  # type: ignore
-            )
-            for i in range(len(indices_of_interest))
-        ]
-        # Collect the results
-        results = ray.get(futures)
+        for i in tqdm(range(len(indices_of_interest))):
+            sampled_params = self.sample_params()
+            sfs = self.create_SFS(sampled_params, self.num_samples)
 
-        # Unpack the results
-        for result in results:
-            sample_params_storage.append(result["sampled_params"])
-            model_sfs.append(result["sfs"])
+            # Initialize result dictionary
+            results = {
+                "sampled_params": sampled_params,
+                "sfs": sfs,
+            }
 
-            if self.experiment_config["dadi_analysis"]:
-                opt_params_dadi_list.append(result["opt_params_dict_dadi"])
-                model_sfs_dadi_list.append(result["model_sfs_dadi"])
-                opt_theta_dadi_list.append(result["opt_theta_dadi"])
-
-            if self.experiment_config["moments_analysis"]:
-                opt_params_moments_list.append(result["opt_params_dict_moments"])
-                model_sfs_moments_list.append(result["model_sfs_moments"])
-                opt_theta_moments_list.append(result["opt_theta_moments"])
-
+            # Simulate process and save windows as VCF files
             if self.experiment_config["momentsLD_analysis"]:
-                opt_params_momentsLD_list.append(result["opt_params_momentsLD"])
+                g = self.bottleneck_model(sampled_params)
+                self.run_msprime_replicates(g)
+                samples_file, flat_map_file = self.write_samples_and_rec_map()
+
+            # Conditional analysis based on provided functions
+            if self.experiment_config['dadi_analysis']:
+                model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi(
+                    sfs,
+                    p0=[0.25, 0.75, 0.1, 0.05],
+                    lower_bound=[0.001, 0.001, 0.001, 0.001],
+                    upper_bound=[10, 10, 10, 10],
+                    sampled_params=sampled_params,
+                    num_samples=self.num_samples,
+                    maxiter=self.maxiter,
+                )
+                results.update(
+                    {
+                        "opt_params_dict_dadi": opt_params_dict_dadi,
+                        "model_sfs_dadi": model_sfs_dadi,
+                        "opt_theta_dadi": opt_theta_dadi,
+                    }
+                )
+
+            if run_inference_moments:
+                model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
+                    run_inference_moments(
+                        sfs,
+                        p0=[0.25, 0.75, 0.1, 0.05],
+                        lower_bound=[0.001, 0.001, 0.001, 0.001],
+                        upper_bound=[10, 10, 10, 10],
+                        sampled_params=sampled_params,
+                        maxiter=self.maxiter,
+                        use_FIM = self.experiment_config["use_FIM"]
+                    )
+                )
+                results.update(
+                    {
+                        "opt_params_dict_moments": opt_params_dict_moments,
+                        "model_sfs_moments": model_sfs_moments,
+                        "opt_theta_moments": opt_theta_moments,
+                    }
+                )
+
+            if run_inference_momentsLD:
+                opt_params_momentsLD = run_inference_momentsLD(
+                    folderpath=self.folderpath,
+                    num_windows=self.num_windows,
+                    param_sample=sampled_params,
+                    p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
+                    maxiter=self.maxiter
+                )
+                results["opt_params_momentsLD"] = opt_params_momentsLD
+
+        sample_params_storage.append(results["sampled_params"])
+        model_sfs.append(results["sfs"])
+
+        if self.experiment_config["dadi_analysis"]:
+            opt_params_dadi_list.append(results["opt_params_dict_dadi"])
+            model_sfs_dadi_list.append(results["model_sfs_dadi"])
+            opt_theta_dadi_list.append(results["opt_theta_dadi"])
+
+        if self.experiment_config["moments_analysis"]:
+            opt_params_moments_list.append(results["opt_params_dict_moments"])
+            model_sfs_moments_list.append(results["model_sfs_moments"])
+            opt_theta_moments_list.append(results["opt_theta_moments"])
+
+        if self.experiment_config["momentsLD_analysis"]:
+            opt_params_momentsLD_list.append(results["opt_params_momentsLD"])
 
         # Create the output dictionaries
         dadi_dict = (

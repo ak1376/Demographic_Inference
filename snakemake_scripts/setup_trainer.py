@@ -1,7 +1,6 @@
 import pickle
 import argparse
 from models import ShallowNN
-import ray
 import os
 from utils import visualizing_results, calculate_model_errors
 import json
@@ -24,7 +23,6 @@ class Trainer:
         self.num_epochs=self.model_config['num_epochs']
         self.learning_rate=self.model_config['learning_rate']
         self.use_FIM = use_FIM
-        ray.init(num_cpus=os.cpu_count(), num_gpus=3, local_mode=False)
 
 
     def train(self, training_data, training_targets, validation_data, validation_targets, visualize = True):
@@ -57,16 +55,9 @@ class Trainer:
 
         print(f'Training data shape: {training_data.shape}')
         print(f'Validation data shape: {validation_data.shape}')
-        if self.use_FIM == False:
-            training_predictions = snn_model.predict(training_data[:,:8])
-            # print(f'Training predictions shape: {training_predictions.shape}')
-            # print(f'Validation Data shape: {validation_data.shape}')
-            validation_predictions = snn_model.predict(validation_data[:,:8])
 
-
-        else:
-            training_predictions = snn_model.predict(training_data)
-            validation_predictions = snn_model.predict(validation_data)
+        training_predictions = snn_model.predict(training_data)
+        validation_predictions = snn_model.predict(validation_data)
 
         snn_mdl_obj = {}
         snn_mdl_obj["training"] = {}
@@ -108,6 +99,14 @@ def main(experiment_directory, model_config_file, features_file, use_FIM = True)
     with open(features_file, 'rb') as f:
         features = pickle.load(f)
 
+    print(features['training']['features'])
+    print()
+    print(features['training']['targets'])
+    print()
+    print(features['validation']['features'])
+    print()
+    print(features['validation']['targets'])
+    print()
     
     # print(features.keys())
     # print(features['training'].keys())

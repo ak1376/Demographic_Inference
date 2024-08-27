@@ -242,9 +242,9 @@ class ShallowNN(nn.Module):
         X_val_tensor = torch.tensor(X_val, dtype=torch.float32).cuda()
         y_val_tensor = torch.tensor(y_val, dtype=torch.float32).cuda()
 
-        if use_FIM == False:
-            X_train_tensor = X_train_tensor[:,:8]
-            X_val_tensor = X_val_tensor[:,:8]
+        # if use_FIM == False:
+        #     X_train_tensor = X_train_tensor[:,:8]
+        #     X_val_tensor = X_val_tensor[:,:8]
 
         # Create DataLoader for mini-batch training
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
