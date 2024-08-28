@@ -29,20 +29,14 @@ def obtain_features(experiment_config, experiment_directory, num_sims_pretrain, 
     with open(experiment_config, 'r') as f:
         experiment_config = json.load(f)
     
-    
-    print(f'MomentsLD flag: {experiment_config["momentsLD_analysis"]}')
-    print(f'Dadi flag: {experiment_config["dadi_analysis"]}')
-    print(f'Moments flag: {experiment_config["moments_analysis"]}')
-
     # Load the experiment object to get the experiment directory
     with open(f'{experiment_directory}/experiment_obj.pkl', 'rb') as f:
         experiment_obj = pickle.load(f)
     experiment_directory = experiment_obj.experiment_directory
 
 
-    processor = Processor(experiment_config, experiment_directory)
-    extractor = FeatureExtractor(experiment_directory)
-    print(f'MomentsLD flag: {extractor.momentsLD_analysis}')
+    processor = Processor(experiment_config, experiment_directory, recombination_rate=experiment_config["recombination_rate"], mutation_rate=experiment_config["mutation_rate"], window_length=experiment_config["window_length"])
+    extractor = FeatureExtractor(experiment_directory, dadi_analysis=experiment_config["dadi_analysis"], moments_analysis=experiment_config["moments_analysis"], momentsLD_analysis=experiment_config["momentsLD_analysis"])
 
     all_indices = np.arange(num_sims_pretrain)
     np.random.shuffle(all_indices)

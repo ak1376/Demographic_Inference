@@ -4,7 +4,7 @@ from tqdm import tqdm
 import numpy as np
 import msprime
 import dadi
-import dadi.Demes
+import moments.Demes as demes_obj
 import glob
 import demes
 from utils import (
@@ -108,6 +108,7 @@ def process_single_simulation(
     num_windows=None,
     num_samples=None,
     maxiter=None,
+    mutation_rate = 1.26e-8
 ):
     sampled_params = sample_params_func()
     sfs = create_SFS_func(sampled_params, num_samples)
@@ -134,6 +135,7 @@ def process_single_simulation(
             sampled_params=sampled_params,
             num_samples=num_samples,
             maxiter=maxiter,
+            mutation_rate = mutation_rate
         )
         results.update(
             {
@@ -152,6 +154,7 @@ def process_single_simulation(
                 upper_bound=[10, 10, 10, 10],
                 sampled_params=sampled_params,
                 maxiter=maxiter,
+                mutation_rate = mutation_rate
             )
         )
         results.update(
@@ -168,7 +171,7 @@ def process_single_simulation(
             num_windows=num_windows,
             param_sample=sampled_params,
             p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
-            maxiter=maxiter,
+            maxiter=maxiter
         )
         results["opt_params_momentsLD"] = opt_params_momentsLD
 
@@ -513,7 +516,7 @@ class Processor:
         return sampled_params
 
     @staticmethod
-    def create_SFS(sampled_params, num_samples = 100):
+    def create_SFS(sampled_params, length = 1e7, mutation_rate = 1.26e-8, num_samples = 100):
         """
         If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
 
@@ -532,12 +535,16 @@ class Processor:
 
         demes_model = demography.to_demes()
 
-        sfs = dadi.Demes.SFS(
+        sfs = demes_obj.SFS(
             demes_model,
             sampled_demes=["A"],
             sample_sizes=[2 * num_samples],
-            pts=4 * num_samples,
+            # Ne = sampled_params["N0"]
+            u = mutation_rate
         )
+
+        #multiply sfs by L
+        sfs*=length
 
         return sfs
 
@@ -560,7 +567,7 @@ class Processor:
         # Create a list of futures to run simulations in parallel
         for i in tqdm(range(len(indices_of_interest))):
             sampled_params = self.sample_params()
-            sfs = self.create_SFS(sampled_params, self.num_samples)
+            sfs = self.create_SFS(sampled_params, length = self.L, mutation_rate=self.mutation_rate, num_samples = self.num_samples)
 
             # Initialize result dictionary
             results = {
@@ -584,6 +591,8 @@ class Processor:
                     sampled_params=sampled_params,
                     num_samples=self.num_samples,
                     maxiter=self.maxiter,
+                    mutation_rate=self.mutation_rate,
+                    length = self.L
                 )
                 results.update(
                     {
@@ -593,7 +602,7 @@ class Processor:
                     }
                 )
 
-            if run_inference_moments:
+            if self.experiment_config['moments_analysis']:
                 model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
                     run_inference_moments(
                         sfs,
@@ -613,7 +622,7 @@ class Processor:
                     }
                 )
 
-            if run_inference_momentsLD:
+            if self.experiment_config['momentsLD_analysis']:
                 opt_params_momentsLD = run_inference_momentsLD(
                     folderpath=self.folderpath,
                     num_windows=self.num_windows,

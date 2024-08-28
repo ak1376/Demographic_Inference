@@ -55,6 +55,8 @@ def run_inference_dadi(
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[10, 10, 10, 10],
     maxiter=20,
+    mutation_rate = 1.26e-8,
+    length = 1e7
 ):
     """
     This should do the parameter inference for dadi
@@ -68,6 +70,7 @@ def run_inference_dadi(
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
+
 
     opt_params = dadi.Inference.optimize_log_lbfgsb(
         p_guess,
@@ -83,12 +86,14 @@ def run_inference_dadi(
 
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
 
+    N_ref = opt_theta/(4*mutation_rate*length)
+
     opt_params_dict = {
-        "N0": sampled_params["N0"],
-        "Nb": opt_params[0] * sampled_params["N0"],
-        "N_recover": opt_params[1] * sampled_params["N0"],
-        "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"],  # type: ignore
-        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"],  # type: ignore
+        "N0": N_ref,
+        "Nb": opt_params[0] * N_ref,
+        "N_recover": opt_params[1] * N_ref,
+        "t_bottleneck_end": opt_params[3] * 2 * N_ref, #type: ignore
+        "t_bottleneck_start": opt_params[2] * 2 * N_ref  # type: ignore
     }
 
     model = model * opt_theta
@@ -103,7 +108,9 @@ def run_inference_moments(
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[10, 10, 10, 10],
     maxiter=20,
-    use_FIM=False
+    use_FIM=False,
+    mutation_rate = 1.26e-8,
+    length = 1e7,
 ):
     """
     This should do the parameter inference for moments
@@ -124,6 +131,8 @@ def run_inference_moments(
 
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
+
+    N_ref = opt_theta/(4*mutation_rate*length)
 
     # uncerts = moments.Godambe.FIM_uncert(
     # model_func, opt_params, sfs)
@@ -153,11 +162,11 @@ def run_inference_moments(
     # }
 
     opt_params_dict = {
-        "N0": sampled_params["N0"],
-        "Nb": opt_params[0] * sampled_params["N0"],
-        "N_recover": opt_params[1] * sampled_params["N0"],
-        "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"], #type: ignore
-        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"], #type: ignore
+        "N0": N_ref,
+        "Nb": opt_params[0] * N_ref,
+        "N_recover": opt_params[1] * N_ref,
+        "t_bottleneck_end": opt_params[3] * 2 * N_ref, #type: ignore
+        "t_bottleneck_start": opt_params[2] * 2 * N_ref, #type: ignore
         "upper_triangular_FIM": upper_triangular
     }
 

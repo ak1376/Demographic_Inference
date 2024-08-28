@@ -58,13 +58,13 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 3,
-    "num_sims_inference": 3,
+    "num_sims_pretrain": 100,
+    "num_sims_inference": 100,
     "num_samples": 20,
     "experiment_name": "yikes",
     "dadi_analysis": True,
     "moments_analysis": True,
-    "momentsLD_analysis": True,
+    "momentsLD_analysis": False,
     "num_windows": 5,
     "window_length": 1e5,
     "maxiter": 100,
@@ -79,7 +79,7 @@ config = {
 }
 
 linear_experiment = Experiment_Manager(config)
-# linear_experiment.obtaining_features()
+linear_experiment.obtaining_features()
 preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/checking_against_snakemake/preprocessing_results_obj.pkl")
 # preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/with_FIM/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]

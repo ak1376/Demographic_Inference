@@ -24,6 +24,10 @@ def main(config_path):
     with open(config_file, "r") as f:
         config = json.load(f)
 
+    print('====================================================')
+    print(f"CONFIGURATION FILE: {config['momentsLD_analysis']}")
+    print('====================================================')
+
     # Create the Experiment_Manager object
     linear_experiment = create_experiment(config)
 
