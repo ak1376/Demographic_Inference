@@ -16,7 +16,7 @@ lower_bound_params = {
 "t_bottleneck_start": 1500
 }
 model_config = {
-"input_size": 12,
+"input_size": 8,
 "hidden_size": 1000,
 "output_size": 4,
 "num_epochs": 1000,
@@ -29,17 +29,17 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 100,
-    "num_sims_inference": 100,
+    "num_sims_pretrain": 10,
+    "num_sims_inference": 10,
     "num_samples": 20,
-    "experiment_name": "yikes_snakemake",
+    "experiment_name": "debugging",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e6,
-    "maxiter": 100,
-    "genome_length": 1e7,
+    "maxiter": 1,
+    "genome_length": 1e6,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
     "seed": 42,

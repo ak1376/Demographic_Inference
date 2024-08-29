@@ -565,6 +565,7 @@ class Processor:
         opt_params_momentsLD_list = []
 
         # Create a list of futures to run simulations in parallel
+
         for i in tqdm(range(len(indices_of_interest))):
             sampled_params = self.sample_params()
             sfs = self.create_SFS(sampled_params, length = self.L, mutation_rate=self.mutation_rate, num_samples = self.num_samples)
@@ -572,7 +573,7 @@ class Processor:
             # Initialize result dictionary
             results = {
                 "sampled_params": sampled_params,
-                "sfs": sfs,
+                "sfs": sfs
             }
 
             # Simulate process and save windows as VCF files
@@ -630,7 +631,8 @@ class Processor:
                     p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
                     maxiter=self.maxiter
                 )
-                results["opt_params_momentsLD"] = opt_params_momentsLD
+
+                results.update({"opt_params_momentsLD": opt_params_momentsLD})
 
         sample_params_storage.append(results["sampled_params"])
         model_sfs.append(results["sfs"])
@@ -681,5 +683,9 @@ class Processor:
             if self.experiment_config["momentsLD_analysis"]
             else {}
         )
+
+        print("Length of dadi preprocessing (i.e. number of simulations): ", len(dadi_dict["model_sfs"]))
+        print("Length of moments preprocessing (i.e. number of simulations): ", len(moments_dict["model_sfs"]))
+        print("Length of momentsLD preprocessing (i.e. number of simulations): ", len(momentsLD_dict["opt_params"]))
 
         return dadi_dict, moments_dict, momentsLD_dict

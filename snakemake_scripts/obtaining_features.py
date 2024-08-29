@@ -46,6 +46,10 @@ def obtain_features(experiment_config, experiment_directory, num_sims_pretrain, 
     validation_indices = all_indices[n_train:]
     testing_indices = np.arange(num_sims_inference)
 
+    print(f'Number of Training Indices: {len(training_indices)}')
+    print(f'Number of Validation Indices: {len(validation_indices)}')
+    print(f'Number of Testing Indices: {len(testing_indices)}')
+
     for stage, indices in [
         ("training", training_indices),
         ("validation", validation_indices),

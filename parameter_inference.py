@@ -70,8 +70,8 @@ def run_inference_dadi(
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
-
-
+    start = time.time()
+    
     opt_params = dadi.Inference.optimize_log_lbfgsb(
         p_guess,
         sfs,
@@ -87,6 +87,10 @@ def run_inference_dadi(
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
 
     N_ref = opt_theta/(4*mutation_rate*length)
+
+    end = time.time()
+
+    print(f"Dadi ptimization took {end - start} seconds")
 
     opt_params_dict = {
         "N0": N_ref,
@@ -105,7 +109,7 @@ def run_inference_moments(
     sfs,
     p0,
     sampled_params,
-    lower_bound=[0.001, 0.001, 0.001, 0.001],
+    lower_bound=[0.01, 0.01, 0.01, 0.01],
     upper_bound=[10, 10, 10, 10],
     maxiter=20,
     use_FIM=False,
@@ -120,6 +124,9 @@ def run_inference_moments(
     )
 
     model_func = moments.Demographics1D.three_epoch
+
+    start = time.time()
+
     opt_params = moments.Inference.optimize_log_lbfgsb(
         p_guess,
         sfs,
@@ -133,6 +140,8 @@ def run_inference_moments(
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
 
     N_ref = opt_theta/(4*mutation_rate*length)
+    
+    end = time.time()
 
     # uncerts = moments.Godambe.FIM_uncert(
     # model_func, opt_params, sfs)
@@ -174,6 +183,8 @@ def run_inference_moments(
         del opt_params_dict["upper_triangular_FIM"]
 
     model = model * opt_theta
+
+    print(f"Moments optimization took {end - start} seconds")
 
     return model, opt_theta, opt_params_dict
 
