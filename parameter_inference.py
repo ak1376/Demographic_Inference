@@ -52,12 +52,13 @@ def run_inference_dadi(
     p0,
     sampled_params,
     num_samples,
-    lower_bound=[0.001, 0.001, 0.001, 0.001],
-    upper_bound=[10, 10, 10, 10],
+    lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+    upper_bound=[100, 100, 100, 100],
     maxiter=20,
     mutation_rate = 1.26e-8,
     length = 1e7
-):
+    
+    ):
     """
     This should do the parameter inference for dadi
     """
@@ -79,18 +80,16 @@ def run_inference_dadi(
         pts=2 * num_samples,
         lower_bound=lower_bound,
         upper_bound=upper_bound,
-        maxiter=maxiter,
+        maxiter=maxiter, 
     )
+    end = time.time()
+    # print(f"Dadi optimization took {end - start} seconds")
 
     model = model_func(opt_params, sfs.sample_sizes, 2 * num_samples)
 
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
 
     N_ref = opt_theta/(4*mutation_rate*length)
-
-    end = time.time()
-
-    print(f"Dadi ptimization took {end - start} seconds")
 
     opt_params_dict = {
         "N0": N_ref,
@@ -109,8 +108,8 @@ def run_inference_moments(
     sfs,
     p0,
     sampled_params,
-    lower_bound=[0.01, 0.01, 0.01, 0.01],
-    upper_bound=[10, 10, 10, 10],
+    lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+    upper_bound=[100, 100, 100, 100],
     maxiter=20,
     use_FIM=False,
     mutation_rate = 1.26e-8,
@@ -184,7 +183,7 @@ def run_inference_moments(
 
     model = model * opt_theta
 
-    print(f"Moments optimization took {end - start} seconds")
+    # print(f"Moments optimization took {end - start} seconds")
 
     return model, opt_theta, opt_params_dict
 
@@ -212,7 +211,7 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
     demo_func = moments.LD.Demographics1D.three_epoch  # type: ignore
     # Set up the initial guess
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
-    opt_params, LL = moments.LD.Inference.optimize_log_fmin(  # type: ignore
+    opt_params, LL = moments.LD.Inference.optimize_lbfgsb(  # type: ignore
         p_guess,
         [mv["means"], mv["varcovs"]],
         [demo_func],

@@ -45,7 +45,7 @@ lower_bound_params = {
 "t_bottleneck_start": 1500
 }
 model_config = {
-"input_size": 12,
+"input_size": 8,
 "hidden_size": 1000,
 "output_size": 4,
 "num_epochs": 1000,
@@ -58,20 +58,20 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 100,
-    "num_sims_inference": 100,
+    "num_sims_pretrain": 1000,
+    "num_sims_inference": 1000,
     "num_samples": 20,
-    "experiment_name": "yikes",
+    "experiment_name": "dadi_moments_analysis_new",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
-    "num_windows": 5,
-    "window_length": 1e5,
+    "num_windows": 50,
+    "window_length": 1e6,
     "maxiter": 100,
-    "genome_length": 1e7,
+    "genome_length": 1e8,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
-    "seed": 295,
+    "seed": 42,
     "normalization": False,
     "remove_outliers": True,
     "use_FIM": False,
@@ -80,8 +80,8 @@ config = {
 
 linear_experiment = Experiment_Manager(config)
 linear_experiment.obtaining_features()
-preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/checking_against_snakemake/preprocessing_results_obj.pkl")
-# preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/with_FIM/preprocessing_results_obj.pkl")
+preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
+# preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/Demographic_Inference/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]
 training_targets = preprocessing_results_obj["training"]["targets"]
 validation_features = preprocessing_results_obj["validation"]["predictions"]

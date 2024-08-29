@@ -53,8 +53,8 @@ class Trainer:
     
     def predict(self, snn_model, training_data, validation_data, training_targets, validation_targets, visualize = True):
 
-        print(f'Training data shape: {training_data.shape}')
-        print(f'Validation data shape: {validation_data.shape}')
+        # print(f'Training data shape: {training_data.shape}')
+        # print(f'Validation data shape: {validation_data.shape}')
 
         training_predictions = snn_model.predict(training_data)
         validation_predictions = snn_model.predict(validation_data)
@@ -99,14 +99,14 @@ def main(experiment_directory, model_config_file, features_file, use_FIM = True)
     with open(features_file, 'rb') as f:
         features = pickle.load(f)
 
-    print(features['training']['features'])
-    print()
-    print(features['training']['targets'])
-    print()
-    print(features['validation']['features'])
-    print()
-    print(features['validation']['targets'])
-    print()
+    # print(features['training']['features'])
+    # print()
+    # print(features['training']['targets'])
+    # print()
+    # print(features['validation']['features'])
+    # print()
+    # print(features['validation']['targets'])
+    # print()
     
     # print(features.keys())
     # print(features['training'].keys())

@@ -21,6 +21,8 @@ from parameter_inference import (
     run_inference_momentsLD,
 )
 
+import allel
+
 def generate_window(ts, window_length, n_samples):
     start = np.random.randint(0, n_samples- window_length)
     end = start + window_length
@@ -240,6 +242,8 @@ class FeatureExtractor:
             normalization=normalization,
         )
 
+        
+        #TODO: I don't want to rely on the class instances for any of this. This makes it less generalizable to the GHIST data. 
         if analysis_type not in self.features[stage]:
             self.features[stage][analysis_type] = []
             self.targets[stage][analysis_type] = []
@@ -261,6 +265,7 @@ class FeatureExtractor:
 
         # visualizing_results(batch_data, save_loc = self.experiment_directory, analysis=f"{analysis_type}_{stage}")
 
+    #TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
     def finalize_processing(self, remove_outliers=True):
         """
         This function will create the numpy array of features and targets across all analysis types and stages. If the user specifies to remove outliers, it will remove them from the data and then resample the rows for concatenation
@@ -297,6 +302,7 @@ class FeatureExtractor:
         )
         return concatenated_features, concatenated_targets, self.feature_names
 
+    # TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
     def concatenate_features_and_targets(self):
         concatenated_features = {}
         concatenated_targets = {}
@@ -346,6 +352,7 @@ class FeatureExtractor:
         self.feature_names = concatenated_feature_names
         return concatenated_features, concatenated_targets
 
+    # TODO: Again, need to modify this s.t. I am not relying on the class instances for any of this.
     def resample_features_and_targets(self, stage):
 
         analysis_types = list(self.features[stage].keys())
@@ -549,6 +556,9 @@ class Processor:
         return sfs
 
     def run(self, indices_of_interest):
+        '''
+        This really should be subdivided into more functions so that when we do inference I can separately call the helper functions. 
+        '''
 
         # Initialize lists to store results
         sample_params_storage = []
@@ -587,8 +597,8 @@ class Processor:
                 model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi(
                     sfs,
                     p0=[0.25, 0.75, 0.1, 0.05],
-                    lower_bound=[0.001, 0.001, 0.001, 0.001],
-                    upper_bound=[10, 10, 10, 10],
+                    lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+                    upper_bound=[None, None, None, None],
                     sampled_params=sampled_params,
                     num_samples=self.num_samples,
                     maxiter=self.maxiter,
@@ -608,11 +618,13 @@ class Processor:
                     run_inference_moments(
                         sfs,
                         p0=[0.25, 0.75, 0.1, 0.05],
-                        lower_bound=[0.001, 0.001, 0.001, 0.001],
-                        upper_bound=[10, 10, 10, 10],
+                        lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+                        upper_bound=[None, None, None, None],
                         sampled_params=sampled_params,
                         maxiter=self.maxiter,
-                        use_FIM = self.experiment_config["use_FIM"]
+                        use_FIM = self.experiment_config["use_FIM"],
+                        mutation_rate=self.mutation_rate,
+                        length = self.L
                     )
                 )
                 results.update(
@@ -634,23 +646,24 @@ class Processor:
 
                 results.update({"opt_params_momentsLD": opt_params_momentsLD})
 
-        sample_params_storage.append(results["sampled_params"])
-        model_sfs.append(results["sfs"])
+            sample_params_storage.append(results["sampled_params"])
+            model_sfs.append(results["sfs"])
 
-        if self.experiment_config["dadi_analysis"]:
-            opt_params_dadi_list.append(results["opt_params_dict_dadi"])
-            model_sfs_dadi_list.append(results["model_sfs_dadi"])
-            opt_theta_dadi_list.append(results["opt_theta_dadi"])
+            if self.experiment_config["dadi_analysis"]:
+                opt_params_dadi_list.append(results["opt_params_dict_dadi"])
+                model_sfs_dadi_list.append(results["model_sfs_dadi"])
+                opt_theta_dadi_list.append(results["opt_theta_dadi"])
 
-        if self.experiment_config["moments_analysis"]:
-            opt_params_moments_list.append(results["opt_params_dict_moments"])
-            model_sfs_moments_list.append(results["model_sfs_moments"])
-            opt_theta_moments_list.append(results["opt_theta_moments"])
+            if self.experiment_config["moments_analysis"]:
+                opt_params_moments_list.append(results["opt_params_dict_moments"])
+                model_sfs_moments_list.append(results["model_sfs_moments"])
+                opt_theta_moments_list.append(results["opt_theta_moments"])
 
-        if self.experiment_config["momentsLD_analysis"]:
-            opt_params_momentsLD_list.append(results["opt_params_momentsLD"])
+            if self.experiment_config["momentsLD_analysis"]:
+                opt_params_momentsLD_list.append(results["opt_params_momentsLD"])
 
         # Create the output dictionaries
+        #TODO: Modify these data dictionary creations to remove "simulated_params". Or just modify it to be compatible with the inference mode object. 
         dadi_dict = (
             {
                 "model_sfs": model_sfs,
@@ -686,6 +699,49 @@ class Processor:
 
         print("Length of dadi preprocessing (i.e. number of simulations): ", len(dadi_dict["model_sfs"]))
         print("Length of moments preprocessing (i.e. number of simulations): ", len(moments_dict["model_sfs"]))
-        print("Length of momentsLD preprocessing (i.e. number of simulations): ", len(momentsLD_dict["opt_params"]))
+        # print("Length of momentsLD preprocessing (i.e. number of simulations): ", len(momentsLD_dict["opt_params"]))
 
         return dadi_dict, moments_dict, momentsLD_dict
+
+
+    def inference(self, vcf_file, popinfo_file, popname):
+        '''
+        Placeholder code for evaluating the trained model on the GHIST data. 
+        '''
+
+        # vcf_data = allel.read_vcf(vcf_file)
+        # num_samples = len(vcf_data['samples'])
+
+        dd = dadi.Misc.make_data_dict_vcf(vcf_data, popinfo_file)
+        fs = dadi.Spectrum.from_data_dict(dd, [popname], projections = [2*self.num_samples], polarized = True)
+
+        p0=[0.25, 0.75, 0.1, 0.05]
+        lower_bound=[0.001, 0.001, 0.001, 0.001]
+        upper_bound=[10, 10, 10, 10]
+        sampled_params = None
+
+        model, opt_theta, opt_params_dict = run_inference_dadi(
+            fs,
+            p0,
+            sampled_params,
+            self.num_samples,
+            lower_bound=[0.001, 0.001, 0.001, 0.001],
+            upper_bound=[10, 10, 10, 10],
+            maxiter=self.maxiter
+        )
+
+        for name, data in [
+            ("dadi", dadi_dict),
+            ("moments", moments_dict),
+            ("momentsLD", momentsLD_dict),
+        ]:
+            filename = f"{name}_dict_{data_type}.pkl"
+            save_dict_to_pickle(data, filename, experiment_directory)
+
+
+
+
+
+
+
+
