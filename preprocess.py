@@ -96,88 +96,88 @@ def delete_vcf_files(directory):
     print(f"Deleted {len(files)} files from {directory}")
 
 
-def process_single_simulation(
-    i,
-    sample_params_func,
-    create_SFS_func,
-    bottleneck_model_func,
-    run_msprime_replicates_func,
-    write_samples_and_rec_map_func,
-    run_inference_dadi_func=None,
-    run_inference_moments_func=None,
-    run_inference_momentsLD_func=None,
-    folderpath=None,
-    num_windows=None,
-    num_samples=None,
-    maxiter=None,
-    mutation_rate = 1.26e-8
-):
-    sampled_params = sample_params_func()
-    sfs = create_SFS_func(sampled_params, num_samples)
+# def process_single_simulation(
+#     i,
+#     sample_params_func,
+#     create_SFS_func,
+#     bottleneck_model_func,
+#     run_msprime_replicates_func,
+#     write_samples_and_rec_map_func,
+#     run_inference_dadi_func=None,
+#     run_inference_moments_func=None,
+#     run_inference_momentsLD_func=None,
+#     folderpath=None,
+#     num_windows=None,
+#     num_samples=None,
+#     maxiter=None,
+#     mutation_rate = 1.26e-8
+# ):
+#     sampled_params = sample_params_func()
+#     sfs = create_SFS_func(sampled_params, num_samples)
 
-    # Simulate process and save windows as VCF files
-    if run_inference_momentsLD_func:
-        g = bottleneck_model_func(sampled_params)
-        run_msprime_replicates_func(g)
-        samples_file, flat_map_file = write_samples_and_rec_map_func()
+#     # Simulate process and save windows as VCF files
+#     if run_inference_momentsLD_func:
+#         g = bottleneck_model_func(sampled_params)
+#         run_msprime_replicates_func(g)
+#         samples_file, flat_map_file = write_samples_and_rec_map_func()
 
-    # Initialize result dictionary
-    results = {
-        "sampled_params": sampled_params,
-        "sfs": sfs,
-    }
+#     # Initialize result dictionary
+#     results = {
+#         "sampled_params": sampled_params,
+#         "sfs": sfs,
+#     }
 
-    # Conditional analysis based on provided functions
-    if run_inference_dadi_func:
-        model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi_func(
-            sfs,
-            p0=[0.25, 0.75, 0.1, 0.05],
-            lower_bound=[0.001, 0.001, 0.001, 0.001],
-            upper_bound=[10, 10, 10, 10],
-            sampled_params=sampled_params,
-            num_samples=num_samples,
-            maxiter=maxiter,
-            mutation_rate = mutation_rate
-        )
-        results.update(
-            {
-                "opt_params_dict_dadi": opt_params_dict_dadi,
-                "model_sfs_dadi": model_sfs_dadi,
-                "opt_theta_dadi": opt_theta_dadi,
-            }
-        )
+#     # Conditional analysis based on provided functions
+#     if run_inference_dadi_func:
+#         model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi_func(
+#             sfs,
+#             p0=[0.25, 0.75, 0.1, 0.05],
+#             lower_bound=[0.001, 0.001, 0.001, 0.001],
+#             upper_bound=[10, 10, 10, 10],
+#             sampled_params=sampled_params,
+#             num_samples=num_samples,
+#             maxiter=maxiter,
+#             mutation_rate = mutation_rate
+#         )
+#         results.update(
+#             {
+#                 "opt_params_dict_dadi": opt_params_dict_dadi,
+#                 "model_sfs_dadi": model_sfs_dadi,
+#                 "opt_theta_dadi": opt_theta_dadi,
+#             }
+#         )
 
-    if run_inference_moments_func:
-        model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
-            run_inference_moments_func(
-                sfs,
-                p0=[0.25, 0.75, 0.1, 0.05],
-                lower_bound=[0.001, 0.001, 0.001, 0.001],
-                upper_bound=[10, 10, 10, 10],
-                sampled_params=sampled_params,
-                maxiter=maxiter,
-                mutation_rate = mutation_rate
-            )
-        )
-        results.update(
-            {
-                "opt_params_dict_moments": opt_params_dict_moments,
-                "model_sfs_moments": model_sfs_moments,
-                "opt_theta_moments": opt_theta_moments,
-            }
-        )
+#     if run_inference_moments_func:
+#         model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
+#             run_inference_moments_func(
+#                 sfs,
+#                 p0=[0.25, 0.75, 0.1, 0.05],
+#                 lower_bound=[0.001, 0.001, 0.001, 0.001],
+#                 upper_bound=[10, 10, 10, 10],
+#                 sampled_params=sampled_params,
+#                 maxiter=maxiter,
+#                 mutation_rate = mutation_rate
+#             )
+#         )
+#         results.update(
+#             {
+#                 "opt_params_dict_moments": opt_params_dict_moments,
+#                 "model_sfs_moments": model_sfs_moments,
+#                 "opt_theta_moments": opt_theta_moments,
+#             }
+#         )
 
-    if run_inference_momentsLD_func:
-        opt_params_momentsLD = run_inference_momentsLD_func(
-            folderpath=folderpath,
-            num_windows=num_windows,
-            param_sample=sampled_params,
-            p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
-            maxiter=maxiter
-        )
-        results["opt_params_momentsLD"] = opt_params_momentsLD
+#     if run_inference_momentsLD_func:
+#         opt_params_momentsLD = run_inference_momentsLD_func(
+#             folderpath=folderpath,
+#             num_windows=num_windows,
+#             param_sample=sampled_params,
+#             p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
+#             maxiter=maxiter
+#         )
+#         results["opt_params_momentsLD"] = opt_params_momentsLD
 
-    return results
+#     return results
 
 
 # def extract_and_process_features(simulated_params, opt_params, analysis_type, stage, experiment_directory, remove_outliers=True):
@@ -376,6 +376,38 @@ class FeatureExtractor:
         # for analysis_type in analysis_types:
         #     print(f"Samples for {stage}:{analysis_type} after resampling: {len(self.features[stage][analysis_type])}")
 
+def get_dicts(list_of_mega_result_dicts):
+    '''
+    Concatenate the values for each subdict and each main key across list elements
+    '''
+
+    merged_dict = {}
+
+    for dictionary in list_of_mega_result_dicts:
+        for key, value in dictionary.items():
+            if key in merged_dict:
+                if isinstance(merged_dict[key], dict) and isinstance(value, dict):
+                    # Merge nested dictionaries by combining each subkey
+                    for subkey, subvalue in value.items():
+                        if subkey in merged_dict[key]:
+                            # Append conflicting values to a list
+                            if not isinstance(merged_dict[key][subkey], list):
+                                merged_dict[key][subkey] = [merged_dict[key][subkey]]
+                            merged_dict[key][subkey].append(subvalue)
+                        else:
+                            merged_dict[key][subkey] = subvalue
+                else:
+                    # If the key exists but is not a dictionary, overwrite the value
+                    if not isinstance(merged_dict[key], list):
+                        merged_dict[key] = [merged_dict[key]]
+                    merged_dict[key].append(value)
+            else:
+                # If the key does not exist in the merged dictionary, add it
+                merged_dict[key] = value
+
+    return merged_dict
+
+
 
 class Processor:
     def __init__(
@@ -523,65 +555,79 @@ class Processor:
         return sampled_params
 
     @staticmethod
-    def create_SFS(sampled_params, length = 1e7, mutation_rate = 1.26e-8, num_samples = 100):
+    def create_SFS(sampled_params, mode, num_samples, length = 1e7, mutation_rate = 1.26e-8, **kwargs):
         """
         If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
 
         """
 
-        demography = msprime.Demography()
-        demography.add_population(
-            name="A", initial_size=sampled_params["N_recover"]
-        )
-        demography.add_population_parameters_change(
-            sampled_params["t_bottleneck_end"], initial_size=sampled_params["Nb"]
-        )
-        demography.add_population_parameters_change(
-            sampled_params["t_bottleneck_start"], initial_size=sampled_params["N0"]
-        )
+        if mode == "pretrain":
 
-        demes_model = demography.to_demes()
+            demography = msprime.Demography()
+            demography.add_population(
+                name="A", initial_size=sampled_params["N_recover"]
+            )
+            demography.add_population_parameters_change(
+                sampled_params["t_bottleneck_end"], initial_size=sampled_params["Nb"]
+            )
+            demography.add_population_parameters_change(
+                sampled_params["t_bottleneck_start"], initial_size=sampled_params["N0"]
+            )
 
-        sfs = demes_obj.SFS(
-            demes_model,
-            sampled_demes=["A"],
-            sample_sizes=[2 * num_samples],
-            # Ne = sampled_params["N0"]
-            u = mutation_rate
-        )
+            demes_model = demography.to_demes()
 
-        #multiply sfs by L
-        sfs*=length
+            sfs = demes_obj.SFS(
+                demes_model,
+                sampled_demes=["A"],
+                sample_sizes=[2 * num_samples],
+                # Ne = sampled_params["N0"]
+                u = mutation_rate
+            )
+
+            #multiply sfs by L
+            sfs*=length
+
+        elif mode == "inference":
+            vcf_file = kwargs.get('vcf_file', None)
+            pop_file = kwargs.get('pop_file', None)
+            popname = kwargs.get('popname', None)
+            
+            if vcf_file is None or pop_file is None:
+                raise ValueError("vcf_file and pop_file must be provided in inference mode.")
+            
+            dd = dadi.Misc.make_data_dict_vcf(vcf_file, pop_file)
+            sfs = dadi.Spectrum.from_data_dict(dd, [popname], projections = [2*num_samples], polarized = True)
 
         return sfs
 
-    def run(self, indices_of_interest):
+    def pretrain_processing(self, indices_of_interest):
         '''
         This really should be subdivided into more functions so that when we do inference I can separately call the helper functions. 
         '''
 
         # Initialize lists to store results
-        sample_params_storage = []
-        model_sfs = []
+        # sample_params_storage = []
+        # model_sfs = []
 
-        opt_params_dadi_list = []
-        model_sfs_dadi_list = []
-        opt_theta_dadi_list = []
+        # opt_params_dadi_list = []
+        # model_sfs_dadi_list = []
+        # opt_theta_dadi_list = []
 
-        opt_params_moments_list = []
-        model_sfs_moments_list = []
-        opt_theta_moments_list = []
+        # opt_params_moments_list = []
+        # model_sfs_moments_list = []
+        # opt_theta_moments_list = []
 
-        opt_params_momentsLD_list = []
+        # opt_params_momentsLD_list = []
 
-        # Create a list of futures to run simulations in parallel
+        list_of_mega_result_dicts = []
 
         for i in tqdm(range(len(indices_of_interest))):
-            sampled_params = self.sample_params()
-            sfs = self.create_SFS(sampled_params, length = self.L, mutation_rate=self.mutation_rate, num_samples = self.num_samples)
+            mega_result_dict = {} # This will store all the results (downstream postprocessing) later
 
-            # Initialize result dictionary
-            results = {
+            sampled_params = self.sample_params()
+            sfs = self.create_SFS(sampled_params, mode = "pretrain", num_samples=self.num_samples, length = self.L, mutation_rate=self.mutation_rate)
+
+            mega_result_dict = {
                 "sampled_params": sampled_params,
                 "sfs": sfs
             }
@@ -605,13 +651,21 @@ class Processor:
                     mutation_rate=self.mutation_rate,
                     length = self.L
                 )
-                results.update(
-                    {
-                        "opt_params_dict_dadi": opt_params_dict_dadi,
-                        "model_sfs_dadi": model_sfs_dadi,
-                        "opt_theta_dadi": opt_theta_dadi,
-                    }
-                )
+                # results.update(
+                #     {
+                #         "opt_params_dict_dadi": opt_params_dict_dadi,
+                #         "model_sfs_dadi": model_sfs_dadi,
+                #         "opt_theta_dadi": opt_theta_dadi,
+                #     }
+                # )
+
+                dadi_results = {
+                    'model_sfs_dadi': model_sfs_dadi, 
+                    'opt_theta_dadi': opt_theta_dadi,
+                    'opt_params_dadi': opt_params_dict_dadi
+                }
+
+                mega_result_dict.update(dadi_results)
 
             if self.experiment_config['moments_analysis']:
                 model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
@@ -627,13 +681,22 @@ class Processor:
                         length = self.L
                     )
                 )
-                results.update(
-                    {
-                        "opt_params_dict_moments": opt_params_dict_moments,
-                        "model_sfs_moments": model_sfs_moments,
-                        "opt_theta_moments": opt_theta_moments,
-                    }
-                )
+
+                moments_results = {
+                    'model_sfs_moments': model_sfs_moments,
+                    'opt_theta_moments': opt_theta_moments,
+                    'opt_params_moments': opt_params_dict_moments
+                }
+
+                mega_result_dict.update(moments_results)
+
+                # results.update(
+                #     {
+                #         "opt_params_dict_moments": opt_params_dict_moments,
+                #         "model_sfs_moments": model_sfs_moments,
+                #         "opt_theta_moments": opt_theta_moments,
+                #     }
+                # )
 
             if self.experiment_config['momentsLD_analysis']:
                 opt_params_momentsLD = run_inference_momentsLD(
@@ -644,99 +707,109 @@ class Processor:
                     maxiter=self.maxiter
                 )
 
-                results.update({"opt_params_momentsLD": opt_params_momentsLD})
+                momentsLD_results = {
+                    'opt_params_momentsLD': opt_params_momentsLD
+                }
 
-            sample_params_storage.append(results["sampled_params"])
-            model_sfs.append(results["sfs"])
+                mega_result_dict.update(momentsLD_results)
 
-            if self.experiment_config["dadi_analysis"]:
-                opt_params_dadi_list.append(results["opt_params_dict_dadi"])
-                model_sfs_dadi_list.append(results["model_sfs_dadi"])
-                opt_theta_dadi_list.append(results["opt_theta_dadi"])
+                # results.update({"opt_params_momentsLD": opt_params_momentsLD})
+            
+            list_of_mega_result_dicts.append(mega_result_dict)
 
-            if self.experiment_config["moments_analysis"]:
-                opt_params_moments_list.append(results["opt_params_dict_moments"])
-                model_sfs_moments_list.append(results["model_sfs_moments"])
-                opt_theta_moments_list.append(results["opt_theta_moments"])
+        return get_dicts(list_of_mega_result_dicts)
 
-            if self.experiment_config["momentsLD_analysis"]:
-                opt_params_momentsLD_list.append(results["opt_params_momentsLD"])
+            # sample_params_storage.append(results["sampled_params"])
+            # model_sfs.append(results["sfs"])
+
+            # if self.experiment_config["dadi_analysis"]:
+            #     opt_params_dadi_list.append(results["opt_params_dict_dadi"])
+            #     model_sfs_dadi_list.append(results["model_sfs_dadi"])
+            #     opt_theta_dadi_list.append(results["opt_theta_dadi"])
+
+            # if self.experiment_config["moments_analysis"]:
+            #     opt_params_moments_list.append(results["opt_params_dict_moments"])
+            #     model_sfs_moments_list.append(results["model_sfs_moments"])
+            #     opt_theta_moments_list.append(results["opt_theta_moments"])
+
+            # if self.experiment_config["momentsLD_analysis"]:
+            #     opt_params_momentsLD_list.append(results["opt_params_momentsLD"])
 
         # Create the output dictionaries
         #TODO: Modify these data dictionary creations to remove "simulated_params". Or just modify it to be compatible with the inference mode object. 
-        dadi_dict = (
-            {
-                "model_sfs": model_sfs,
-                "simulated_params": sample_params_storage,
-                "opt_params": opt_params_dadi_list,
-                "model_sfs": model_sfs_dadi_list,
-                "opt_theta": opt_theta_dadi_list,
-            }
-            if self.experiment_config["dadi_analysis"]
-            else {}
-        )
+        # dadi_dict = (
+        #     {
+        #         "model_sfs": model_sfs,
+        #         "simulated_params": sample_params_storage,
+        #         "opt_params": opt_params_dadi_list,
+        #         "model_sfs": model_sfs_dadi_list,
+        #         "opt_theta": opt_theta_dadi_list,
+        #     }
+        #     if self.experiment_config["dadi_analysis"]
+        #     else {}
+        # )
 
-        moments_dict = (
-            {
-                "model_sfs": model_sfs,
-                "simulated_params": sample_params_storage,
-                "opt_params": opt_params_moments_list,
-                "model_sfs": model_sfs_moments_list,
-                "opt_theta": opt_theta_moments_list,
-            }
-            if self.experiment_config["moments_analysis"]
-            else {}
-        )
+        # moments_dict = (
+        #     {
+        #         "model_sfs": model_sfs,
+        #         "simulated_params": sample_params_storage,
+        #         "opt_params": opt_params_moments_list,
+        #         "model_sfs": model_sfs_moments_list,
+        #         "opt_theta": opt_theta_moments_list,
+        #     }
+        #     if self.experiment_config["moments_analysis"]
+        #     else {}
+        # )
 
-        momentsLD_dict = (
-            {
-                "simulated_params": sample_params_storage,
-                "opt_params": opt_params_momentsLD_list,
-            }
-            if self.experiment_config["momentsLD_analysis"]
-            else {}
-        )
+        # momentsLD_dict = (
+        #     {
+        #         "simulated_params": sample_params_storage,
+        #         "opt_params": opt_params_momentsLD_list,
+        #     }
+        #     if self.experiment_config["momentsLD_analysis"]
+        #     else {}
+        # )
 
-        print("Length of dadi preprocessing (i.e. number of simulations): ", len(dadi_dict["model_sfs"]))
-        print("Length of moments preprocessing (i.e. number of simulations): ", len(moments_dict["model_sfs"]))
-        # print("Length of momentsLD preprocessing (i.e. number of simulations): ", len(momentsLD_dict["opt_params"]))
+        # print("Length of dadi preprocessing (i.e. number of simulations): ", len(dadi_dict["model_sfs"]))
+        # print("Length of moments preprocessing (i.e. number of simulations): ", len(moments_dict["model_sfs"]))
+        # # print("Length of momentsLD preprocessing (i.e. number of simulations): ", len(momentsLD_dict["opt_params"]))
 
-        return dadi_dict, moments_dict, momentsLD_dict
+        # return dadi_dict, moments_dict, momentsLD_dict
 
 
-    def inference(self, vcf_file, popinfo_file, popname):
-        '''
-        Placeholder code for evaluating the trained model on the GHIST data. 
-        '''
+    # def inference(self, vcf_file, popinfo_file, popname):
+    #     '''
+    #     Placeholder code for evaluating the trained model on the GHIST data. 
+    #     '''
 
-        # vcf_data = allel.read_vcf(vcf_file)
-        # num_samples = len(vcf_data['samples'])
+    #     # vcf_data = allel.read_vcf(vcf_file)
+    #     # num_samples = len(vcf_data['samples'])
 
-        dd = dadi.Misc.make_data_dict_vcf(vcf_data, popinfo_file)
-        fs = dadi.Spectrum.from_data_dict(dd, [popname], projections = [2*self.num_samples], polarized = True)
+    #     dd = dadi.Misc.make_data_dict_vcf(vcf_data, popinfo_file)
+    #     fs = dadi.Spectrum.from_data_dict(dd, [popname], projections = [2*self.num_samples], polarized = True)
 
-        p0=[0.25, 0.75, 0.1, 0.05]
-        lower_bound=[0.001, 0.001, 0.001, 0.001]
-        upper_bound=[10, 10, 10, 10]
-        sampled_params = None
+    #     p0=[0.25, 0.75, 0.1, 0.05]
+    #     lower_bound=[0.001, 0.001, 0.001, 0.001]
+    #     upper_bound=[10, 10, 10, 10]
+    #     sampled_params = None
 
-        model, opt_theta, opt_params_dict = run_inference_dadi(
-            fs,
-            p0,
-            sampled_params,
-            self.num_samples,
-            lower_bound=[0.001, 0.001, 0.001, 0.001],
-            upper_bound=[10, 10, 10, 10],
-            maxiter=self.maxiter
-        )
+    #     model, opt_theta, opt_params_dict = run_inference_dadi(
+    #         fs,
+    #         p0,
+    #         sampled_params,
+    #         self.num_samples,
+    #         lower_bound=[0.001, 0.001, 0.001, 0.001],
+    #         upper_bound=[10, 10, 10, 10],
+    #         maxiter=self.maxiter
+    #     )
 
-        for name, data in [
-            ("dadi", dadi_dict),
-            ("moments", moments_dict),
-            ("momentsLD", momentsLD_dict),
-        ]:
-            filename = f"{name}_dict_{data_type}.pkl"
-            save_dict_to_pickle(data, filename, experiment_directory)
+    #     for name, data in [
+    #         ("dadi", dadi_dict),
+    #         ("moments", moments_dict),
+    #         ("momentsLD", momentsLD_dict),
+    #     ]:
+    #         filename = f"{name}_dict_{data_type}.pkl"
+    #         save_dict_to_pickle(data, filename, experiment_directory)
 
 
 

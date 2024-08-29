@@ -13,15 +13,15 @@ def extract_features(simulated_params, opt_params, normalization=True):
     """
 
     # Extracting parameters from the flattened lists
-    Nb_opt = [d["Nb"] for d in opt_params]
-    N_recover_opt = [d["N_recover"] for d in opt_params]
-    t_bottleneck_start_opt = [d["t_bottleneck_start"] for d in opt_params]
-    t_bottleneck_end_opt = [d["t_bottleneck_end"] for d in opt_params]
+    Nb_opt = opt_params['Nb']
+    N_recover_opt = opt_params['N_recover']
+    t_bottleneck_start_opt = opt_params['t_bottleneck_start']
+    t_bottleneck_end_opt = opt_params['t_bottleneck_end']
 
-    Nb_sample = [d["Nb"] for d in simulated_params]
-    N_recover_sample = [d["N_recover"] for d in simulated_params]
-    t_bottleneck_start_sample = [d["t_bottleneck_start"] for d in simulated_params]
-    t_bottleneck_end_sample = [d["t_bottleneck_end"] for d in simulated_params]
+    Nb_sample = simulated_params['Nb']
+    N_recover_sample = simulated_params['N_recover']
+    t_bottleneck_start_sample = simulated_params['t_bottleneck_start']
+    t_bottleneck_end_sample = simulated_params['t_bottleneck_end']
 
     #TODO: Make this a bit more elegant and streamlined.
     if "upper_triangular_FIM" in opt_params[0]:
@@ -429,9 +429,41 @@ def save_dict_to_pickle(data_dict, filename, directory):
     print(f"Saved: {filepath}")
 
 
-def process_and_save_data(processor, indices, data_type, experiment_directory):
+def process_and_save_data(processor, indices, data_type, experiment_directory, dadi_analysis, moments_analysis, momentsLD_analysis):
     """Process data and save results to pickle files."""
-    dadi_dict, moments_dict, momentsLD_dict = processor.run(indices)
+    merged_dict = processor.pretrain_processing(indices)
+
+    if dadi_analysis:
+        dadi_dict = {
+            'simulated_params': merged_dict['sampled_params'], 
+            'sfs': merged_dict['sfs'],
+            'model_sfs': merged_dict['model_sfs_dadi'],
+            'opt_theta': merged_dict['opt_theta_dadi'],
+            'opt_params': merged_dict['opt_params_dadi']
+        }
+    else:
+        dadi_dict = {}
+
+    
+    if moments_analysis:
+        moments_dict = {
+            'simulated_params': merged_dict['sampled_params'], 
+            'sfs': merged_dict['sfs'],
+            'model_sfs': merged_dict['model_sfs_moments'],
+            'opt_theta': merged_dict['opt_theta_moments'],
+            'opt_params': merged_dict['opt_params_moments']
+        }
+    else:
+        moments_dict = {}
+
+    if momentsLD_analysis:
+        momentsLD_dict = {
+            'simulated_params': merged_dict['sampled_params'], 
+            'sfs': merged_dict['sfs'],
+            'opt_params': merged_dict['opt_params_momentsLD']
+        }
+    else:
+        momentsLD_dict = {}
 
     for name, data in [
         ("dadi", dadi_dict),

@@ -120,20 +120,10 @@ class Experiment_Manager:
 
             # Your existing process_and_save_data function
 
-
             # Call the remote function and get the ObjectRef
-            result_ref = process_and_save_data(
-                processor, indices, stage, self.experiment_directory
+            dadi_dict, moments_dict, momentsLD_dict = process_and_save_data(
+                processor, indices, stage, self.experiment_directory, self.dadi_analysis, self.moments_analysis, self.momentsLD_analysis
             )
-
-            start = time.time() 
-
-            # Use ray.get() to retrieve the actual result
-            dadi_dict, moments_dict, momentsLD_dict = result_ref[0], result_ref[1], result_ref[2]
-
-            end = time.time()
-
-            print(f"Time taken for processing {stage} data: {end - start}")
 
             # Process each dictionary
             if extractor.dadi_analysis:
@@ -148,7 +138,8 @@ class Experiment_Manager:
                 )
 
         # After processing all stages, finalize the processing
-
+        #TODO: Need to rewrite this
+        
         features, targets, feature_names = extractor.finalize_processing(
             remove_outliers=self.remove_outliers
         )

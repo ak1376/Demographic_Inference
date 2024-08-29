@@ -58,8 +58,8 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 1000,
-    "num_sims_inference": 1000,
+    "num_sims_pretrain": 5,
+    "num_sims_inference": 5,
     "num_samples": 20,
     "experiment_name": "dadi_moments_analysis_new",
     "dadi_analysis": True,
