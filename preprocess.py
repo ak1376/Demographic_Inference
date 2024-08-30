@@ -223,11 +223,9 @@ class FeatureExtractor:
         self.dadi_analysis = dadi_analysis
         self.moments_analysis = moments_analysis
         self.momentsLD_analysis = momentsLD_analysis
-        self.features = {stage: {} for stage in ["training", "validation", "testing"]}
-        self.targets = {stage: {} for stage in ["training", "validation", "testing"]}
-        self.feature_names = {}
 
-    def process_batch(self, batch_data, analysis_type, stage, normalization=False):
+    def process_batch(self, batch_data, analysis_type, stage, features_dict = {}, targets_dict = {}, feature_names = [], normalization=False):
+
         if (
             not batch_data
             or "simulated_params" not in batch_data
@@ -242,22 +240,23 @@ class FeatureExtractor:
             normalization=normalization,
         )
 
-        
         #TODO: I don't want to rely on the class instances for any of this. This makes it less generalizable to the GHIST data. 
-        if analysis_type not in self.features[stage]:
-            self.features[stage][analysis_type] = []
-            self.targets[stage][analysis_type] = []
+        if analysis_type not in features_dict[stage]:
+            features_dict[stage][analysis_type] = []
+            targets_dict[stage][analysis_type] = []
 
-        self.features[stage][analysis_type].extend(features)
-        self.targets[stage][analysis_type].extend(targets)
+        features_dict[stage][analysis_type].extend(features)
+        targets_dict[stage][analysis_type].extend(targets)
 
-        if analysis_type not in self.feature_names:
-            self.feature_names[analysis_type] = [
+        if analysis_type not in feature_names:
+            feature_names[analysis_type] = [
                 f"Nb_opt_{analysis_type}",
                 f"N_recover_opt_{analysis_type}",
                 f"t_bottleneck_start_opt_{analysis_type}",
                 f"t_bottleneck_end_opt_{analysis_type}"
             ]
+
+        return features_dict, targets_dict, feature_names
             
 
         # error_value = root_mean_squared_error(targets, features)
@@ -266,14 +265,14 @@ class FeatureExtractor:
         # visualizing_results(batch_data, save_loc = self.experiment_directory, analysis=f"{analysis_type}_{stage}")
 
     #TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
-    def finalize_processing(self, remove_outliers=True):
+    def finalize_processing(self, features_dict, targets_dict, feature_names, remove_outliers=True):
         """
         This function will create the numpy array of features and targets across all analysis types and stages. If the user specifies to remove outliers, it will remove them from the data and then resample the rows for concatenation
         """
-        for stage in self.features:
-            for analysis_type in self.features[stage]:
-                features = np.array(self.features[stage][analysis_type])
-                targets = np.array(self.targets[stage][analysis_type])
+        for stage in features_dict:
+            for analysis_type in features_dict[stage]:
+                features = np.array(features_dict[stage][analysis_type])
+                targets = np.array(targets_dict[stage][analysis_type])
 
                 outlier_indices = find_outlier_indices(features)
                 np.savetxt(
@@ -291,35 +290,36 @@ class FeatureExtractor:
                     targets = np.delete(targets, outlier_indices, axis=0)
                     # self.resample_features_and_targets(stage)
 
-                self.features[stage][analysis_type] = features
-                self.targets[stage][analysis_type] = targets
+                features_dict[stage][analysis_type] = features
+                targets_dict[stage][analysis_type] = targets
 
                 # error_value = root_mean_squared_error(targets, features)
                 # print(f"Final error value for {analysis_type} {stage}: {error_value}")
 
         concatenated_features, concatenated_targets = (
-            self.concatenate_features_and_targets()
+            self.concatenate_features_and_targets(feature_names=feature_names, features_dict=features_dict, targets_dict=targets_dict)
         )
-        return concatenated_features, concatenated_targets, self.feature_names
+        return concatenated_features, concatenated_targets, feature_names
 
     # TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
-    def concatenate_features_and_targets(self):
+    @staticmethod
+    def concatenate_features_and_targets(feature_names, features_dict, targets_dict):
         concatenated_features = {}
         concatenated_targets = {}
         concatenated_feature_names = []
 
         # Concatenate feature names only once
-        for analysis_type in sorted(self.feature_names.keys()): #type: ignore
-            concatenated_feature_names.extend(self.feature_names[analysis_type])
+        for analysis_type in sorted(feature_names.keys()): #type: ignore
+            concatenated_feature_names.extend(feature_names[analysis_type])
 
-        for stage in self.features:
+        for stage in features_dict:
             all_features = []
             all_targets = []
             for analysis_type in sorted(
-                self.features[stage].keys()
+                features_dict[stage].keys()
             ):  # Sort to ensure consistent order
-                all_features.append(self.features[stage][analysis_type])
-                all_targets.append(self.targets[stage][analysis_type])
+                all_features.append(features_dict[stage][analysis_type])
+                all_targets.append(targets_dict[stage][analysis_type])
 
             # Find the minimum number of samples across all analysis types
             min_samples = min(len(features) for features in all_features)
@@ -349,28 +349,27 @@ class FeatureExtractor:
             # print(f"  Concatenated features shape: {concatenated_features[stage].shape}")
             # print(f"  Concatenated targets shape: {concatenated_targets[stage].shape}")
 
-        self.feature_names = concatenated_feature_names
         return concatenated_features, concatenated_targets
 
     # TODO: Again, need to modify this s.t. I am not relying on the class instances for any of this.
-    def resample_features_and_targets(self, stage):
+    def resample_features_and_targets(self, features_dict, targets_dict, stage):
 
-        analysis_types = list(self.features[stage].keys())
+        analysis_types = list(features_dict[stage].keys())
         if len(analysis_types) < 2:
             return  # No need to resample if there's only one or no analysis type
 
         # Find the minimum number of samples across all analysis types
-        min_samples = min(len(self.features[stage][at]) for at in analysis_types)
+        min_samples = min(len(features_dict[stage][at]) for at in analysis_types)
 
         for analysis_type in analysis_types:
-            features = np.array(self.features[stage][analysis_type])
-            targets = np.array(self.targets[stage][analysis_type])
+            features = np.array(features_dict[stage][analysis_type])
+            targets = np.array(targets_dict[stage][analysis_type])
 
             if len(features) > min_samples:
                 # Randomly sample without replacement
                 indices = np.random.choice(len(features), min_samples, replace=False)
-                self.features[stage][analysis_type] = features[indices]
-                self.targets[stage][analysis_type] = targets[indices]
+                features_dict[stage][analysis_type] = features[indices]
+                targets_dict[stage][analysis_type] = targets[indices]
 
         # Print the number of samples after resampling
         # for analysis_type in analysis_types:

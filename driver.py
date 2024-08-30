@@ -2,6 +2,8 @@ from experiment_manager import Experiment_Manager
 import os
 import warnings
 from train import Trainer
+from inference import Inference
+from preprocess import Processor
 
 # Suppress the specific warning about delim_whitespace
 warnings.filterwarnings(
@@ -58,8 +60,8 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 5,
-    "num_sims_inference": 5,
+    "num_sims_pretrain": 20,
+    "num_sims_inference": 20,
     "num_samples": 20,
     "experiment_name": "dadi_moments_analysis_new",
     "dadi_analysis": True,
@@ -80,7 +82,7 @@ config = {
 
 linear_experiment = Experiment_Manager(config)
 linear_experiment.obtaining_features()
-preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
+preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/dadi_moments_analysis_new/preprocessing_results_obj.pkl")
 # preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/Demographic_Inference/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]
 training_targets = preprocessing_results_obj["training"]["targets"]
@@ -93,6 +95,7 @@ testing_targets = preprocessing_results_obj["testing"]["targets"]
 trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config, use_FIM=config['use_FIM'])
 snn_model, train_losses, val_losses = trainer.train(training_features, training_targets, validation_features, validation_targets, visualize = True)
 trainer.predict(snn_model, training_features, validation_features, training_targets, validation_targets, visualize = True)
+inference_obj = Inference(vcf_filepath = 'GHIST-bottleneck.vcf.gz', txt_filepath='wisent.txt', popname = 'wisent')
 
 print("siema")
 # linear_experiment.inference()

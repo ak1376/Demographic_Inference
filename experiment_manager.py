@@ -51,7 +51,9 @@ class Experiment_Manager:
 
         # Open a file in write mode and save the dictionary as JSON
         with open(f"{self.experiment_directory}/config.json", "w") as json_file:
-            json.dump(self.experiment_config, json_file, indent=4)  # indent=4 makes the JSON file more readable
+            json.dump(
+                self.experiment_config, json_file, indent=4
+            )  # indent=4 makes the JSON file more readable
 
     def create_directory(
         self, folder_name, base_dir="experiments", archive_subdir="archive"
@@ -85,19 +87,24 @@ class Experiment_Manager:
         self.experiment_directory = base_path
 
     def load_features(self, file_name):
-        with open(f'{file_name}', "rb") as file:
+        with open(f"{file_name}", "rb") as file:
             loaded_object = pickle.load(file)
 
         return loaded_object
 
     def obtaining_features(self):
         """
-        This should do the dadi and moments inference (input to the ML models)
+        This should do the dadi and moments inference (input to the ML models). THIS IS PRETRAINING CODE
         """
 
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
-        extractor = FeatureExtractor(self.experiment_directory)
+        extractor = FeatureExtractor(
+            self.experiment_directory,
+            dadi_analysis=self.experiment_config["dadi_analysis"],
+            moments_analysis=self.experiment_config["moments_analysis"],
+            momentsLD_analysis=self.experiment_config["momentsLD_analysis"],
+        )
 
         # Now I want to define training, validation, and testing indices:
 
@@ -112,6 +119,10 @@ class Experiment_Manager:
         validation_indices = all_indices[n_train:]
         testing_indices = np.arange(self.num_sims_inference)
 
+        features_dict = {stage: {} for stage in ["training", "validation", "testing"]}
+        targets_dict = {stage: {} for stage in ["training", "validation", "testing"]}
+        feature_names = {}
+
         for stage, indices in [
             ("training", training_indices),
             ("validation", validation_indices),
@@ -121,26 +132,53 @@ class Experiment_Manager:
             # Your existing process_and_save_data function
 
             # Call the remote function and get the ObjectRef
-            dadi_dict, moments_dict, momentsLD_dict = process_and_save_data(
-                processor, indices, stage, self.experiment_directory, self.dadi_analysis, self.moments_analysis, self.momentsLD_analysis
-            )
+            merged_dict = processor.pretrain_processing(indices)
 
+            dadi_dict, moments_dict, momentsLD_dict = process_and_save_data(
+                merged_dict,
+                stage,
+                self.experiment_directory,
+                self.dadi_analysis,
+                self.moments_analysis,
+                self.momentsLD_analysis,
+            )
+            
             # Process each dictionary
             if extractor.dadi_analysis:
-                extractor.process_batch(dadi_dict, "dadi", stage, normalization=self.normalization)
+                features_dict, targets_dict, feature_names = extractor.process_batch(
+                    merged_dict,
+                    "dadi",
+                    stage,
+                    features_dict=features_dict,
+                    targets_dict=targets_dict,
+                    feature_names=feature_names,
+                    normalization=self.normalization
+                )  # type: ignore
             if extractor.moments_analysis:
-                extractor.process_batch(
-                    moments_dict, "moments", stage, normalization=self.normalization
-                )
+                features_dict, targets_dict, feature_names = extractor.process_batch(
+                    merged_dict,
+                    "moments",
+                    stage,
+                    features_dict=features_dict,
+                    targets_dict=targets_dict,
+                    feature_names=feature_names,
+                    normalization=self.normalization,
+                )  # type:ignore
             if extractor.momentsLD_analysis:
-                extractor.process_batch(
-                    momentsLD_dict, "momentsLD", stage, normalization=self.normalization
-                )
+                features_dict, targets_dict, feature_names = extractor.process_batch(
+                    momentsLD_dict,
+                    "momentsLD",
+                    stage,
+                    features_dict=features_dict,
+                    targets_dict=targets_dict,
+                    feature_names=feature_names,
+                    normalization=self.normalization,
+                )  # type:ignore
 
         # After processing all stages, finalize the processing
-        #TODO: Need to rewrite this
-        
-        features, targets, feature_names = extractor.finalize_processing(
+        # TODO: Need to rewrite this
+
+        features, targets, feature_names = extractor.finalize_processing(features_dict=features_dict, targets_dict=targets_dict, feature_names=feature_names,
             remove_outliers=self.remove_outliers
         )
         training_features, validation_features, testing_features = (
@@ -177,11 +215,12 @@ class Experiment_Manager:
         preprocessing_results_obj["testing"]["targets"] = testing_targets
 
         # Open a file to save the object
-        with open(f"{self.experiment_directory}/preprocessing_results_obj.pkl", "wb") as file:  # "wb" mode opens the file in binary write mode
+        with open(
+            f"{self.experiment_directory}/preprocessing_results_obj.pkl", "wb"
+        ) as file:  # "wb" mode opens the file in binary write mode
             pickle.dump(preprocessing_results_obj, file)
 
-
-        # TODO: This function should be modified to properly consider outliers. 
+        # TODO: This function should be modified to properly consider outliers.
         visualizing_results(
             preprocessing_results_obj,
             save_loc=self.experiment_directory,
@@ -204,6 +243,7 @@ class Experiment_Manager:
         validation_predictions = linear_mdl.predict(validation_features)
         # testing_predictions = linear_mdl.predict(testing_features)
 
+        #TODO: Linear regression should be moded to the models module. 
         linear_mdl_obj = {}
         linear_mdl_obj["model"] = linear_mdl
 
@@ -221,26 +261,37 @@ class Experiment_Manager:
         linear_mdl_obj["testing"]["targets"] = testing_targets
 
         # Open a file to save the object
-        with open(f"{self.experiment_directory}/linear_mdl_obj.pkl", "wb") as file:  # "wb" mode opens the file in binary write mode
+        with open(
+            f"{self.experiment_directory}/linear_mdl_obj.pkl", "wb"
+        ) as file:  # "wb" mode opens the file in binary write mode
             pickle.dump(linear_mdl_obj, file)
 
         # targets
         visualizing_results(
-            linear_mdl_obj, "linear_results", save_loc=self.experiment_directory, stages=["training", "validation"]
+            linear_mdl_obj,
+            "linear_results",
+            save_loc=self.experiment_directory,
+            stages=["training", "validation"],
         )
 
         # Calculate errors for each model separately
         preprocessing_errors = calculate_model_errors(
-            preprocessing_results_obj, "preprocessing", datasets=["training", "validation"]
+            preprocessing_results_obj,
+            "preprocessing",
+            datasets=["training", "validation"],
         )
-        linear_errors = calculate_model_errors(linear_mdl_obj, "linear", datasets=["training", "validation"]) # The reason why we are not passing "testing" because we will pass the trained model along with the testing data to the inference object. 
+        linear_errors = calculate_model_errors(
+            linear_mdl_obj, "linear", datasets=["training", "validation"]
+        )  # The reason why we are not passing "testing" because we will pass the trained model along with the testing data to the inference object.
         # snn_errors = calculate_model_errors(snn_mdl_obj, "snn", datasets=["training", "validation"])
 
         # Combine all errors if needed
         all_errors = {**preprocessing_errors, **linear_errors}
 
         # Print results
-        with open(f"{self.experiment_directory}/preprocessing_data_error.txt", "w") as f:
+        with open(
+            f"{self.experiment_directory}/preprocessing_data_error.txt", "w"
+        ) as f:
             for model, datasets in all_errors.items():
                 f.write(f"\n{model.upper()} Model Errors:\n")
                 for dataset, error in datasets.items():
@@ -258,3 +309,20 @@ class Experiment_Manager:
         # )
 
         print("Training complete!")
+
+    
+    # def inference(self, vcf_filepath, popinfo_filepath):
+    #     '''
+    #     Scratch code for inference testing
+    #     '''
+    #     # First step: define the processor
+    #     processor = Processor(self.experiment_config, self.experiment_directory)
+    #     extractor = FeatureExtractor(
+    #         self.experiment_directory,
+    #         dadi_analysis=self.experiment_config["dadi_analysis"], #Not applicable for inference
+    #         moments_analysis=self.experiment_config["moments_analysis"], # Not applicable for inference
+    #         momentsLD_analysis=self.experiment_config["momentsLD_analysis"], # Not applicable for inference
+    #     )
+
+
+

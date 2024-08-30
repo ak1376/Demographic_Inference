@@ -12,6 +12,8 @@ def extract_features(simulated_params, opt_params, normalization=True):
     opt_params can come from any of the inference methods.
     """
 
+    #TODO: Rewrite this code s.t. I am not assuming a priori the demographic model . 
+
     # Extracting parameters from the flattened lists
     Nb_opt = opt_params['Nb']
     N_recover_opt = opt_params['N_recover']
@@ -24,7 +26,7 @@ def extract_features(simulated_params, opt_params, normalization=True):
     t_bottleneck_end_sample = simulated_params['t_bottleneck_end']
 
     #TODO: Make this a bit more elegant and streamlined.
-    if "upper_triangular_FIM" in opt_params[0]:
+    if "upper_triangular_FIM" in opt_params.keys():
         upper_triangular_FIM = [d["upper_triangular_FIM"] for d in opt_params]
 
         # Add the FIM values to the features
@@ -39,7 +41,7 @@ def extract_features(simulated_params, opt_params, normalization=True):
         )
 
     # Put all these features into a single 2D array
-    if "upper_triangular_FIM" in opt_params[0]:
+    if "upper_triangular_FIM" in opt_params.keys():
         opt_params_array = np.column_stack(
             (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt, upper_triangular_FIM)
         )
@@ -429,9 +431,10 @@ def save_dict_to_pickle(data_dict, filename, directory):
     print(f"Saved: {filepath}")
 
 
-def process_and_save_data(processor, indices, data_type, experiment_directory, dadi_analysis, moments_analysis, momentsLD_analysis):
+def process_and_save_data(merged_dict, data_type, experiment_directory, dadi_analysis, moments_analysis, momentsLD_analysis):
+    #TODO: I need to rewrite this so that I can call this for both pretraining mode and inference mode. 
     """Process data and save results to pickle files."""
-    merged_dict = processor.pretrain_processing(indices)
+    # merged_dict = processor.pretrain_processing(indices)
 
     if dadi_analysis:
         dadi_dict = {

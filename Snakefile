@@ -71,6 +71,9 @@ rule create_experiment:
         config_file = f"{EXPERIMENT_DIRECTORY}/config.json",
         experiment_obj_file = f"{EXPERIMENT_DIRECTORY}/experiment_obj.pkl",
         model_config_file = f"{EXPERIMENT_DIRECTORY}/model_config.json"
+
+    # conda: 
+    #     "myenv"
     run:
         print(f'Experiment Directory: {EXPERIMENT_DIRECTORY}')
         os.makedirs(EXPERIMENT_DIRECTORY, exist_ok=True)
@@ -92,6 +95,9 @@ rule obtain_features:
         num_sims_inference = config['num_sims_inference'],
         normalization = config['normalization'],
         remove_outliers = config['remove_outliers']
+
+    # conda: 
+    #     "myenv"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtaining_features.py \
@@ -108,6 +114,9 @@ rule get_features:
         preprocessing_results = rules.obtain_features.output.preprocessing_results
     output:
         features_output = f"{EXPERIMENT_DIRECTORY}/features_and_targets.pkl"
+
+    # conda: 
+    #     "myenv"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/extracting_features.py \
@@ -122,6 +131,9 @@ rule train_and_predict:
     params:
         use_FIM = False,
         experiment_directory = EXPERIMENT_DIRECTORY
+
+    # conda: 
+    #     "myenv"
     output:
         model_results = f"{EXPERIMENT_DIRECTORY}/snn_results.pkl",
         trained_model = f"{EXPERIMENT_DIRECTORY}/snn_model.pth"
