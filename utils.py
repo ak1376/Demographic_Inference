@@ -438,7 +438,7 @@ def process_and_save_data(merged_dict, data_type, experiment_directory, dadi_ana
 
     if dadi_analysis:
         dadi_dict = {
-            'simulated_params': merged_dict['sampled_params'], 
+            'simulated_params': merged_dict['simulated_params'], 
             'sfs': merged_dict['sfs'],
             'model_sfs': merged_dict['model_sfs_dadi'],
             'opt_theta': merged_dict['opt_theta_dadi'],
@@ -450,7 +450,7 @@ def process_and_save_data(merged_dict, data_type, experiment_directory, dadi_ana
     
     if moments_analysis:
         moments_dict = {
-            'simulated_params': merged_dict['sampled_params'], 
+            'simulated_params': merged_dict['simulated_params'], 
             'sfs': merged_dict['sfs'],
             'model_sfs': merged_dict['model_sfs_moments'],
             'opt_theta': merged_dict['opt_theta_moments'],
@@ -461,7 +461,7 @@ def process_and_save_data(merged_dict, data_type, experiment_directory, dadi_ana
 
     if momentsLD_analysis:
         momentsLD_dict = {
-            'simulated_params': merged_dict['sampled_params'], 
+            'simulated_params': merged_dict['simulated_params'], 
             'sfs': merged_dict['sfs'],
             'opt_params': merged_dict['opt_params_momentsLD']
         }

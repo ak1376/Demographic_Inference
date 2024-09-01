@@ -229,18 +229,17 @@ class FeatureExtractor:
         if (
             not batch_data
             or "simulated_params" not in batch_data
-            or "opt_params" not in batch_data
+            or f"opt_params_{analysis_type}" not in batch_data
         ):
             print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
             return
 
         features, targets = extract_features(
             batch_data["simulated_params"],
-            batch_data["opt_params"],
+            batch_data[f"opt_params_{analysis_type}"],
             normalization=normalization,
         )
 
-        #TODO: I don't want to rely on the class instances for any of this. This makes it less generalizable to the GHIST data. 
         if analysis_type not in features_dict[stage]:
             features_dict[stage][analysis_type] = []
             targets_dict[stage][analysis_type] = []
@@ -264,7 +263,6 @@ class FeatureExtractor:
 
         # visualizing_results(batch_data, save_loc = self.experiment_directory, analysis=f"{analysis_type}_{stage}")
 
-    #TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
     def finalize_processing(self, features_dict, targets_dict, feature_names, remove_outliers=True):
         """
         This function will create the numpy array of features and targets across all analysis types and stages. If the user specifies to remove outliers, it will remove them from the data and then resample the rows for concatenation
@@ -627,7 +625,7 @@ class Processor:
             sfs = self.create_SFS(sampled_params, mode = "pretrain", num_samples=self.num_samples, length = self.L, mutation_rate=self.mutation_rate)
 
             mega_result_dict = {
-                "sampled_params": sampled_params,
+                "simulated_params": sampled_params,
                 "sfs": sfs
             }
 

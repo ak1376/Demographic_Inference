@@ -60,8 +60,8 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 20,
-    "num_sims_inference": 20,
+    "num_sims_pretrain": 10,
+    "num_sims_inference": 10,
     "num_samples": 20,
     "experiment_name": "dadi_moments_analysis_new",
     "dadi_analysis": True,
@@ -95,8 +95,8 @@ testing_targets = preprocessing_results_obj["testing"]["targets"]
 trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config, use_FIM=config['use_FIM'])
 snn_model, train_losses, val_losses = trainer.train(training_features, training_targets, validation_features, validation_targets, visualize = True)
 trainer.predict(snn_model, training_features, validation_features, training_targets, validation_targets, visualize = True)
-inference_obj = Inference(vcf_filepath = 'GHIST-bottleneck.vcf.gz', txt_filepath='wisent.txt', popname = 'wisent')
-
+inference_obj = Inference(vcf_filepath = 'GHIST-bottleneck.vcf.gz', txt_filepath='wisent.txt', popname = 'wisent', config = config, experiment_directory=linear_experiment.experiment_directory)
+inference_obj.obtain_features()
 print("siema")
 # linear_experiment.inference()
 

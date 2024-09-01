@@ -8,17 +8,18 @@ from preprocess import Processor, FeatureExtractor, get_dicts
 from utils import process_and_save_data, save_dict_to_pickle
 
 class Inference(Processor):
-    def __init__(self, vcf_filepath, txt_filepath, popname, processor):
+    def __init__(self, vcf_filepath, txt_filepath, popname, config, experiment_directory):
         self.vcf_filepath = vcf_filepath
         self.txt_filepath = txt_filepath
         self.popname = popname
+        self.experiment_directory = experiment_directory
 
-        self.processor = processor
+        self.config = config
         self.extractor = FeatureExtractor(
             self.experiment_directory,
-            dadi_analysis=self.experiment_config["dadi_analysis"], #Not applicable for inference
-            moments_analysis=self.experiment_config["moments_analysis"], # Not applicable for inference
-            momentsLD_analysis=self.experiment_config["momentsLD_analysis"], # Not applicable for inference
+            dadi_analysis=self.config["dadi_analysis"], #Not applicable for inference
+            moments_analysis=self.config["moments_analysis"], # Not applicable for inference
+            momentsLD_analysis=self.config["momentsLD_analysis"], # Not applicable for inference
         )
 
     def read_data(self):
@@ -74,7 +75,7 @@ class Inference(Processor):
 
         p0 = [0.25, 0.75, 0.1, 0.05]
 
-        if self.experiment_config["dadi_analysis"]:
+        if self.config["dadi_analysis"]:
        
             model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = self.dadi_inference(
                 sfs,
@@ -95,7 +96,7 @@ class Inference(Processor):
 
             mega_result_dict.update(dadi_results)
 
-        if self.experiment_config['moments_analysis']:
+        if self.config['moments_analysis']:
             model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
                 run_inference_moments(
                     sfs,
@@ -104,7 +105,7 @@ class Inference(Processor):
                     upper_bound=[None, None, None, None],
                     sampled_params=None,
                     maxiter=self.maxiter,
-                    use_FIM = self.experiment_config["use_FIM"],
+                    use_FIM = self.config["use_FIM"],
                     mutation_rate=self.mutation_rate,
                     length = self.L
                 )
@@ -119,7 +120,7 @@ class Inference(Processor):
             mega_result_dict.update(moments_results)
 
 
-        if self.experiment_config['momentsLD_analysis']:
+        if self.config['momentsLD_analysis']:
             opt_params_momentsLD = run_inference_momentsLD(
                 folderpath=self.folderpath,
                 num_windows=self.num_windows,
@@ -140,7 +141,7 @@ class Inference(Processor):
         merged_dict = get_dicts(list_of_mega_result_dicts)
 
         #TODO: Rewrite everything below: 
-        if self.experiment_config["dadi_analysis"]:
+        if self.config["dadi_analysis"]:
             dadi_dict = {
                 'simulated_params': merged_dict['sampled_params'], 
                 'sfs': merged_dict['sfs'],
@@ -152,7 +153,7 @@ class Inference(Processor):
             dadi_dict = {}
 
         
-        if self.experiment_config['moments_analysis']:
+        if self.config['moments_analysis']:
             moments_dict = {
                 'simulated_params': merged_dict['sampled_params'], 
                 'sfs': merged_dict['sfs'],
@@ -163,7 +164,7 @@ class Inference(Processor):
         else:
             moments_dict = {}
 
-        if self.experiment_config['momentsLD_analysis']:
+        if self.config['momentsLD_analysis']:
             momentsLD_dict = {
                 'simulated_params': merged_dict['sampled_params'], 
                 'sfs': merged_dict['sfs'],
@@ -178,7 +179,7 @@ class Inference(Processor):
             ("momentsLD", momentsLD_dict),
         ]:
             filename = f"{name}_dict_inference.pkl"
-            save_dict_to_pickle(data, filename, self.experiment_config["experiment_directory"])
+            save_dict_to_pickle(data, filename, self.config["experiment_directory"])
 
         features_dict = {stage: {} for stage in ["inference"]}
         targets_dict = {stage: {} for stage in ["inference"]}
@@ -193,7 +194,7 @@ class Inference(Processor):
                 features_dict=features_dict,
                 targets_dict=targets_dict,
                 feature_names=feature_names,
-                normalization=self.processor.experiment_config['normalization']
+                normalization=self.config['normalization']
             )  # type: ignore
         if self.extractor.moments_analysis:
             features_dict, targets_dict, feature_names = self.extractor.process_batch(
@@ -203,7 +204,7 @@ class Inference(Processor):
                 features_dict=features_dict,
                 targets_dict=targets_dict,
                 feature_names=feature_names,
-                normalization=self.processor.experiment_config['normalization'],
+                normalization=self.config['normalization'],
             )  # type:ignore
         if self.extractor.momentsLD_analysis:
             features_dict, targets_dict, feature_names = self.extractor.process_batch(
@@ -213,7 +214,7 @@ class Inference(Processor):
                 features_dict=features_dict,
                 targets_dict=targets_dict,
                 feature_names=feature_names,
-                normalization=self.processor.experiment_config['normalization'],
+                normalization=self.config['normalization'],
             )  # type:ignore
 
         # After processing all stages, finalize the processing
