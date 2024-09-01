@@ -226,14 +226,22 @@ class FeatureExtractor:
 
     def process_batch(self, batch_data, analysis_type, stage, features_dict = {}, targets_dict = {}, feature_names = [], normalization=False):
 
-        if (
-            not batch_data
-            or "simulated_params" not in batch_data
-            or f"opt_params_{analysis_type}" not in batch_data
-        ):
-            print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
-            return
-
+        
+        if stage != "inference":
+            # Original condition that applies when stage is not 'inference'
+            if (
+                not batch_data
+                or "simulated_params" not in batch_data
+                or f"opt_params_{analysis_type}" not in batch_data
+            ):
+                print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
+                return
+        else:
+            # Special condition that applies when stage is 'inference'
+            if "opt_params" not in batch_data:
+                print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
+                return
+        
         features, targets = extract_features(
             batch_data["simulated_params"],
             batch_data[f"opt_params_{analysis_type}"],

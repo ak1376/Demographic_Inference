@@ -4,7 +4,8 @@ import warnings
 from train import Trainer
 from inference import Inference
 from preprocess import Processor
-
+import pickle
+import torch
 # Suppress the specific warning about delim_whitespace
 warnings.filterwarnings(
     "ignore", message="The 'delim_whitespace' keyword in pd.read_csv is deprecated"
@@ -97,6 +98,16 @@ snn_model, train_losses, val_losses = trainer.train(training_features, training_
 trainer.predict(snn_model, training_features, validation_features, training_targets, validation_targets, visualize = True)
 inference_obj = Inference(vcf_filepath = 'GHIST-bottleneck.vcf.gz', txt_filepath='wisent.txt', popname = 'wisent', config = config, experiment_directory=linear_experiment.experiment_directory)
 inference_obj.obtain_features()
+
+with open(f"{os.getcwd()}/experiments/dadi_moments_analysis_new/inference_results_obj.pkl", 'rb') as file:
+    inference_results = pickle.load(file)
+
+inference_features = torch.tensor(inference_results["features"], dtype=torch.float32)
+
+inferred_params = snn_model.predict(inference_features)
+
+print(inferred_params)
+
 print("siema")
 # linear_experiment.inference()
 
