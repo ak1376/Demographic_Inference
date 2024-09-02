@@ -218,13 +218,15 @@ if __name__ == "__main__":
     with open(args.config, 'r') as f:
         config = json.load(f)
     
+    print('====================================================')
+    print(f"CONFIG KEYS: {config.keys()}")
     # Initialize Inference object
     inference = Inference(
         vcf_filepath=f'{config["vcf_filepath"]}',
         txt_filepath=f'{config["txt_filepath"]}',
         popname=config['popname'],
         config=config,
-        experiment_directory=config['experiment_directory']
+        experiment_directory=args.experiment_directory
     )
 
     # Run feature extraction and inference

@@ -49,7 +49,6 @@ def main(config_path):
     with open(f"{experiment_directory}/inference_config_file.json", 'w') as f:
         json.dump(inference_config, f, indent=4)
 
-    print(f"VCF FILEPATH!!!! {config['vcf_filepath']}")
     
     # Save the experiment object
     with open(experiment_obj_file, "wb") as f:

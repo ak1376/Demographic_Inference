@@ -29,10 +29,10 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 10,
-    "num_sims_inference": 10,
+    "num_sims_pretrain": 100,
+    "num_sims_inference": 100,
     "num_samples": 20,
-    "experiment_name": "new_jawn",
+    "experiment_name": "bottleneck_experiment",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
@@ -87,7 +87,8 @@ rule create_experiment:
     output:
         config_file = f"{EXPERIMENT_DIRECTORY}/config.json",
         experiment_obj_file = f"{EXPERIMENT_DIRECTORY}/experiment_obj.pkl",
-        model_config_file = f"{EXPERIMENT_DIRECTORY}/model_config.json"
+        model_config_file = f"{EXPERIMENT_DIRECTORY}/model_config.json",
+        inference_config_file = f"{EXPERIMENT_DIRECTORY}/inference_config_file.json"
 
     # conda: 
     #     "myenv"
@@ -165,28 +166,37 @@ rule train_and_predict:
 
 rule get_inferred_params:
     input:
-        config=f"{EXPERIMENT_DIRECTORY}/inference_config_file.json",
+        config = rules.create_experiment.output.config_file,
+    
+    params:
         experiment_directory = EXPERIMENT_DIRECTORY
     output:
         f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl",
-        f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
+        f"{EXPERIMENT_DIRECTORY}/dadi_dict_inference.pkl",
+        f"{EXPERIMENT_DIRECTORY}/moments_dict_inference.pkl",
+        f"{EXPERIMENT_DIRECTORY}/momentsLD_dict_inference.pkl"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/inference.py \
         --config {input.config} \
-        --experiment_directory {input.experiment_directory} \
+        --experiment_directory {params.experiment_directory}
         """
 
 rule evaluate_model_GHIST:
     input:
-        
+        config = rules.create_experiment.output.config_file,
+        trained_weights = rules.train_and_predict.output.trained_model,
+        inference_obj = rules.get_inferred_params.output[0]  # Because output is a tuple
+    params:
+        experiment_directory = EXPERIMENT_DIRECTORY
 
-
-
-
-    # # If needed, add code here to load a trained model and call evaluate_model
-    # inference_features = torch.tensor(inference_results["features"], dtype=torch.float32)
-    # inferred_params = snn_model.predict(inference_features)
-
-    # # Save the array as a text file
-    # np.savetxt(f'{self.experiment_directory}/inferred_params_GHIST_bottleneck.txt', inferred_params, delimiter=' ', fmt='%.5f')
+    output:
+        f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
+    shell:
+        """
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/evaluate_model_on_ghist.py \
+        --config {input.config} \
+        --trained_weights {input.trained_weights} \
+        --inference_obj {input.inference_obj} \
+        --experiment_directory {params.experiment_directory}
+        """
