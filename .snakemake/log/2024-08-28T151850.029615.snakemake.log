@@ -1,0 +1,68 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 25
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    4
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Wed Aug 28 15:18:50 2024]
+localrule obtain_features:
+    input: experiments/yikes_snakemake/config.json, experiments/yikes_snakemake/experiment_obj.pkl
+    output: experiments/yikes_snakemake/preprocessing_results_obj.pkl, experiments/yikes_snakemake/linear_regression_model.pkl
+    jobid: 2
+    reason: Missing output files: experiments/yikes_snakemake/preprocessing_results_obj.pkl, experiments/yikes_snakemake/linear_regression_model.pkl; Updated input files: experiments/yikes_snakemake/config.json
+    resources: tmpdir=/tmp
+
+[Wed Aug 28 16:31:46 2024]
+Finished job 2.
+1 of 4 steps (25%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Wed Aug 28 16:31:46 2024]
+localrule get_features:
+    input: experiments/yikes_snakemake/preprocessing_results_obj.pkl
+    output: experiments/yikes_snakemake/features_and_targets.pkl
+    jobid: 3
+    reason: Input files updated by another job: experiments/yikes_snakemake/preprocessing_results_obj.pkl
+    resources: tmpdir=/tmp
+
+[Wed Aug 28 16:31:46 2024]
+Finished job 3.
+2 of 4 steps (50%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Wed Aug 28 16:31:46 2024]
+localrule train_and_predict:
+    input: experiments/yikes_snakemake/model_config.json, experiments/yikes_snakemake/features_and_targets.pkl
+    output: experiments/yikes_snakemake/snn_results.pkl, experiments/yikes_snakemake/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/yikes_snakemake/snn_model.pth, experiments/yikes_snakemake/snn_results.pkl; Input files updated by another job: experiments/yikes_snakemake/features_and_targets.pkl
+    resources: tmpdir=/tmp
+
+[Wed Aug 28 16:31:51 2024]
+Error in rule train_and_predict:
+    jobid: 4
+    input: experiments/yikes_snakemake/model_config.json, experiments/yikes_snakemake/features_and_targets.pkl
+    output: experiments/yikes_snakemake/snn_results.pkl, experiments/yikes_snakemake/snn_model.pth
+    shell:
+        
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/setup_trainer.py         --model_config experiments/yikes_snakemake/model_config.json         --experiment_directory experiments/yikes_snakemake         --features_file experiments/yikes_snakemake/features_and_targets.pkl         --use_FIM False
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-08-28T151850.029615.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

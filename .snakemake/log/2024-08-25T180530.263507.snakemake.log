@@ -1,0 +1,69 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+create_experiment        1
+get_features             1
+obtain_features          1
+total                    4
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Sun Aug 25 18:05:30 2024]
+localrule create_experiment:
+    output: experiments/snakemake_test/config.json, experiments/snakemake_test/experiment_obj.pkl
+    jobid: 1
+    reason: Missing output files: experiments/snakemake_test/config.json, experiments/snakemake_test/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Sun Aug 25 18:05:32 2024]
+Finished job 1.
+1 of 4 steps (25%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Sun Aug 25 18:05:32 2024]
+localrule obtain_features:
+    input: experiments/snakemake_test/config.json, experiments/snakemake_test/experiment_obj.pkl
+    output: experiments/snakemake_test/preprocessing_results_obj.pkl, experiments/snakemake_test/linear_regression_model.pkl
+    jobid: 2
+    reason: Missing output files: experiments/snakemake_test/linear_regression_model.pkl, experiments/snakemake_test/preprocessing_results_obj.pkl; Input files updated by another job: experiments/snakemake_test/config.json, experiments/snakemake_test/experiment_obj.pkl; Params have changed since last execution
+    wildcards: EXPERIMENT_NAME=snakemake_test
+    resources: tmpdir=/tmp
+
+[Sun Aug 25 18:20:37 2024]
+Finished job 2.
+2 of 4 steps (50%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Sun Aug 25 18:20:37 2024]
+localrule get_features:
+    input: experiments/snakemake_test/preprocessing_results_obj.pkl
+    output: experiments/snakemake_test/features_and_targets.pkl
+    jobid: 3
+    reason: Missing output files: experiments/snakemake_test/features_and_targets.pkl; Input files updated by another job: experiments/snakemake_test/preprocessing_results_obj.pkl
+    resources: tmpdir=/tmp
+
+[Sun Aug 25 18:20:37 2024]
+Finished job 3.
+3 of 4 steps (75%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Sun Aug 25 18:20:37 2024]
+localrule all:
+    input: experiments/snakemake_test/config.json, experiments/snakemake_test/experiment_obj.pkl, experiments/snakemake_test/preprocessing_results_obj.pkl, experiments/snakemake_test/linear_regression_model.pkl, experiments/snakemake_test/features_and_targets.pkl
+    jobid: 0
+    reason: Input files updated by another job: experiments/snakemake_test/config.json, experiments/snakemake_test/linear_regression_model.pkl, experiments/snakemake_test/preprocessing_results_obj.pkl, experiments/snakemake_test/features_and_targets.pkl, experiments/snakemake_test/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Sun Aug 25 18:20:37 2024]
+Finished job 0.
+4 of 4 steps (100%) done
+Complete log: .snakemake/log/2024-08-25T180530.263507.snakemake.log

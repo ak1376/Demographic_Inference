@@ -1,0 +1,39 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 25
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    4
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Wed Aug 28 14:53:12 2024]
+localrule obtain_features:
+    input: experiments/yikes_snakemake/config.json, experiments/yikes_snakemake/experiment_obj.pkl
+    output: experiments/yikes_snakemake/preprocessing_results_obj.pkl, experiments/yikes_snakemake/linear_regression_model.pkl
+    jobid: 2
+    reason: Updated input files: experiments/yikes_snakemake/config.json
+    resources: tmpdir=/tmp
+
+Terminating processes on user request, this might take some time.
+[Wed Aug 28 14:53:32 2024]
+Error in rule obtain_features:
+    jobid: 2
+    input: experiments/yikes_snakemake/config.json, experiments/yikes_snakemake/experiment_obj.pkl
+    output: experiments/yikes_snakemake/preprocessing_results_obj.pkl, experiments/yikes_snakemake/linear_regression_model.pkl
+    shell:
+        
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/obtaining_features.py         --experiment_config experiments/yikes_snakemake/config.json         --experiment_directory experiments/yikes_snakemake         --num_sims_pretrain 100         --num_sims_inference 100         --normalization False         --remove_outliers True
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Complete log: .snakemake/log/2024-08-28T145312.737019.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

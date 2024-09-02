@@ -1,0 +1,83 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+create_experiment        1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    5
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 11:07:48 2024]
+localrule create_experiment:
+    output: experiments/debugging/config.json, experiments/debugging/experiment_obj.pkl, experiments/debugging/model_config.json
+    jobid: 1
+    reason: Missing output files: experiments/debugging/config.json, experiments/debugging/model_config.json, experiments/debugging/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 11:07:51 2024]
+Finished job 1.
+1 of 5 steps (20%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 11:07:51 2024]
+localrule obtain_features:
+    input: experiments/debugging/config.json, experiments/debugging/experiment_obj.pkl
+    output: experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl
+    jobid: 2
+    reason: Missing output files: experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl; Input files updated by another job: experiments/debugging/config.json, experiments/debugging/experiment_obj.pkl; Params have changed since last execution
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 11:16:02 2024]
+Finished job 2.
+2 of 5 steps (40%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 11:16:02 2024]
+localrule get_features:
+    input: experiments/debugging/preprocessing_results_obj.pkl
+    output: experiments/debugging/features_and_targets.pkl
+    jobid: 3
+    reason: Missing output files: experiments/debugging/features_and_targets.pkl; Input files updated by another job: experiments/debugging/preprocessing_results_obj.pkl
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 11:16:02 2024]
+Finished job 3.
+3 of 5 steps (60%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 11:16:02 2024]
+localrule train_and_predict:
+    input: experiments/debugging/model_config.json, experiments/debugging/features_and_targets.pkl
+    output: experiments/debugging/snn_results.pkl, experiments/debugging/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/debugging/snn_results.pkl, experiments/debugging/snn_model.pth; Input files updated by another job: experiments/debugging/model_config.json, experiments/debugging/features_and_targets.pkl
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 11:16:13 2024]
+Finished job 4.
+4 of 5 steps (80%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 11:16:13 2024]
+localrule all:
+    input: experiments/debugging/config.json, experiments/debugging/model_config.json, experiments/debugging/experiment_obj.pkl, experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl, experiments/debugging/features_and_targets.pkl, experiments/debugging/snn_results.pkl, experiments/debugging/snn_model.pth
+    jobid: 0
+    reason: Input files updated by another job: experiments/debugging/config.json, experiments/debugging/features_and_targets.pkl, experiments/debugging/snn_results.pkl, experiments/debugging/experiment_obj.pkl, experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/model_config.json, experiments/debugging/linear_regression_model.pkl, experiments/debugging/snn_model.pth
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 11:16:13 2024]
+Finished job 0.
+5 of 5 steps (100%) done
+Complete log: .snakemake/log/2024-08-29T110748.602276.snakemake.log

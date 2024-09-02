@@ -1,0 +1,81 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 57
+Rules claiming more threads will be scaled down.
+Job stats:
+job                     count
+--------------------  -------
+all                         1
+evaluate_model_GHIST        1
+get_features                1
+get_inferred_params         1
+train_and_predict           1
+total                       5
+
+Select jobs to execute...
+Execute 2 jobs...
+
+[Mon Sep  2 16:27:37 2024]
+localrule get_features:
+    input: experiments/new_jawn/preprocessing_results_obj.pkl
+    output: experiments/new_jawn/features_and_targets.pkl
+    jobid: 3
+    reason: Missing output files: experiments/new_jawn/features_and_targets.pkl
+    resources: tmpdir=/tmp
+
+
+[Mon Sep  2 16:27:37 2024]
+localrule get_inferred_params:
+    input: experiments/new_jawn/config.json
+    output: experiments/new_jawn/inference_results_obj.pkl, experiments/new_jawn/dadi_dict_inference.pkl, experiments/new_jawn/moments_dict_inference.pkl, experiments/new_jawn/momentsLD_dict_inference.pkl
+    jobid: 5
+    reason: Missing output files: experiments/new_jawn/inference_results_obj.pkl, experiments/new_jawn/momentsLD_dict_inference.pkl, experiments/new_jawn/dadi_dict_inference.pkl, experiments/new_jawn/moments_dict_inference.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:27:37 2024]
+Finished job 3.
+1 of 5 steps (20%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 16:27:37 2024]
+localrule train_and_predict:
+    input: experiments/new_jawn/model_config.json, experiments/new_jawn/features_and_targets.pkl
+    output: experiments/new_jawn/snn_results.pkl, experiments/new_jawn/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/new_jawn/snn_results.pkl, experiments/new_jawn/snn_model.pth; Input files updated by another job: experiments/new_jawn/features_and_targets.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:27:45 2024]
+Finished job 4.
+2 of 5 steps (40%) done
+[Mon Sep  2 16:27:49 2024]
+Finished job 5.
+3 of 5 steps (60%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 16:27:49 2024]
+localrule evaluate_model_GHIST:
+    input: experiments/new_jawn/config.json, experiments/new_jawn/snn_model.pth, experiments/new_jawn/inference_results_obj.pkl
+    output: experiments/new_jawn/inferred_params_GHIST_bottleneck.txt
+    jobid: 6
+    reason: Missing output files: experiments/new_jawn/inferred_params_GHIST_bottleneck.txt; Input files updated by another job: experiments/new_jawn/inference_results_obj.pkl, experiments/new_jawn/snn_model.pth
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:27:49 2024]
+Error in rule evaluate_model_GHIST:
+    jobid: 6
+    input: experiments/new_jawn/config.json, experiments/new_jawn/snn_model.pth, experiments/new_jawn/inference_results_obj.pkl
+    output: experiments/new_jawn/inferred_params_GHIST_bottleneck.txt
+    shell:
+        
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/evaluate_model_on_ghist.py         --config experiments/new_jawn/config.json         --trained_weights experiments/new_jawn/snn_model.pth         --inference_obj experiments/new_jawn/inference_results_obj.pkl
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-09-02T162737.163553.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

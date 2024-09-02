@@ -1,0 +1,40 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    4
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 10:20:33 2024]
+localrule obtain_features:
+    input: experiments/debugging/config.json, experiments/debugging/experiment_obj.pkl
+    output: experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl
+    jobid: 0
+    reason: Forced execution
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 10:22:08 2024]
+Error in rule obtain_features:
+    jobid: 0
+    input: experiments/debugging/config.json, experiments/debugging/experiment_obj.pkl
+    output: experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl
+    shell:
+        
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/obtaining_features.py         --experiment_config experiments/debugging/config.json         --experiment_directory experiments/debugging         --num_sims_pretrain 10         --num_sims_inference 10         --normalization False         --remove_outliers True
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-08-29T102033.932099.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

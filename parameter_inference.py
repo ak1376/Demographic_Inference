@@ -5,11 +5,13 @@ from tqdm import tqdm
 import numpy as np
 import ray
 import time
+from dadi.Godambe import get_godambe
+from moments.Godambe import _get_godambe
 
 @ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
     start_time = time.time()
-    ld_stats = moments.LD.Parsing.compute_ld_statistics( # type: ignore
+    ld_stats = moments.LD.Parsing.compute_ld_statistics(  # type: ignore
         vcf_file,
         rec_map_file=flat_map_path,
         pop_file=pop_file_path,
@@ -51,7 +53,8 @@ def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
 
     return results
 
-#TODO: Get rid of sampled_params 
+
+# TODO: Get rid of sampled_params
 def run_inference_dadi(
     sfs,
     p0,
@@ -95,7 +98,7 @@ def run_inference_dadi(
         "Nb": opt_params[0] * sampled_params["N0"],
         "N_recover": opt_params[1] * sampled_params["N0"],
         "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"],  # type: ignore
-        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"], # type: ignore
+        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"],  # type: ignore
     }
 
     model = model * opt_theta
@@ -131,6 +134,21 @@ def run_inference_moments(
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
 
+    uncerts = moments.Godambe.FIM_uncert(
+    model_func, opt_params, sfs)
+
+    # Let's extract the hessian
+    # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
+    H = _get_godambe(model_func, all_boot = [], p0 = opt_params, data = sfs, eps = 1e-6, log=False, just_hess=True)
+    FIM = -1*H
+
+    # Get the indices of the upper triangular part (including the diagonal)
+    upper_tri_indices = np.triu_indices(FIM.shape[0])
+
+    # Extract the upper triangular elements
+    upper_triangular = FIM[upper_tri_indices]
+
+
     # opt_params_dict = {
     #     'N0': N0_opt,
     #     'Nb': opt_params[0]*N0_opt,
@@ -143,8 +161,9 @@ def run_inference_moments(
         "N0": sampled_params["N0"],
         "Nb": opt_params[0] * sampled_params["N0"],
         "N_recover": opt_params[1] * sampled_params["N0"],
-        "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"],
-        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"],
+        "t_bottleneck_end": opt_params[3] * 2 * sampled_params["N0"], #type: ignore
+        "t_bottleneck_start": opt_params[2] * 2 * sampled_params["N0"], #type: ignore
+        "upper_triangular_FIM": upper_triangular
     }
 
     model = model * opt_theta
@@ -169,13 +188,13 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
         ld_stats[i] = result
 
     print("computing mean and varcov matrix from LD statistics sums")
-    mv = moments.LD.Parsing.bootstrap_data(ld_stats) # type: ignore
+    mv = moments.LD.Parsing.bootstrap_data(ld_stats)  # type: ignore
     mv["varcovs"][-1].shape = (1, 1)
 
-    demo_func = moments.LD.Demographics1D.three_epoch # type: ignore
+    demo_func = moments.LD.Demographics1D.three_epoch  # type: ignore
     # Set up the initial guess
-    p_guess = moments.LD.Util.perturb_params(p_guess, fold=1) # type: ignore
-    opt_params, LL = moments.LD.Inference.optimize_log_fmin( # type: ignore
+    p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
+    opt_params, LL = moments.LD.Inference.optimize_log_fmin(  # type: ignore
         p_guess,
         [mv["means"], mv["varcovs"]],
         [demo_func],

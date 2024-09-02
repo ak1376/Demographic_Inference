@@ -1,0 +1,6 @@
+Building DAG of jobs...
+MissingInputException in rule run_inference in file /sietch_colab/akapoor/Demographic_Inference/Snakefile, line 163:
+Missing input files for rule run_inference:
+    output: experiments/new_jawn/inference_results_obj.pkl, experiments/new_jawn/inferred_params_GHIST_bottleneck.txt
+    affected files:
+        experiments/new_jawn/inference_config.json

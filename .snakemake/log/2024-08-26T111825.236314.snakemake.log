@@ -1,0 +1,38 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+train_and_predict        1
+total                    2
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Aug 26 11:18:25 2024]
+localrule train_and_predict:
+    input: experiments/snakemake/model_config.json, experiments/snakemake/features_and_targets.pkl
+    output: experiments/snakemake/snn_results.pkl, experiments/snakemake/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/snakemake/snn_model.pth, experiments/snakemake/snn_results.pkl
+    resources: tmpdir=/tmp
+
+[Mon Aug 26 11:18:37 2024]
+Error in rule train_and_predict:
+    jobid: 4
+    input: experiments/snakemake/model_config.json, experiments/snakemake/features_and_targets.pkl
+    output: experiments/snakemake/snn_results.pkl, experiments/snakemake/snn_model.pth
+    shell:
+        
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/setup_trainer.py         --model_config experiments/snakemake/model_config.json         --experiment_directory experiments/snakemake         --features_file experiments/snakemake/features_and_targets.pkl         --use_FIM False
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-08-26T111825.236314.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

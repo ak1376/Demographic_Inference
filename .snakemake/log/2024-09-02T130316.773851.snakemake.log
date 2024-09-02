@@ -1,0 +1,83 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 57
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+create_experiment        1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    5
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 13:03:16 2024]
+localrule create_experiment:
+    output: experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl, experiments/new_jawn/model_config.json
+    jobid: 1
+    reason: Missing output files: experiments/new_jawn/model_config.json, experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 13:03:19 2024]
+Finished job 1.
+1 of 5 steps (20%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 13:03:19 2024]
+localrule obtain_features:
+    input: experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl
+    output: experiments/new_jawn/preprocessing_results_obj.pkl, experiments/new_jawn/linear_regression_model.pkl
+    jobid: 2
+    reason: Missing output files: experiments/new_jawn/linear_regression_model.pkl, experiments/new_jawn/preprocessing_results_obj.pkl; Input files updated by another job: experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 13:04:05 2024]
+Finished job 2.
+2 of 5 steps (40%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 13:04:05 2024]
+localrule get_features:
+    input: experiments/new_jawn/preprocessing_results_obj.pkl
+    output: experiments/new_jawn/features_and_targets.pkl
+    jobid: 3
+    reason: Missing output files: experiments/new_jawn/features_and_targets.pkl; Input files updated by another job: experiments/new_jawn/preprocessing_results_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 13:04:05 2024]
+Finished job 3.
+3 of 5 steps (60%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 13:04:05 2024]
+localrule train_and_predict:
+    input: experiments/new_jawn/model_config.json, experiments/new_jawn/features_and_targets.pkl
+    output: experiments/new_jawn/snn_results.pkl, experiments/new_jawn/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/new_jawn/snn_model.pth, experiments/new_jawn/snn_results.pkl; Input files updated by another job: experiments/new_jawn/features_and_targets.pkl, experiments/new_jawn/model_config.json
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 13:04:13 2024]
+Finished job 4.
+4 of 5 steps (80%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 13:04:13 2024]
+localrule all:
+    input: experiments/new_jawn/config.json, experiments/new_jawn/model_config.json, experiments/new_jawn/experiment_obj.pkl, experiments/new_jawn/preprocessing_results_obj.pkl, experiments/new_jawn/linear_regression_model.pkl, experiments/new_jawn/features_and_targets.pkl, experiments/new_jawn/snn_results.pkl, experiments/new_jawn/snn_model.pth
+    jobid: 0
+    reason: Input files updated by another job: experiments/new_jawn/preprocessing_results_obj.pkl, experiments/new_jawn/model_config.json, experiments/new_jawn/linear_regression_model.pkl, experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl, experiments/new_jawn/snn_results.pkl, experiments/new_jawn/features_and_targets.pkl, experiments/new_jawn/snn_model.pth
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 13:04:13 2024]
+Finished job 0.
+5 of 5 steps (100%) done
+Complete log: .snakemake/log/2024-09-02T130316.773851.snakemake.log

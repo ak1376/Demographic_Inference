@@ -1,0 +1,54 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+create_experiment        1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    5
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Aug 26 14:51:03 2024]
+localrule create_experiment:
+    output: experiments/snakemake/config.json, experiments/snakemake/experiment_obj.pkl, experiments/snakemake/model_config.json
+    jobid: 1
+    reason: Missing output files: experiments/snakemake/model_config.json, experiments/snakemake/config.json, experiments/snakemake/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Aug 26 14:51:06 2024]
+Finished job 1.
+1 of 5 steps (20%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Aug 26 14:51:06 2024]
+localrule obtain_features:
+    input: experiments/snakemake/config.json, experiments/snakemake/experiment_obj.pkl
+    output: experiments/snakemake/preprocessing_results_obj.pkl, experiments/snakemake/linear_regression_model.pkl
+    jobid: 2
+    reason: Missing output files: experiments/snakemake/preprocessing_results_obj.pkl, experiments/snakemake/linear_regression_model.pkl; Input files updated by another job: experiments/snakemake/config.json, experiments/snakemake/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Aug 26 14:51:20 2024]
+Error in rule obtain_features:
+    jobid: 2
+    input: experiments/snakemake/config.json, experiments/snakemake/experiment_obj.pkl
+    output: experiments/snakemake/preprocessing_results_obj.pkl, experiments/snakemake/linear_regression_model.pkl
+    shell:
+        
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/obtaining_features.py         --experiment_config experiments/snakemake/config.json         --experiment_directory experiments/snakemake         --num_sims_pretrain 100         --num_sims_inference 100         --normalization False         --remove_outliers True
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-08-26T145103.490680.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

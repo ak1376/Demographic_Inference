@@ -1,0 +1,84 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 57
+Rules claiming more threads will be scaled down.
+Job stats:
+job                     count
+--------------------  -------
+all                         1
+evaluate_model_GHIST        1
+get_features                1
+obtain_features             1
+train_and_predict           1
+total                       5
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 16:42:03 2024]
+localrule obtain_features:
+    input: experiments/bottleneck_experiment/config.json, experiments/bottleneck_experiment/experiment_obj.pkl
+    output: experiments/bottleneck_experiment/preprocessing_results_obj.pkl, experiments/bottleneck_experiment/linear_regression_model.pkl
+    jobid: 2
+    reason: Missing output files: experiments/bottleneck_experiment/linear_regression_model.pkl, experiments/bottleneck_experiment/preprocessing_results_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:49:42 2024]
+Finished job 2.
+1 of 5 steps (20%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 16:49:42 2024]
+localrule get_features:
+    input: experiments/bottleneck_experiment/preprocessing_results_obj.pkl
+    output: experiments/bottleneck_experiment/features_and_targets.pkl
+    jobid: 3
+    reason: Missing output files: experiments/bottleneck_experiment/features_and_targets.pkl; Input files updated by another job: experiments/bottleneck_experiment/preprocessing_results_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:49:42 2024]
+Finished job 3.
+2 of 5 steps (40%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 16:49:42 2024]
+localrule train_and_predict:
+    input: experiments/bottleneck_experiment/model_config.json, experiments/bottleneck_experiment/features_and_targets.pkl
+    output: experiments/bottleneck_experiment/snn_results.pkl, experiments/bottleneck_experiment/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/bottleneck_experiment/snn_model.pth, experiments/bottleneck_experiment/snn_results.pkl; Input files updated by another job: experiments/bottleneck_experiment/features_and_targets.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:49:52 2024]
+Finished job 4.
+3 of 5 steps (60%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 16:49:52 2024]
+localrule evaluate_model_GHIST:
+    input: experiments/bottleneck_experiment/config.json, experiments/bottleneck_experiment/snn_model.pth, experiments/bottleneck_experiment/inference_results_obj.pkl
+    output: experiments/bottleneck_experiment/inferred_params_GHIST_bottleneck.txt
+    jobid: 6
+    reason: Missing output files: experiments/bottleneck_experiment/inferred_params_GHIST_bottleneck.txt; Input files updated by another job: experiments/bottleneck_experiment/snn_model.pth
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:49:56 2024]
+Finished job 6.
+4 of 5 steps (80%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 16:49:56 2024]
+localrule all:
+    input: experiments/bottleneck_experiment/config.json, experiments/bottleneck_experiment/model_config.json, experiments/bottleneck_experiment/experiment_obj.pkl, experiments/bottleneck_experiment/inference_config_file.json, experiments/bottleneck_experiment/preprocessing_results_obj.pkl, experiments/bottleneck_experiment/linear_regression_model.pkl, experiments/bottleneck_experiment/features_and_targets.pkl, experiments/bottleneck_experiment/snn_results.pkl, experiments/bottleneck_experiment/snn_model.pth, experiments/bottleneck_experiment/inference_results_obj.pkl, experiments/bottleneck_experiment/inferred_params_GHIST_bottleneck.txt, experiments/bottleneck_experiment/dadi_dict_inference.pkl, experiments/bottleneck_experiment/moments_dict_inference.pkl, experiments/bottleneck_experiment/momentsLD_dict_inference.pkl
+    jobid: 0
+    reason: Input files updated by another job: experiments/bottleneck_experiment/features_and_targets.pkl, experiments/bottleneck_experiment/inferred_params_GHIST_bottleneck.txt, experiments/bottleneck_experiment/linear_regression_model.pkl, experiments/bottleneck_experiment/snn_model.pth, experiments/bottleneck_experiment/preprocessing_results_obj.pkl, experiments/bottleneck_experiment/snn_results.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 16:49:56 2024]
+Finished job 0.
+5 of 5 steps (100%) done
+Complete log: .snakemake/log/2024-09-02T164203.527099.snakemake.log

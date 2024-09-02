@@ -1,0 +1,36 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+create_experiment        1
+get_features             1
+obtain_features          1
+total                    4
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Aug 26 10:48:34 2024]
+localrule create_experiment:
+    output: experiments/snakemake_test/config.json, experiments/snakemake_test/experiment_obj.pkl, experiments/snakemake_test/model_config.json
+    jobid: 1
+    reason: Missing output files: experiments/snakemake_test/model_config.json, experiments/snakemake_test/experiment_obj.pkl, experiments/snakemake_test/config.json
+    resources: tmpdir=/tmp
+
+[Mon Aug 26 10:48:36 2024]
+Error in rule create_experiment:
+    jobid: 1
+    output: experiments/snakemake_test/config.json, experiments/snakemake_test/experiment_obj.pkl, experiments/snakemake_test/model_config.json
+    shell:
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/setup_experiment.py --config_file experiments/snakemake_test/config.json --experiment_obj_file experiments/snakemake_test/experiment_obj.pkl
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-08-26T104834.613287.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

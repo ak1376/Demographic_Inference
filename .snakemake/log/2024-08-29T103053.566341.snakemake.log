@@ -1,0 +1,69 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    4
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 10:30:53 2024]
+localrule obtain_features:
+    input: experiments/debugging/config.json, experiments/debugging/experiment_obj.pkl
+    output: experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl
+    jobid: 2
+    reason: Forced execution
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 10:34:13 2024]
+Finished job 2.
+1 of 4 steps (25%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 10:34:13 2024]
+localrule get_features:
+    input: experiments/debugging/preprocessing_results_obj.pkl
+    output: experiments/debugging/features_and_targets.pkl
+    jobid: 3
+    reason: Missing output files: experiments/debugging/features_and_targets.pkl; Input files updated by another job: experiments/debugging/preprocessing_results_obj.pkl
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 10:34:13 2024]
+Finished job 3.
+2 of 4 steps (50%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 10:34:13 2024]
+localrule train_and_predict:
+    input: experiments/debugging/model_config.json, experiments/debugging/features_and_targets.pkl
+    output: experiments/debugging/snn_results.pkl, experiments/debugging/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/debugging/snn_results.pkl, experiments/debugging/snn_model.pth; Input files updated by another job: experiments/debugging/features_and_targets.pkl
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 10:34:22 2024]
+Finished job 4.
+3 of 4 steps (75%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Thu Aug 29 10:34:22 2024]
+localrule all:
+    input: experiments/debugging/config.json, experiments/debugging/model_config.json, experiments/debugging/experiment_obj.pkl, experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl, experiments/debugging/features_and_targets.pkl, experiments/debugging/snn_results.pkl, experiments/debugging/snn_model.pth
+    jobid: 0
+    reason: Input files updated by another job: experiments/debugging/snn_results.pkl, experiments/debugging/snn_model.pth, experiments/debugging/features_and_targets.pkl, experiments/debugging/preprocessing_results_obj.pkl, experiments/debugging/linear_regression_model.pkl
+    resources: tmpdir=/tmp
+
+[Thu Aug 29 10:34:22 2024]
+Finished job 0.
+4 of 4 steps (100%) done
+Complete log: .snakemake/log/2024-08-29T103053.566341.snakemake.log

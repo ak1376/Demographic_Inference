@@ -1,0 +1,27 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+train_and_predict        1
+total                    2
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Aug 26 10:31:59 2024]
+localrule train_and_predict:
+    input: experiments/snakemake_test/model_config.json, experiments/snakemake_test
+    output: experiments/snakemake_test/snn_results.pkl, experiments/snakemake_test/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/snakemake_test/snn_results.pkl, experiments/snakemake_test/snn_model.pth
+    resources: tmpdir=/tmp
+
+RuleException in rule train_and_predict in file /sietch_colab/akapoor/Demographic_Inference/Snakefile, line 74:
+AttributeError: 'Params' object has no attribute 'experiment_directory', when formatting the following:
+
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/train_and_predict.py         --model_config {input.model_config_file}         --experiment_directory {params.experiment_directory}         --use_FIM {params.use_FIM}
+        

@@ -1,0 +1,39 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 256
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+train_and_predict        1
+total                    2
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Aug 26 12:04:08 2024]
+localrule train_and_predict:
+    input: experiments/snakemake/model_config.json, experiments/snakemake/features_and_targets.pkl
+    output: experiments/snakemake/snn_results.pkl, experiments/snakemake/snn_model.pth
+    jobid: 4
+    reason: Missing output files: experiments/snakemake/snn_results.pkl, experiments/snakemake/snn_model.pth
+    resources: tmpdir=/tmp
+
+[Mon Aug 26 12:04:26 2024]
+Finished job 4.
+1 of 2 steps (50%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Aug 26 12:04:26 2024]
+localrule all:
+    input: experiments/snakemake/config.json, experiments/snakemake/model_config.json, experiments/snakemake/experiment_obj.pkl, experiments/snakemake/preprocessing_results_obj.pkl, experiments/snakemake/linear_regression_model.pkl, experiments/snakemake/features_and_targets.pkl, experiments/snakemake/snn_results.pkl, experiments/snakemake/snn_model.pth
+    jobid: 0
+    reason: Input files updated by another job: experiments/snakemake/snn_model.pth, experiments/snakemake/snn_results.pkl
+    resources: tmpdir=/tmp
+
+[Mon Aug 26 12:04:26 2024]
+Finished job 0.
+2 of 2 steps (100%) done
+Complete log: .snakemake/log/2024-08-26T120408.166821.snakemake.log

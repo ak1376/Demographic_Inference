@@ -1,0 +1,24 @@
+Building DAG of jobs...
+MissingInputException in rule create_experiment in file /sietch_colab/akapoor/Demographic_Inference/Snakefile, line 67:
+Missing input files for rule create_experiment:
+    output: experiments/snakemake/config.json, experiments/snakemake/experiment_obj.pkl, experiments/snakemake/model_config.json
+    affected files:
+        num_samples
+        num_sims_pretrain
+        moments_analysis
+        momentsLD_analysis
+        maxiter
+        num_windows
+        neural_net_hyperparameters
+        recombination_rate
+        remove_outliers
+        num_sims_inference
+        lower_bound_params
+        window_length
+        experiment_name
+        dadi_analysis
+        mutation_rate
+        upper_bound_params
+        seed
+        normalization
+        genome_length

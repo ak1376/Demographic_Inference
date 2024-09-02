@@ -1,0 +1,6 @@
+Building DAG of jobs...
+MissingInputException in rule all in file /sietch_colab/akapoor/Demographic_Inference/Snakefile, line 18:
+Missing input files for rule all:
+    affected files:
+        experiments/snakemake_test/snn_model.pth
+        experiments/snakemake_test/snn_results.pkl

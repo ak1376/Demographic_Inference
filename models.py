@@ -15,22 +15,9 @@ from torch.optim.adam import Adam
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ray
-
-def root_mean_squared_error(y_true, y_pred):
-    '''
-    This RMSE function calculates the relative error between predictions and true values,
-    then computes the root mean squared error using PyTorch.
-    '''
-    # Calculate the relative error
-    relative_error = (y_pred - y_true) / y_true
-    
-    # Square the relative error
-    squared_relative_error = torch.square(relative_error)
-    
-    # Sum the squared errors across the second dimension (axis=1) and then take the mean
-    rrmse_value = torch.sqrt(torch.mean(torch.sum(squared_relative_error, dim=1)))
-    
-    return rrmse_value
+from sklearn.model_selection import LeaveOneOut
+import torch.nn.utils as utils
+from torch.utils.data import DataLoader, TensorDataset
 
 
 class XGBoost:
@@ -38,7 +25,7 @@ class XGBoost:
         self,
         feature_names,
         target_names,
-        objective="reg:squarederror",  # TODO: Investigate whether it makes sense to change this objective function to be trained in the same way as the GHIST is evaluated?
+        objective="reg:squarederror", 
         n_estimators=100,
         learning_rate=0.1,
         max_depth=5,
@@ -120,156 +107,201 @@ class XGBoost:
             return train_error, validation_error, y_pred_test
 
 
-import torch
-import torch.nn as nn
-from torch.optim import Adam
-import ray
-import numpy as np
-import matplotlib.pyplot as plt
+# @ray.remote(num_gpus=1)
+# class ModelActor:
+#     def __init__(self, model_config):
+#         self.model = ShallowNN(**model_config) #type: ignore
+#         self.model = self.model.cuda()
+
+#         total_params = sum(p.numel() for p in self.model.parameters())
+#         trainable_params = sum(
+#             p.numel() for p in self.model.parameters() if p.requires_grad
+#         )
+
+#         print(f"Total parameters: {total_params}")
+#         print(f"Trainable parameters: {trainable_params}")
+
+    # def train_and_evaluate(
+    #     self, X_train, y_train, X_val, y_val, num_epochs, learning_rate
+    # ):
+    #     criterion = nn.MSELoss()
+    #     optimizer = Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-4) 
+
+    #     train_loss_curve = []
+    #     val_loss_curve = []
+
+    #     X_train, y_train = X_train.cuda(), y_train.cuda()
+    #     X_val, y_val = X_val.cuda(), y_val.cuda()
+
+    #     for epoch in range(num_epochs):
+    #         self.model.train()
+    #         optimizer.zero_grad()
+    #         outputs = self.model(X_train)
+    #         loss = criterion(outputs, y_train)
+    #         loss.backward()
+    #         optimizer.step()
+
+    #         # Evaluate on the validation set
+    #         self.model.eval()
+    #         with torch.no_grad():
+    #             val_outputs = self.model(X_val)
+    #             val_loss = criterion(val_outputs, y_val).item()
+
+    #         # Record the training and validation loss for this epoch
+    #         train_loss_curve.append(loss.item())
+    #         val_loss_curve.append(val_loss)
+
+    #     # Final evaluation and predictions
+    #     self.model.eval()
+    #     with torch.no_grad():
+    #         y_pred = self.model(X_val)
+
+    #     return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
+
+# Hook function to inspect BatchNorm outputs
+def inspect_batchnorm_output(module, input, output):
+    print(f'BatchNorm Output Mean: {output.mean().item()}')
+    print(f'BatchNorm Output Variance: {output.var().item()}')
+
 
 class ShallowNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, loo, experiment_directory):
+    def __init__(self, input_size, hidden_size, output_size, num_layers=3, dropout_rate=0.1, weight_decay=1e-4):
         super(ShallowNN, self).__init__()
-        self.layer1 = nn.Linear(input_size, hidden_size)
-        self.layer2 = nn.Linear(hidden_size, hidden_size)
-        self.output_layer = nn.Linear(hidden_size, output_size)
-        self.loo = loo
-        self.experiment_directory = experiment_directory
+        self.num_layers = num_layers
+        self.dropout_rate = dropout_rate
+        self.weight_decay = weight_decay
+
+        layers = []
+
+        # First layer (input to first hidden layer)
+        layers.append(nn.Linear(input_size, hidden_size))
+        # layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
+        layers.append(nn.ReLU())
+        layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
+
+        # Hidden layers (loop through to add layers dynamically)
+        for _ in range(num_layers - 1):
+            layers.append(nn.Linear(hidden_size, hidden_size))
+            # layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
+
+        # Output layer (no dropout after the output layer)
+        layers.append(nn.Linear(hidden_size, output_size))
+
+        # Combine the layers into a sequential container
+        self.network = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = torch.relu(self.layer1(x))
-        x = torch.relu(self.layer2(x))
-        x = self.output_layer(x)
-        return x
+        return self.network(x)
+    
+    def predict(self, X):
+        """
+        Make predictions using the trained model.
 
-    @ray.remote
-    def train_and_evaluate(
-        self, X_train, y_train, X_val, y_val, num_epochs=10, learning_rate=0.001
-    ):
-        model = ShallowNN(
-            input_size=X_train.shape[1],
-            hidden_size=self.layer1.out_features,
-            output_size=self.output_layer.out_features,
-            loo=self.loo,
-            experiment_directory=self.experiment_directory,
-        )
+        Args:
+        X (numpy.ndarray or torch.Tensor): Input data for prediction.
 
-        criterion = nn.MSELoss()
-        optimizer = Adam(model.parameters(), lr=learning_rate)
-
-        train_loss_curve = []
-        val_loss_curve = []
-
-        model.train()
-        for epoch in range(num_epochs):
-            optimizer.zero_grad()
-            outputs = model(X_train)
-            train_loss = criterion(outputs, y_train)
-            train_loss.backward()
-            optimizer.step()
-
-            model.eval()
-            with torch.no_grad():
-                val_outputs = model(X_val)
-                val_loss = criterion(val_outputs, y_val)
-
-            train_loss_curve.append(train_loss.item())
-            val_loss_curve.append(val_loss.item())
-
-            model.train()
-
-        model.eval()
+        Returns:
+        numpy.ndarray: Predicted outputs.
+        """
+        self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
-            y_pred = model(X_val)
-            val_loss = criterion(y_pred, y_val).item()
+            if isinstance(X, np.ndarray):
+                X = torch.tensor(X, dtype=torch.float32)
+            if X.device != next(self.parameters()).device:
+                X = X.to(next(self.parameters()).device)
+            predictions = self(X)
 
-        return train_loss_curve, val_loss_curve, y_pred.numpy(), val_loss
+        return predictions.cpu().numpy()
 
-    def cross_validate(self, X, y, num_epochs=10, learning_rate=0.001):
-        loo = self.loo
-        validation_losses = []
-        predictions = np.zeros_like(y)
-        all_train_loss_curves = []
-        all_val_loss_curves = []
-
-        X_tensor = torch.tensor(X, dtype=torch.float32)
-        y_tensor = torch.tensor(y, dtype=torch.float32)
-
-        total_splits = loo.get_n_splits(X)
-
-        futures = []
-
-        for train_index, val_index in loo.split(X):
-            X_train, X_val = X_tensor[train_index], X_tensor[val_index]
-            y_train, y_val = y_tensor[train_index], y_tensor[val_index]
-
-            futures.append(
-                self.train_and_evaluate.remote(
-                    self,
-                    X_train,
-                    y_train,
-                    X_val,
-                    y_val,
-                    num_epochs=num_epochs,
-                    learning_rate=learning_rate,
-                )
-            )
-
-        results = ray.get(futures)
-
-        for i, (train_loss_curve, val_loss_curve, y_pred, val_loss) in enumerate(results):
-            all_train_loss_curves.append(train_loss_curve)
-            all_val_loss_curves.append(val_loss_curve)
-            validation_losses.append(val_loss)
-            predictions[i] = y_pred
-
-        average_val_loss = np.mean(validation_losses)
-        print(f"Average Validation Loss (LOO-CV): {average_val_loss}")
-
-        return average_val_loss, predictions, all_train_loss_curves, all_val_loss_curves
-
-    #TODO: Need to add num_epochs and learning_rate as arguments
-    def train_on_full_data(self, X, y, num_epochs=1000, learning_rate=3e-4):
-        model = ShallowNN(
-            input_size=X.shape[1],
-            hidden_size=self.layer1.out_features,
-            output_size=self.output_layer.out_features,
-            loo=self.loo,
-            experiment_directory=self.experiment_directory,
-        )
-
+    @staticmethod
+    def train_and_validate(
+        X_train,
+        y_train,
+        X_val,
+        y_val,
+        input_size,
+        hidden_size,
+        output_size,
+        num_layers=3,
+        num_epochs=1000,
+        learning_rate=3e-4,
+        weight_decay=1e-4,
+        dropout_rate=0.1,
+        batch_size=64,
+        use_FIM = True
+    ):
+        model = ShallowNN(input_size, hidden_size, output_size, num_layers, dropout_rate=dropout_rate, weight_decay=weight_decay).cuda()
         criterion = nn.MSELoss()
-        optimizer = Adam(model.parameters(), lr=learning_rate)
+        optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay) 
 
-        X_tensor = torch.tensor(X, dtype=torch.float32)
-        y_tensor = torch.tensor(y, dtype=torch.float32)
+        # Convert training and validation data into PyTorch tensors
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32).cuda()
+        y_train_tensor = torch.tensor(y_train, dtype=torch.float32).cuda()
+        X_val_tensor = torch.tensor(X_val, dtype=torch.float32).cuda()
+        y_val_tensor = torch.tensor(y_val, dtype=torch.float32).cuda()
 
-        model.train()
+        if use_FIM == False:
+            X_train_tensor = X_train_tensor[:,:8]
+            X_val_tensor = X_val_tensor[:,:8]
+
+        # Create DataLoader for mini-batch training
+        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        train_losses = []
+        val_losses = []
+
+        # running_mean_mean = []
+        # running_var_mean = []
+        
         for epoch in range(num_epochs):
-            optimizer.zero_grad()
-            outputs = model(X_tensor)
-            loss = criterion(outputs, y_tensor)
-            loss.backward()
-            optimizer.step()
+            model.train()
+            for inputs, targets in train_loader:
+                optimizer.zero_grad()
+                outputs = model(inputs)
+                train_loss = criterion(outputs, targets)
+                train_loss.backward()
+                optimizer.step()
 
-        # Save the trained model
-        model_path = f"{self.experiment_directory}/final_model.pth"
-        torch.save(model.state_dict(), model_path)
-        print(f"Model saved to {model_path}")
+                # Store training loss for the batch
+                train_losses.append(train_loss.item())
 
-    def plot_loss_curves(self, all_train_loss_curves, all_val_loss_curves):
-        def average_across_sublists(sublists):
-            return [sum(values) / len(values) for values in zip(*sublists)]
+                # **Monitoring BatchNorm Statistics**
+                # Register the hook to all BatchNorm layers in the model
+                # for layer in model.modules():
+                #     if isinstance(layer, nn.BatchNorm1d) or isinstance(layer, nn.BatchNorm2d):
+                #         layer.register_forward_hook(inspect_batchnorm_output)
 
-        avg_train_loss_curve = average_across_sublists(all_train_loss_curves)
-        avg_val_loss_curve = average_across_sublists(all_val_loss_curves)
 
-        plt.figure()
-        plt.plot(avg_train_loss_curve, label="Average Train Loss Curve", color="blue", linewidth=2)
-        plt.plot(avg_val_loss_curve, label="Average Val Loss Curve", color="red", linewidth=2)
-        plt.xlabel("Epoch")
+
+                # Validate on the full validation set
+                model.eval()
+                with torch.no_grad():
+                    val_outputs = model(X_val_tensor)
+                    val_loss = criterion(val_outputs, y_val_tensor).item()
+
+                # Store validation loss for the batch
+                val_losses.append(val_loss)
+
+            if (epoch) % 100 == 0:
+                print(
+                    f"Epoch {epoch+1}/{num_epochs}, Last Batch Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}"
+                )
+
+        return model, train_losses, val_losses
+
+    @staticmethod
+    def plot_loss_curves(train_losses, val_losses, save_path):
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(10, 6))
+        plt.plot(train_losses, label="Train Loss", color="blue", linewidth=2)
+        plt.plot(val_losses, label="Validation Loss", color="red", linewidth=2)
+        plt.xlabel("Batch")
         plt.ylabel("Loss")
-        plt.title("Average Training and Validation Loss Curves (LOO-CV)")
+        plt.yscale("log")
+        plt.title("Training and Validation Loss Curves (Batch-by-Batch)")
         plt.legend()
-        plt.show()
-        plt.savefig(f"{self.experiment_directory}/shallow_nn_loss_curves.png", format="png")
+        plt.savefig(save_path)
+        plt.close()

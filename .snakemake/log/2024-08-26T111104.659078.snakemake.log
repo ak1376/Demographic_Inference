@@ -1,0 +1,6 @@
+Building DAG of jobs...
+MissingInputException in rule train_and_predict in file /sietch_colab/akapoor/Demographic_Inference/Snakefile, line 77:
+Missing input files for rule train_and_predict:
+    output: experiments/snakemake/snn_results.pkl, experiments/snakemake/snn_model.pth
+    affected files:
+        experiments/snakemake

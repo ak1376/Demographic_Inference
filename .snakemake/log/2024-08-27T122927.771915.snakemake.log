@@ -1,0 +1,54 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 16
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+all                      1
+create_experiment        1
+get_features             1
+obtain_features          1
+train_and_predict        1
+total                    5
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Tue Aug 27 12:29:27 2024]
+localrule create_experiment:
+    output: experiments/yikes_snakemake/config.json, experiments/yikes_snakemake/experiment_obj.pkl, experiments/yikes_snakemake/model_config.json
+    jobid: 1
+    reason: Missing output files: experiments/yikes_snakemake/experiment_obj.pkl, experiments/yikes_snakemake/model_config.json, experiments/yikes_snakemake/config.json
+    resources: tmpdir=/tmp
+
+[Tue Aug 27 12:29:30 2024]
+Finished job 1.
+1 of 5 steps (20%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Tue Aug 27 12:29:30 2024]
+localrule obtain_features:
+    input: experiments/yikes_snakemake/config.json, experiments/yikes_snakemake/experiment_obj.pkl
+    output: experiments/yikes_snakemake/preprocessing_results_obj.pkl, experiments/yikes_snakemake/linear_regression_model.pkl
+    jobid: 2
+    reason: Missing output files: experiments/yikes_snakemake/preprocessing_results_obj.pkl, experiments/yikes_snakemake/linear_regression_model.pkl; Input files updated by another job: experiments/yikes_snakemake/experiment_obj.pkl, experiments/yikes_snakemake/config.json
+    resources: tmpdir=/tmp
+
+[Tue Aug 27 12:29:32 2024]
+Error in rule obtain_features:
+    jobid: 2
+    input: experiments/yikes_snakemake/config.json, experiments/yikes_snakemake/experiment_obj.pkl
+    output: experiments/yikes_snakemake/preprocessing_results_obj.pkl, experiments/yikes_snakemake/linear_regression_model.pkl
+    shell:
+        
+        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python /sietch_colab/akapoor/Demographic_Inference/snakemake_scripts/obtaining_features.py         --experiment_config experiments/yikes_snakemake/config.json         --experiment_directory experiments/yikes_snakemake         --num_sims_pretrain 1000         --num_sims_inference 1000         --normalization False         --remove_outliers True
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-08-27T122927.771915.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

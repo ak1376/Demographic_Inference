@@ -1,0 +1,30 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 1 (use --cores to define parallelism)
+Rules claiming more threads will be scaled down.
+Job stats:
+job                  count
+-----------------  -------
+create_experiment        1
+total                    1
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Sep  2 13:41:49 2024]
+localrule create_experiment:
+    output: experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl, experiments/new_jawn/model_config.json
+    jobid: 0
+    reason: Missing output files: experiments/new_jawn/model_config.json, experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl
+    resources: tmpdir=/tmp
+
+[Mon Sep  2 13:41:52 2024]
+Error in rule create_experiment:
+    jobid: 0
+    output: experiments/new_jawn/config.json, experiments/new_jawn/experiment_obj.pkl, experiments/new_jawn/model_config.json
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2024-09-02T134149.646513.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.
