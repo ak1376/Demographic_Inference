@@ -242,18 +242,29 @@ class FeatureExtractor:
                 print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
                 return
         
-        features, targets = extract_features(
-            batch_data["simulated_params"],
-            batch_data[f"opt_params_{analysis_type}"],
-            normalization=normalization,
-        )
+        if stage != "inference":
+            features, targets = extract_features(
+                simulated_params=batch_data["simulated_params"],
+                opt_params=batch_data[f"opt_params_{analysis_type}"],
+                normalization=normalization
+            )
+        else:
+            features = extract_features(
+                simulated_params=None,
+                opt_params=batch_data[f"opt_params"],
+                normalization=normalization
+            )
+
 
         if analysis_type not in features_dict[stage]:
             features_dict[stage][analysis_type] = []
-            targets_dict[stage][analysis_type] = []
+            if stage != "inference":
+                targets_dict[stage][analysis_type] = []
 
         features_dict[stage][analysis_type].extend(features)
-        targets_dict[stage][analysis_type].extend(targets)
+        
+        if stage != "inference":
+            targets_dict[stage][analysis_type].extend(targets)
 
         if analysis_type not in feature_names:
             feature_names[analysis_type] = [
@@ -263,7 +274,11 @@ class FeatureExtractor:
                 f"t_bottleneck_end_opt_{analysis_type}"
             ]
 
-        return features_dict, targets_dict, feature_names
+        if stage != "inference":
+        
+            return features_dict, targets_dict, feature_names
+        else:
+            return features_dict, feature_names
             
 
         # error_value = root_mean_squared_error(targets, features)
@@ -272,90 +287,119 @@ class FeatureExtractor:
         # visualizing_results(batch_data, save_loc = self.experiment_directory, analysis=f"{analysis_type}_{stage}")
 
     def finalize_processing(self, features_dict, targets_dict, feature_names, remove_outliers=True):
+        #TODO: I really need to rewrite this whole function. So many errors. 
+        #TODO: Maybe I can just eliminate this entire function altogether. 
         """
         This function will create the numpy array of features and targets across all analysis types and stages. If the user specifies to remove outliers, it will remove them from the data and then resample the rows for concatenation
         """
+
         for stage in features_dict:
             for analysis_type in features_dict[stage]:
                 features = np.array(features_dict[stage][analysis_type])
-                targets = np.array(targets_dict[stage][analysis_type])
 
-                outlier_indices = find_outlier_indices(features)
-                np.savetxt(
-                    os.path.join(
-                        self.experiment_directory,
-                        f"outlier_indices_{analysis_type}_{stage}.csv",
-                    ),
-                    outlier_indices,
-                    delimiter=",",
-                )
+                if targets_dict: # i.e. if we are not in inference mode
+                    targets = np.array(targets_dict[stage][analysis_type])
 
-                # Remove outliers
-                if remove_outliers:
-                    features = np.delete(features, outlier_indices, axis=0)
-                    targets = np.delete(targets, outlier_indices, axis=0)
-                    # self.resample_features_and_targets(stage)
+                    outlier_indices = find_outlier_indices(features)
+                    np.savetxt(
+                        os.path.join(
+                            self.experiment_directory,
+                            f"outlier_indices_{analysis_type}_{stage}.csv",
+                        ),
+                        outlier_indices,
+                        delimiter=",",
+                    )
+
+                    # Remove outliers
+                    if remove_outliers:
+                        features = np.delete(features, outlier_indices, axis=0)
+                        targets = np.delete(targets, outlier_indices, axis=0)
+                        # self.resample_features_and_targets(stage)
+                
+                    targets_dict[stage][analysis_type] = targets
 
                 features_dict[stage][analysis_type] = features
-                targets_dict[stage][analysis_type] = targets
 
                 # error_value = root_mean_squared_error(targets, features)
                 # print(f"Final error value for {analysis_type} {stage}: {error_value}")
 
-        concatenated_features, concatenated_targets = (
-            self.concatenate_features_and_targets(feature_names=feature_names, features_dict=features_dict, targets_dict=targets_dict)
-        )
-        return concatenated_features, concatenated_targets, feature_names
+        if targets_dict:
+            concatenated_features, concatenated_targets = (
+                self.concatenate_features_and_targets(stage = stage, feature_names=feature_names, features_dict=features_dict, targets_dict=targets_dict)
+            ) #type:ignore
+        else:
+            concatenated_features = (
+                self.concatenate_features_and_targets(stage = stage, feature_names=feature_names, features_dict=features_dict, targets_dict=None)
+            ) #type:ignore
+
+        if targets_dict:
+            return concatenated_features, concatenated_targets, feature_names
+        else:
+            return concatenated_features, feature_names
 
     # TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
     @staticmethod
-    def concatenate_features_and_targets(feature_names, features_dict, targets_dict):
+    def concatenate_features_and_targets(feature_names, features_dict, targets_dict, stage):
         concatenated_features = {}
         concatenated_targets = {}
         concatenated_feature_names = []
 
         # Concatenate feature names only once
-        for analysis_type in sorted(feature_names.keys()): #type: ignore
+        for analysis_type in sorted(feature_names.keys()):  # type: ignore
             concatenated_feature_names.extend(feature_names[analysis_type])
 
-        for stage in features_dict:
+        for stage_key in features_dict:
             all_features = []
-            all_targets = []
-            for analysis_type in sorted(
-                features_dict[stage].keys()
-            ):  # Sort to ensure consistent order
-                all_features.append(features_dict[stage][analysis_type])
-                all_targets.append(targets_dict[stage][analysis_type])
+            all_targets = [] if stage != 'inference' else None
+            
+            for analysis_type in sorted(features_dict[stage_key].keys()):  # Sort to ensure consistent order
+                all_features.append(features_dict[stage_key][analysis_type])
+                if stage != 'inference':
+                    all_targets.append(targets_dict[stage_key][analysis_type]) #type:ignore
 
             # Find the minimum number of samples across all analysis types
             min_samples = min(len(features) for features in all_features)
 
-            # Resample features and targets to have the same number of samples
+            # Resample features (and targets, if not in inference mode) to have the same number of samples
             resampled_features = []
-            resampled_targets = []
-            for features, targets in zip(all_features, all_targets):
+            resampled_targets = [] if stage != 'inference' else None
+            
+            for features, targets in zip(all_features, all_targets or []):
                 if len(features) > min_samples:
                     resampled_features.append(
                         resample(features, n_samples=min_samples, random_state=42)
                     )
-                    resampled_targets.append(
-                        resample(targets, n_samples=min_samples, random_state=42)
-                    )
+                    if stage != 'inference':
+                        resampled_targets.append( #type:ignore
+                            resample(targets, n_samples=min_samples, random_state=42)
+                        ) 
                 else:
                     resampled_features.append(features)
-                    resampled_targets.append(targets)
+                    if stage != 'inference':
+                        resampled_targets.append(targets) #type:ignore
 
-            # Concatenate the resampled features and targets
-            concatenated_features[stage] = np.hstack(resampled_features)
-            concatenated_targets[stage] = resampled_targets[
-                0
-            ]  # Assuming targets are the same for all analysis types
+            # Concatenate the resampled features (and targets, if not in inference mode)
+            if targets_dict == {}:
+                resampled_features = all_features.copy()
+            
+            concatenated_features[stage_key] = np.hstack(resampled_features)
+            
+            if stage != 'inference':
+                concatenated_targets[stage_key] = resampled_targets[0]  # Assuming targets are the same for all analysis types #type:ignore
 
-            # print(f"Stage: {stage}")
-            # print(f"  Concatenated features shape: {concatenated_features[stage].shape}")
-            # print(f"  Concatenated targets shape: {concatenated_targets[stage].shape}")
+            # Uncomment these lines if you need to debug shapes
+            # print(f"Stage: {stage_key}")
+            # print(f"  Concatenated features shape: {concatenated_features[stage_key].shape}")
+            # if stage != 'inference':
+            #     print(f"  Concatenated targets shape: {concatenated_targets[stage_key].shape}")
 
-        return concatenated_features, concatenated_targets
+            # Return concatenated_features if stage is 'inference'
+            if stage == 'inference':
+                return concatenated_features
+
+            # Otherwise, return both concatenated_features and concatenated_targets
+            return concatenated_features, concatenated_targets
+
 
     # TODO: Again, need to modify this s.t. I am not relying on the class instances for any of this.
     def resample_features_and_targets(self, features_dict, targets_dict, stage):

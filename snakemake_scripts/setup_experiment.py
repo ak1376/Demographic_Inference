@@ -42,6 +42,14 @@ def main(config_path):
     print(f'CONFIG FILE PATH: {config_file}')
     experiment_obj_file = os.path.join(experiment_directory, "experiment_obj.pkl")
     model_config_file = os.path.join(experiment_directory, "model_config.json")
+
+    # Save the inference config file
+    inference_config = config.copy()
+    inference_config['experiment_directory'] = experiment_directory
+    with open(f"{experiment_directory}/inference_config_file.json", 'w') as f:
+        json.dump(inference_config, f, indent=4)
+
+    print(f"VCF FILEPATH!!!! {config['vcf_filepath']}")
     
     # Save the experiment object
     with open(experiment_obj_file, "wb") as f:
@@ -52,6 +60,7 @@ def main(config_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create experiment configuration and object")
     parser.add_argument("--config_file", help="Path to the config file")
+    parser.add_argument("--inference_config_file", help="Path to the inference config file")
     parser.add_argument("--experiment_obj_file", help="Path to save the experiment object file")
     args = parser.parse_args()
 

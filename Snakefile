@@ -16,9 +16,9 @@ lower_bound_params = {
 "t_bottleneck_start": 1500
 }
 model_config = {
-"input_size": 8,
+"input_size": 10,
 "hidden_size": 1000,
-"output_size": 4,
+"output_size": 5,
 "num_epochs": 1000,
 "learning_rate": 3e-4,
 "num_layers": 3,
@@ -29,16 +29,16 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 1000,
-    "num_sims_inference": 1000,
+    "num_sims_pretrain": 10,
+    "num_sims_inference": 10,
     "num_samples": 20,
-    "experiment_name": "dadi_moments_analysis",
+    "experiment_name": "new_jawn",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e6,
-    "maxiter": 10,
+    "maxiter": 100,
     "genome_length": 1e8,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
@@ -46,8 +46,19 @@ config = {
     "normalization": False,
     "remove_outliers": True,
     "use_FIM": False,
-    "neural_net_hyperparameters": model_config
+    "neural_net_hyperparameters": model_config, 
+    'vcf_filepath': '/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz',
+    'txt_filepath': '/sietch_colab/akapoor/wisent.txt',
+    'popname': 'wisent',
 }
+
+    # inference = Inference(
+    #     vcf_filepath=config['vcf_filepath'],
+    #     txt_filepath=config['txt_filepath'],
+    #     popname=config['popname'],
+    #     config=config,
+    #     experiment_directory=config['experiment_directory']
+    # )
 
 # Define the experiment name
 EXPERIMENT_NAME = config['experiment_name']
@@ -60,11 +71,17 @@ rule all:
         f"{EXPERIMENT_DIRECTORY}/config.json",
         f"{EXPERIMENT_DIRECTORY}/model_config.json",
         f"{EXPERIMENT_DIRECTORY}/experiment_obj.pkl",
+        f"{EXPERIMENT_DIRECTORY}/inference_config_file.json",
         f"{EXPERIMENT_DIRECTORY}/preprocessing_results_obj.pkl",
         f"{EXPERIMENT_DIRECTORY}/linear_regression_model.pkl",
         f"{EXPERIMENT_DIRECTORY}/features_and_targets.pkl",
         f"{EXPERIMENT_DIRECTORY}/snn_results.pkl",
-        f"{EXPERIMENT_DIRECTORY}/snn_model.pth"
+        f"{EXPERIMENT_DIRECTORY}/snn_model.pth",
+        f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl",
+        f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt",
+        f"{EXPERIMENT_DIRECTORY}/dadi_dict_inference.pkl",
+        f"{EXPERIMENT_DIRECTORY}/moments_dict_inference.pkl",
+        f"{EXPERIMENT_DIRECTORY}/momentsLD_dict_inference.pkl"
 
 rule create_experiment:
     output:
@@ -81,7 +98,7 @@ rule create_experiment:
             json.dump(config, f, indent=4)
         
         shell(f"PYTHONPATH={{CWD}} python {{CWD}}/snakemake_scripts/setup_experiment.py --config_file {{output.config_file}} --experiment_obj_file {{output.experiment_obj_file}}")
-        
+
 rule obtain_features:
     input:
         config_file = rules.create_experiment.output.config_file,
@@ -145,3 +162,31 @@ rule train_and_predict:
         --features_file {input.features_file} \
         --use_FIM {params.use_FIM}
         """
+
+rule get_inferred_params:
+    input:
+        config=f"{EXPERIMENT_DIRECTORY}/inference_config_file.json",
+        experiment_directory = EXPERIMENT_DIRECTORY
+    output:
+        f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl",
+        f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
+    shell:
+        """
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/inference.py \
+        --config {input.config} \
+        --experiment_directory {input.experiment_directory} \
+        """
+
+rule evaluate_model_GHIST:
+    input:
+        
+
+
+
+
+    # # If needed, add code here to load a trained model and call evaluate_model
+    # inference_features = torch.tensor(inference_results["features"], dtype=torch.float32)
+    # inferred_params = snn_model.predict(inference_features)
+
+    # # Save the array as a text file
+    # np.savetxt(f'{self.experiment_directory}/inferred_params_GHIST_bottleneck.txt', inferred_params, delimiter=' ', fmt='%.5f')

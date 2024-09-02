@@ -6,6 +6,8 @@ from inference import Inference
 from preprocess import Processor
 import pickle
 import torch
+import numpy as np
+
 # Suppress the specific warning about delim_whitespace
 warnings.filterwarnings(
     "ignore", message="The 'delim_whitespace' keyword in pd.read_csv is deprecated"
@@ -48,9 +50,9 @@ lower_bound_params = {
 "t_bottleneck_start": 1500
 }
 model_config = {
-"input_size": 8,
+"input_size": 10,
 "hidden_size": 1000,
-"output_size": 4,
+"output_size": 5,
 "num_epochs": 1000,
 "learning_rate": 3e-4,
 "num_layers": 3,
@@ -102,13 +104,4 @@ inference_obj.obtain_features()
 with open(f"{os.getcwd()}/experiments/dadi_moments_analysis_new/inference_results_obj.pkl", 'rb') as file:
     inference_results = pickle.load(file)
 
-inference_features = torch.tensor(inference_results["features"], dtype=torch.float32)
-
-inferred_params = snn_model.predict(inference_features)
-
-print(inferred_params)
-
-print("siema")
-# linear_experiment.inference()
-
-
+inference_obj.evaluate_model(snn_model, inference_results)
