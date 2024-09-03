@@ -2,19 +2,11 @@
 The experiment manager should import the following modules:
 - Processor object
 - delete_vcf_files function
-
-
 """
 
 import os
 import shutil
-from tqdm import tqdm
 import numpy as np
-from torch.utils.data import DataLoader, random_split, TensorDataset
-import torch
-import torch.optim as optim
-from torch.optim.adam import Adam
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pickle
 import ray
 import time
@@ -23,26 +15,12 @@ import json
 from preprocess import Processor, FeatureExtractor
 from utils import (
     visualizing_results,
-    visualize_model_predictions,
-    # shap_values_plot,
-    # partial_dependence_plots,
-    extract_features,
-    root_mean_squared_error,
-    find_outlier_indices,  # FUNCTION FOR DEBUGGING PURPOSES
-    resample_to_match_row_count,
-    save_dict_to_pickle,
     process_and_save_data,
-    calculate_model_errors,
+    calculate_and_save_rrmse,
+    root_mean_squared_error
 )
-from models import XGBoost, ShallowNN
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from pytorch_lightning.callbacks import TQDMProgressBar
-import matplotlib.pyplot as plt
-from sklearn.model_selection import LeaveOneOut, cross_val_score, cross_val_predict
-from sklearn.metrics import make_scorer
 import joblib
-from train import Trainer
 
 
 class Experiment_Manager:
@@ -74,7 +52,9 @@ class Experiment_Manager:
 
         # Open a file in write mode and save the dictionary as JSON
         with open(f"{self.experiment_directory}/config.json", "w") as json_file:
-            json.dump(self.experiment_config, json_file, indent=4)  # indent=4 makes the JSON file more readable
+            json.dump(
+                self.experiment_config, json_file, indent=4
+            )  # indent=4 makes the JSON file more readable
 
     def create_directory(
         self, folder_name, base_dir="experiments", archive_subdir="archive"
@@ -108,23 +88,24 @@ class Experiment_Manager:
         self.experiment_directory = base_path
 
     def load_features(self, file_name):
-        with open(f'{file_name}', "rb") as file:
+        with open(f"{file_name}", "rb") as file:
             loaded_object = pickle.load(file)
 
         return loaded_object
 
     def obtaining_features(self):
         """
-        This should do the dadi and moments inference (input to the ML models)
+        This should do the dadi and moments inference (input to the ML models). THIS IS PRETRAINING CODE
         """
-
-        ray.init(
-            num_cpus=25, local_mode=False
-        )  # This is a placeholder for now.
 
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
-        extractor = FeatureExtractor(self.experiment_directory)
+        extractor = FeatureExtractor(
+            self.experiment_directory,
+            dadi_analysis=self.experiment_config["dadi_analysis"],
+            moments_analysis=self.experiment_config["moments_analysis"],
+            momentsLD_analysis=self.experiment_config["momentsLD_analysis"],
+        )
 
         # Now I want to define training, validation, and testing indices:
 
@@ -139,6 +120,13 @@ class Experiment_Manager:
         validation_indices = all_indices[n_train:]
         testing_indices = np.arange(self.num_sims_inference)
 
+        features_dict = {stage: {} for stage in ["training", "validation", "testing"]}
+        targets_dict = {stage: {} for stage in ["training", "validation", "testing"]}
+        feature_names = {}
+
+        concatenated_features = {stage: {} for stage in ["training", "validation", "testing"]}
+        concatenated_targets = {stage: {} for stage in ["training", "validation", "testing"]}
+
         for stage, indices in [
             ("training", training_indices),
             ("validation", validation_indices),
@@ -147,55 +135,65 @@ class Experiment_Manager:
 
             # Your existing process_and_save_data function
 
-
             # Call the remote function and get the ObjectRef
-            result_ref = process_and_save_data.remote(
-                processor, indices, stage, self.experiment_directory
+            merged_dict = processor.pretrain_processing(indices)
+
+            dadi_dict, moments_dict, momentsLD_dict = process_and_save_data(
+                merged_dict,
+                stage,
+                self.experiment_directory,
+                self.dadi_analysis,
+                self.moments_analysis,
+                self.momentsLD_analysis,
             )
 
-            start = time.time() 
+            # Now let's take the information from each dictionary above and put it in the features_dict and, if in pretrain mode, the targets_dict.
+            #TODO: Maybe put in a helper function? 
 
-            # Use ray.get() to retrieve the actual result
-            dadi_dict, moments_dict, momentsLD_dict = ray.get(result_ref)
+            if self.dadi_analysis:
+                concatenated_array = np.column_stack([dadi_dict['opt_params'][key] for key in dadi_dict['opt_params']])
+                features_dict[stage]["dadi"] = concatenated_array
 
-            end = time.time()
+                if dadi_dict['simulated_params']:
+                    concatenated_array = np.column_stack([dadi_dict['simulated_params'][key] for key in dadi_dict['simulated_params']])
+                    targets_dict[stage]["dadi"] = concatenated_array
 
-            print(f"Time taken for processing {stage} data: {end - start}")
+            
+            if self.moments_analysis:
+                concatenated_array = np.column_stack([moments_dict['opt_params'][key] for key in moments_dict['opt_params']])
+                features_dict[stage]["moments"] = concatenated_array
 
-            # Process each dictionary
-            if extractor.dadi_analysis:
-                extractor.process_batch(dadi_dict, "dadi", stage, normalization=self.normalization)
-            if extractor.moments_analysis:
-                extractor.process_batch(
-                    moments_dict, "moments", stage, normalization=self.normalization
-                )
-            if extractor.momentsLD_analysis:
-                extractor.process_batch(
-                    momentsLD_dict, "momentsLD", stage, normalization=self.normalization
-                )
+                if moments_dict['simulated_params']:
+                    concatenated_array = np.column_stack([moments_dict['simulated_params'][key] for key in moments_dict['simulated_params']])
+                    targets_dict[stage]["moments"] = concatenated_array
 
-        # After processing all stages, finalize the processing
+            if self.momentsLD_analysis:
+                concatenated_array = np.column_stack([momentsLD_dict['opt_params'][key] for key in momentsLD_dict['opt_params']])
+                features_dict[stage]["momentsLD"] = concatenated_array
 
-        features, targets, feature_names = extractor.finalize_processing(
-            remove_outliers=self.remove_outliers
-        )
+                if momentsLD_dict['simulated_params']:
+                    concatenated_array = np.column_stack([momentsLD_dict['simulated_params'][key] for key in momentsLD_dict['simulated_params']])
+                    targets_dict[stage]["momentsLD"] = concatenated_array
+
+            # Now columnwise the dadi, moments, and momentsLD inferences to get a concatenated features and targets array
+            concat_feats = np.column_stack([features_dict[stage][subkey] for subkey in features_dict[stage]])
+
+            if targets_dict[stage]:
+                concat_targets = np.column_stack([targets_dict[stage]['dadi']]) # dadi because dadi and moments values for the targets are the same. 
+
+            concatenated_features[stage] = concat_feats #type:ignore
+            concatenated_targets[stage] = concat_targets #type:ignore
+
         training_features, validation_features, testing_features = (
-            features["training"],
-            features["validation"],
-            features["testing"],
+            concatenated_features["training"], 
+            concatenated_features["validation"],
+            concatenated_features["testing"]
         )
         training_targets, validation_targets, testing_targets = (
-            targets["training"],
-            targets["validation"],
-            targets["testing"],
+            concatenated_targets["training"],
+            concatenated_targets["validation"], 
+            concatenated_targets["testing"]
         )
-
-        # target_names = {
-        #     0: "Nb_sample",
-        #     1: "N_recover_sample",
-        #     2: "t_bottleneck_start_sample",
-        #     3: "t_bottleneck_end_sample",
-        # }
 
         preprocessing_results_obj = {}
 
@@ -212,12 +210,26 @@ class Experiment_Manager:
         preprocessing_results_obj["testing"]["predictions"] = testing_features
         preprocessing_results_obj["testing"]["targets"] = testing_targets
 
+        # Assuming features_dict and targets_dict are already defined
+        rrmse_dict = calculate_and_save_rrmse(
+            features_dict,
+            targets_dict,
+            save_path=f'{self.experiment_directory}/rrmse_dict.json',
+            dadi_analysis=self.dadi_analysis,
+            moments_analysis=self.moments_analysis,
+            momentsLD_analysis=self.momentsLD_analysis
+        )
+
+        # preprocessing_results_obj['rrmse'] = rrmse_dict
+
         # Open a file to save the object
-        with open(f"{self.experiment_directory}/preprocessing_results_obj.pkl", "wb") as file:  # "wb" mode opens the file in binary write mode
+        with open(
+            f"{self.experiment_directory}/preprocessing_results_obj.pkl", "wb"
+        ) as file:  # "wb" mode opens the file in binary write mode
             pickle.dump(preprocessing_results_obj, file)
 
-
-        # TODO: This function should be modified to properly consider outliers. 
+        # TODO: This function should be modified to properly consider outliers.
+        # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots. 
         visualizing_results(
             preprocessing_results_obj,
             save_loc=self.experiment_directory,
@@ -232,14 +244,16 @@ class Experiment_Manager:
             stages=["testing"],
         )
 
+
         ## LINEAR REGRESSION
         linear_mdl = LinearRegression()
-        linear_mdl.fit(training_features, training_targets)
+        linear_mdl.fit(training_features, training_targets) #type:ignore
 
-        training_predictions = linear_mdl.predict(training_features)
-        validation_predictions = linear_mdl.predict(validation_features)
-        # testing_predictions = linear_mdl.predict(testing_features)
+        training_predictions = linear_mdl.predict(training_features) #type:ignore
+        validation_predictions = linear_mdl.predict(validation_features) #type:ignore
+        testing_predictions = linear_mdl.predict(testing_features) #type:ignore
 
+        #TODO: Linear regression should be moded to the models module. 
         linear_mdl_obj = {}
         linear_mdl_obj["model"] = linear_mdl
 
@@ -253,38 +267,34 @@ class Experiment_Manager:
         linear_mdl_obj["validation"]["predictions"] = validation_predictions
         linear_mdl_obj["validation"]["targets"] = validation_targets
 
-        # linear_mdl_obj["testing"]["predictions"] = testing_predictions
+        linear_mdl_obj["testing"]["predictions"] = testing_predictions
         linear_mdl_obj["testing"]["targets"] = testing_targets
 
-        # Open a file to save the object
-        with open(f"{self.experiment_directory}/linear_mdl_obj.pkl", "wb") as file:  # "wb" mode opens the file in binary write mode
-            pickle.dump(linear_mdl_obj, file)
+        # Now calculate the linear model error
+        
+        rrmse_dict = {}
+        rrmse_dict["training"] = root_mean_squared_error(y_true = training_targets, y_pred = training_predictions)
+        rrmse_dict["validation"] = root_mean_squared_error(y_true = validation_targets, y_pred = validation_predictions)
+        rrmse_dict["testing"] = root_mean_squared_error(y_true = testing_targets, y_pred = testing_predictions)
 
+        # linear_mdl_obj["rrmse"] = rrmse_dict      
+
+        # Open a file to save the object
+        with open(
+            f"{self.experiment_directory}/linear_mdl_obj.pkl", "wb"
+        ) as file:  # "wb" mode opens the file in binary write mode
+            pickle.dump(linear_mdl_obj, file)
+        
+        # Save rrmse_dict to a JSON file
+        with open(f'{self.experiment_directory}/linear_model_error.json', 'w') as json_file:
+            json.dump(rrmse_dict, json_file, indent=4)
+            
         # targets
         visualizing_results(
-            linear_mdl_obj, "linear_results", save_loc=self.experiment_directory, stages=["training", "validation"]
-        )
-
-        ray.shutdown()
-
-        # Calculate errors for each model separately
-        preprocessing_errors = calculate_model_errors(
-            preprocessing_results_obj, "preprocessing", datasets=["training", "validation"]
-        )
-        linear_errors = calculate_model_errors(linear_mdl_obj, "linear", datasets=["training", "validation"]) # The reason why we are not passing "testing" because we will pass the trained model along with the testing data to the inference object. 
-        # snn_errors = calculate_model_errors(snn_mdl_obj, "snn", datasets=["training", "validation"])
-
-        # Combine all errors if needed
-        all_errors = {**preprocessing_errors, **linear_errors}
-
-        # Print results
-        with open(f"{self.experiment_directory}/preprocessing_data_error.txt", "w") as f:
-            for model, datasets in all_errors.items():
-                f.write(f"\n{model.upper()} Model Errors:\n")
-                for dataset, error in datasets.items():
-                    f.write(f"  {dataset.capitalize()} RMSE: {error:.4f}\n")
-        print(
-            f"Results have been saved to {self.experiment_directory}/model_errors.txt"
+            linear_mdl_obj,
+            "linear_results",
+            save_loc=self.experiment_directory,
+            stages=["training", "validation"],
         )
 
         joblib.dump(

@@ -1,8 +1,20 @@
+import pickle
+import argparse
 from models import ShallowNN
 import os
 from utils import visualizing_results, calculate_model_errors
-import pickle
+import json
+import torch
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 class Trainer: 
     def __init__(self, experiment_directory, model_config, use_FIM = True):
@@ -41,14 +53,9 @@ class Trainer:
     
     def predict(self, snn_model, training_data, validation_data, training_targets, validation_targets, visualize = True):
 
-        # if self.use_FIM == False:
-        #     training_predictions = snn_model.predict(training_data[:,:8])
-        #     validation_predictions = snn_model.predict(validation_data[:,:8])
+        # print(f'Training data shape: {training_data.shape}')
+        # print(f'Validation data shape: {validation_data.shape}')
 
-        # else:
-        #     training_predictions = snn_model.predict(training_data)
-        #     validation_predictions = snn_model.predict(validation_data)
-        
         training_predictions = snn_model.predict(training_data)
         validation_predictions = snn_model.predict(validation_data)
 
@@ -81,14 +88,64 @@ class Trainer:
             f"Results have been saved to {self.experiment_directory}/MLP_model_error.txt"
         )
 
-        # Save the results object
-        # with open(f"{self.experiment_directory}/snn_results.pkl", 'wb') as f:
-        #     pickle.dump(snn_mdl_obj, f)
+        return snn_mdl_obj
 
+def main(experiment_directory, model_config_file, features_file, use_FIM = True):
+    # Load model config
+    with open(model_config_file, 'r') as f:
+        model_config = json.load(f)
 
-            
+    # Load features
+    with open(features_file, 'rb') as f:
+        features = pickle.load(f)
 
-
-
-
+    # print(features['training']['features'])
+    # print()
+    # print(features['training']['targets'])
+    # print()
+    # print(features['validation']['features'])
+    # print()
+    # print(features['validation']['targets'])
+    # print()
     
+    # print(features.keys())
+    # print(features['training'].keys())
+    
+    trainer = Trainer(experiment_directory, model_config, use_FIM = use_FIM)
+
+    # Train the model
+    snn_model, train_losses, val_losses = trainer.train(
+        features['training']['features'],
+        features['training']['targets'],
+        features['validation']['features'],
+        features['validation']['targets']
+    )
+
+    # Make predictions
+    snn_results = trainer.predict(
+        snn_model,
+        features['training']['features'],
+        features['validation']['features'],
+        features['training']['targets'],
+        features['validation']['targets']
+    )
+
+    # Save the trained model
+    torch.save(snn_model.state_dict(), f"{experiment_directory}/snn_model.pth")
+
+    snn_results['train_losses'] = train_losses
+    snn_results['val_losses'] = val_losses
+    
+    
+    with open(f"{experiment_directory}/snn_results.pkl", 'wb') as f:
+        pickle.dump(snn_results, f)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--experiment_directory', type=str, required=True)
+    parser.add_argument('--model_config_file', type=str, required=True)
+    parser.add_argument('--features_file', type=str, required=True)
+    parser.add_argument('--use_FIM', type=str2bool, default=True)
+    args = parser.parse_args()
+
+    main(args.experiment_directory, args.model_config_file, args.features_file, args.use_FIM)

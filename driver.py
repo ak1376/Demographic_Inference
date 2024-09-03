@@ -1,11 +1,12 @@
 from experiment_manager import Experiment_Manager
-import ray
 import os
-import multiprocessing
 import warnings
-# import time
-import pickle
 from train import Trainer
+from inference import Inference
+from preprocess import Processor
+import pickle
+import torch
+import numpy as np
 
 # Suppress the specific warning about delim_whitespace
 warnings.filterwarnings(
@@ -35,79 +36,57 @@ warnings.filterwarnings(
 # }
 
 upper_bound_params = {
-    "N0": 10000,
-    "Nb": 2000,
-    "N_recover": 8000,
-    "t_bottleneck_end": 1000,
-    "t_bottleneck_start": 2000,  # In generations
+"N0": 10000,
+"Nb": 5000,
+"N_recover": 7000,
+"t_bottleneck_end": 1000,
+"t_bottleneck_start": 2000
 }
-
 lower_bound_params = {
-    "N0": 8000,
-    "Nb": 1000,
-    "N_recover": 4000,
-    "t_bottleneck_end": 800,
-    "t_bottleneck_start": 1500,  # In generations
+"N0": 8000,
+"Nb": 4000,
+"N_recover": 6000,
+"t_bottleneck_end": 800,
+"t_bottleneck_start": 1500
 }
-
-
-num_simulations_pretrain = 1000
-num_simulations_inference = 1000
-num_samples = 20
-
-# Neural Net Hyperparameters
-
-use_FIM = False
-if use_FIM == False:
-    input_size = 8  # Number of features. This includes the FIM upper triangular matrix. 
-else:
-    input_size = 18
-
-hidden_size = 1000  # Number of neurons in the hidden layer
-output_size = 4  # Number of output classes
-num_epochs = 1000
-learning_rate = 3e-4
-num_layers = 3
-
 model_config = {
-    "input_size": input_size,
-    "hidden_size": hidden_size,
-    "output_size": output_size,
-    "num_epochs": num_epochs,
-    "learning_rate": learning_rate,
-    "num_layers": num_layers,
-    "dropout_rate": 0,
-    "weight_decay": 0
+"input_size": 10,
+"hidden_size": 1000,
+"output_size": 5,
+"num_epochs": 1000,
+"learning_rate": 3e-4,
+"num_layers": 3,
+"dropout_rate": 0,
+"weight_decay": 0
 }
 
-
-# TODO: Add an option where I can specify some text to place in a readme for this experiment.
-config_file = {
+config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": num_simulations_pretrain,
-    "num_sims_inference": num_simulations_inference,
-    "num_samples": num_samples,
-    "experiment_name": "without_FIM",
+    "num_sims_pretrain": 10,
+    "num_sims_inference": 10,
+    "num_samples": 20,
+    "experiment_name": "dadi_moments_analysis_new",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
-    "window_length": 1e5,
+    "window_length": 1e6,
     "maxiter": 100,
-    "genome_length": 1e7,
+    "genome_length": 1e8,
     "mutation_rate": 1.26e-8,
-    "recombination_rate": 1.007e-8, 
-    "seed": 295,
-    "normalization": False, 
-    "remove_outliers": True, 
+    "recombination_rate": 1.007e-8,
+    "seed": 42,
+    "normalization": False,
+    "remove_outliers": True,
+    "use_FIM": False,
     "neural_net_hyperparameters": model_config
 }
 
-linear_experiment = Experiment_Manager(config_file)
-# linear_experiment.obtaining_features()
-# preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/harder_prior_50k_simulation/preprocessing_results_obj.pkl")
-preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/with_FIM/preprocessing_results_obj.pkl")
+linear_experiment = Experiment_Manager(config)
+linear_experiment.obtaining_features()
+preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/dadi_moments_analysis_new/preprocessing_results_obj.pkl")
+# preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/Demographic_Inference/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]
 training_targets = preprocessing_results_obj["training"]["targets"]
 validation_features = preprocessing_results_obj["validation"]["predictions"]
@@ -116,11 +95,13 @@ validation_targets = preprocessing_results_obj["validation"]["targets"]
 testing_features = preprocessing_results_obj["testing"]["predictions"]
 testing_targets = preprocessing_results_obj["testing"]["targets"]
 
-trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config, use_FIM=use_FIM)
+trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config, use_FIM=config['use_FIM'])
 snn_model, train_losses, val_losses = trainer.train(training_features, training_targets, validation_features, validation_targets, visualize = True)
 trainer.predict(snn_model, training_features, validation_features, training_targets, validation_targets, visualize = True)
+inference_obj = Inference(vcf_filepath = 'GHIST-bottleneck.vcf.gz', txt_filepath='wisent.txt', popname = 'wisent', config = config, experiment_directory=linear_experiment.experiment_directory)
+inference_obj.obtain_features()
 
-# linear_experiment.inference()
-ray.shutdown()
+with open(f"{os.getcwd()}/experiments/dadi_moments_analysis_new/inference_results_obj.pkl", 'rb') as file:
+    inference_results = pickle.load(file)
 
-
+inference_obj.evaluate_model(snn_model, inference_results)

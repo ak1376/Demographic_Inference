@@ -3,11 +3,9 @@ import numpy as np
 import xgboost as xgb
 import re
 import os
-import shap
-from sklearn.inspection import PartialDependenceDisplay
 from sklearn.preprocessing import StandardScaler
 import pickle
-import ray
+import json
 
 
 def extract_features(simulated_params, opt_params, normalization=True):
@@ -15,19 +13,23 @@ def extract_features(simulated_params, opt_params, normalization=True):
     opt_params can come from any of the inference methods.
     """
 
-    # Extracting parameters from the flattened lists
-    Nb_opt = [d["Nb"] for d in opt_params]
-    N_recover_opt = [d["N_recover"] for d in opt_params]
-    t_bottleneck_start_opt = [d["t_bottleneck_start"] for d in opt_params]
-    t_bottleneck_end_opt = [d["t_bottleneck_end"] for d in opt_params]
+    #TODO: Rewrite this code s.t. I am not assuming a priori the demographic model . 
 
-    Nb_sample = [d["Nb"] for d in simulated_params]
-    N_recover_sample = [d["N_recover"] for d in simulated_params]
-    t_bottleneck_start_sample = [d["t_bottleneck_start"] for d in simulated_params]
-    t_bottleneck_end_sample = [d["t_bottleneck_end"] for d in simulated_params]
+    # Extracting parameters from the flattened lists
+    Nb_opt = opt_params['Nb']
+    N_recover_opt = opt_params['N_recover']
+    t_bottleneck_start_opt = opt_params['t_bottleneck_start']
+    t_bottleneck_end_opt = opt_params['t_bottleneck_end']
+
+    if simulated_params is not None:
+
+        Nb_sample = simulated_params['Nb']
+        N_recover_sample = simulated_params['N_recover']
+        t_bottleneck_start_sample = simulated_params['t_bottleneck_start']
+        t_bottleneck_end_sample = simulated_params['t_bottleneck_end']
 
     #TODO: Make this a bit more elegant and streamlined.
-    if "upper_triangular_FIM" in opt_params[0]:
+    if "upper_triangular_FIM" in opt_params.keys():
         upper_triangular_FIM = [d["upper_triangular_FIM"] for d in opt_params]
 
         # Add the FIM values to the features
@@ -42,7 +44,7 @@ def extract_features(simulated_params, opt_params, normalization=True):
         )
 
     # Put all these features into a single 2D array
-    if "upper_triangular_FIM" in opt_params[0]:
+    if "upper_triangular_FIM" in opt_params.keys():
         opt_params_array = np.column_stack(
             (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt, upper_triangular_FIM)
         )
@@ -52,14 +54,15 @@ def extract_features(simulated_params, opt_params, normalization=True):
         )
 
     # Combine simulated parameters into targets
-    targets = np.column_stack(
-        (
-            Nb_sample,
-            N_recover_sample,
-            t_bottleneck_start_sample,
-            t_bottleneck_end_sample,
+    if simulated_params is not None:
+        targets = np.column_stack(
+            (
+                Nb_sample,
+                N_recover_sample,
+                t_bottleneck_start_sample,
+                t_bottleneck_end_sample,
+            )
         )
-    )
 
     if normalization:
         # Feature scaling
@@ -67,14 +70,18 @@ def extract_features(simulated_params, opt_params, normalization=True):
         features = feature_scaler.fit_transform(opt_params_array)
 
         # Target scaling
-        target_scaler = StandardScaler()
-        targets = target_scaler.fit_transform(targets)
+        if simulated_params is not None:
+            target_scaler = StandardScaler()
+            targets = target_scaler.fit_transform(targets)
 
     else:
         # Features are the optimized parameters
         features = opt_params_array
 
-    return features, targets
+    if simulated_params is not None:
+        return features, targets
+    else:
+        return features
 
 
 def visualizing_results(
@@ -156,9 +163,11 @@ def visualizing_results(
     print(f"Saved figure to: {filename}")
     plt.show()
 
-
 def calculate_model_errors(model_obj, model_name, datasets):
     """
+    PLACEHOLDER FOR NOW 
+
+
     Calculate RMSE for a single model across training, validation, and testing datasets.
 
     :param model_obj: Dictionary containing model predictions and targets for each dataset
@@ -170,10 +179,63 @@ def calculate_model_errors(model_obj, model_name, datasets):
 
     for dataset in datasets:
         errors[dataset] = root_mean_squared_error(
-            model_obj[dataset]["targets"], model_obj[dataset]["predictions"][:, :4] # The :4 is to only consider the first 4 columns which are the parameters of interest. For moments I also get the upper triangle of the FIM, and those aren't parameters we are inferring. 
+            model_obj[dataset]["targets"], model_obj[dataset]["predictions"] # The :4 is to only consider the first 4 columns which are the parameters of interest. For moments I also get the upper triangle of the FIM, and those aren't parameters we are inferring. 
         )
 
     return {model_name: errors}
+
+def calculate_and_save_rrmse(features_dict, targets_dict, save_path, dadi_analysis=False, moments_analysis=False, momentsLD_analysis=False):
+    rrmse_dict = {}
+
+    if dadi_analysis:
+        rrmse_training_dadi = root_mean_squared_error(features_dict['training']['dadi'], targets_dict['training']['dadi'])
+        rrmse_validation_dadi = root_mean_squared_error(features_dict['validation']['dadi'], targets_dict['validation']['dadi'])
+        rrmse_testing_dadi = root_mean_squared_error(features_dict['testing']['dadi'], targets_dict['testing']['dadi'])
+
+        rrmse_dict["dadi"] = {
+            "training": rrmse_training_dadi,
+            "validation": rrmse_validation_dadi,
+            "testing": rrmse_testing_dadi,
+        }
+
+    if moments_analysis:
+        rrmse_training_moments = root_mean_squared_error(features_dict['training']['moments'], targets_dict['training']['moments'])
+        rrmse_validation_moments = root_mean_squared_error(features_dict['validation']['moments'], targets_dict['validation']['moments'])
+        rrmse_testing_moments = root_mean_squared_error(features_dict['testing']['moments'], targets_dict['testing']['moments'])
+
+        rrmse_dict["moments"] = {
+            "training": rrmse_training_moments,
+            "validation": rrmse_validation_moments,
+            "testing": rrmse_testing_moments,
+        }
+
+    if momentsLD_analysis:
+        rrmse_training_momentsLD = root_mean_squared_error(features_dict['training']['momentsLD'], targets_dict['training']['momentsLD'])
+        rrmse_validation_momentsLD = root_mean_squared_error(features_dict['validation']['momentsLD'], targets_dict['validation']['momentsLD'])
+        rrmse_testing_momentsLD = root_mean_squared_error(features_dict['testing']['momentsLD'], targets_dict['testing']['momentsLD'])
+
+        rrmse_dict["momentsLD"] = {
+            "training": rrmse_training_momentsLD,
+            "validation": rrmse_validation_momentsLD,
+            "testing": rrmse_testing_momentsLD,
+        }
+
+    # Overall training, validation, and testing RMSE
+    rrmse_training = np.mean([rrmse_dict[key]["training"] for key in rrmse_dict])
+    rrmse_validation = np.mean([rrmse_dict[key]["validation"] for key in rrmse_dict])
+    rrmse_testing = np.mean([rrmse_dict[key]["testing"] for key in rrmse_dict])
+
+    rrmse_dict["overall"] = {
+        "training": rrmse_training,
+        "validation": rrmse_validation,
+        "testing": rrmse_testing,
+    }
+
+    # Save rrmse_dict to a JSON file
+    with open(save_path, 'w') as json_file:
+        json.dump(rrmse_dict, json_file, indent=4)
+
+    return rrmse_dict
 
 
 def feature_importance(
@@ -432,10 +494,42 @@ def save_dict_to_pickle(data_dict, filename, directory):
     print(f"Saved: {filepath}")
 
 
-@ray.remote
-def process_and_save_data(processor, indices, data_type, experiment_directory):
+def process_and_save_data(merged_dict, data_type, experiment_directory, dadi_analysis, moments_analysis, momentsLD_analysis):
+    #TODO: I need to rewrite this so that I can call this for both pretraining mode and inference mode. 
     """Process data and save results to pickle files."""
-    dadi_dict, moments_dict, momentsLD_dict = processor.run(indices)
+    # merged_dict = processor.pretrain_processing(indices)
+
+    if dadi_analysis:
+        dadi_dict = {
+            'simulated_params': merged_dict['simulated_params'], 
+            'sfs': merged_dict['sfs'],
+            'model_sfs': merged_dict['model_sfs_dadi'],
+            'opt_theta': merged_dict['opt_theta_dadi'],
+            'opt_params': merged_dict['opt_params_dadi']
+        }
+    else:
+        dadi_dict = {}
+
+    
+    if moments_analysis:
+        moments_dict = {
+            'simulated_params': merged_dict['simulated_params'], 
+            'sfs': merged_dict['sfs'],
+            'model_sfs': merged_dict['model_sfs_moments'],
+            'opt_theta': merged_dict['opt_theta_moments'],
+            'opt_params': merged_dict['opt_params_moments']
+        }
+    else:
+        moments_dict = {}
+
+    if momentsLD_analysis:
+        momentsLD_dict = {
+            'simulated_params': merged_dict['simulated_params'], 
+            'sfs': merged_dict['sfs'],
+            'opt_params': merged_dict['opt_params_momentsLD']
+        }
+    else:
+        momentsLD_dict = {}
 
     for name, data in [
         ("dadi", dadi_dict),
