@@ -1,8 +1,0 @@
-
-PREPROCESSING Model Errors:
-  Training RMSE: 18.5684
-  Validation RMSE: 19.1077
-
-LINEAR Model Errors:
-  Training RMSE: 0.1275
-  Validation RMSE: 0.1374
