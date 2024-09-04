@@ -17,7 +17,7 @@ from utils import (
     visualizing_results,
     process_and_save_data,
     calculate_and_save_rrmse,
-    root_mean_squared_error
+    root_mean_squared_error,
 )
 from sklearn.linear_model import LinearRegression
 import joblib
@@ -124,8 +124,12 @@ class Experiment_Manager:
         targets_dict = {stage: {} for stage in ["training", "validation", "testing"]}
         feature_names = {}
 
-        concatenated_features = {stage: {} for stage in ["training", "validation", "testing"]}
-        concatenated_targets = {stage: {} for stage in ["training", "validation", "testing"]}
+        concatenated_features = {
+            stage: {} for stage in ["training", "validation", "testing"]
+        }
+        concatenated_targets = {
+            stage: {} for stage in ["training", "validation", "testing"]
+        }
 
         for stage, indices in [
             ("training", training_indices),
@@ -148,51 +152,81 @@ class Experiment_Manager:
             )
 
             # Now let's take the information from each dictionary above and put it in the features_dict and, if in pretrain mode, the targets_dict.
-            #TODO: Maybe put in a helper function? 
+            # TODO: Maybe put in a helper function?
 
             if self.dadi_analysis:
-                concatenated_array = np.column_stack([dadi_dict['opt_params'][key] for key in dadi_dict['opt_params']])
+                concatenated_array = np.column_stack(
+                    [dadi_dict["opt_params"][key] for key in dadi_dict["opt_params"]]
+                )
                 features_dict[stage]["dadi"] = concatenated_array
 
-                if dadi_dict['simulated_params']:
-                    concatenated_array = np.column_stack([dadi_dict['simulated_params'][key] for key in dadi_dict['simulated_params']])
+                if dadi_dict["simulated_params"]:
+                    concatenated_array = np.column_stack(
+                        [
+                            dadi_dict["simulated_params"][key]
+                            for key in dadi_dict["simulated_params"]
+                        ]
+                    )
                     targets_dict[stage]["dadi"] = concatenated_array
 
-            
             if self.moments_analysis:
-                concatenated_array = np.column_stack([moments_dict['opt_params'][key] for key in moments_dict['opt_params']])
+                concatenated_array = np.column_stack(
+                    [
+                        moments_dict["opt_params"][key]
+                        for key in moments_dict["opt_params"]
+                    ]
+                )
                 features_dict[stage]["moments"] = concatenated_array
 
-                if moments_dict['simulated_params']:
-                    concatenated_array = np.column_stack([moments_dict['simulated_params'][key] for key in moments_dict['simulated_params']])
+                if moments_dict["simulated_params"]:
+                    concatenated_array = np.column_stack(
+                        [
+                            moments_dict["simulated_params"][key]
+                            for key in moments_dict["simulated_params"]
+                        ]
+                    )
                     targets_dict[stage]["moments"] = concatenated_array
 
             if self.momentsLD_analysis:
-                concatenated_array = np.column_stack([momentsLD_dict['opt_params'][key] for key in momentsLD_dict['opt_params']])
+                concatenated_array = np.column_stack(
+                    [
+                        momentsLD_dict["opt_params"][key]
+                        for key in momentsLD_dict["opt_params"]
+                    ]
+                )
                 features_dict[stage]["momentsLD"] = concatenated_array
 
-                if momentsLD_dict['simulated_params']:
-                    concatenated_array = np.column_stack([momentsLD_dict['simulated_params'][key] for key in momentsLD_dict['simulated_params']])
+                if momentsLD_dict["simulated_params"]:
+                    concatenated_array = np.column_stack(
+                        [
+                            momentsLD_dict["simulated_params"][key]
+                            for key in momentsLD_dict["simulated_params"]
+                        ]
+                    )
                     targets_dict[stage]["momentsLD"] = concatenated_array
 
             # Now columnwise the dadi, moments, and momentsLD inferences to get a concatenated features and targets array
-            concat_feats = np.column_stack([features_dict[stage][subkey] for subkey in features_dict[stage]])
+            concat_feats = np.column_stack(
+                [features_dict[stage][subkey] for subkey in features_dict[stage]]
+            )
 
             if targets_dict[stage]:
-                concat_targets = np.column_stack([targets_dict[stage]['dadi']]) # dadi because dadi and moments values for the targets are the same. 
+                concat_targets = np.column_stack(
+                    [targets_dict[stage]["dadi"]]
+                )  # dadi because dadi and moments values for the targets are the same.
 
-            concatenated_features[stage] = concat_feats #type:ignore
-            concatenated_targets[stage] = concat_targets #type:ignore
+            concatenated_features[stage] = concat_feats  # type:ignore
+            concatenated_targets[stage] = concat_targets  # type:ignore
 
         training_features, validation_features, testing_features = (
-            concatenated_features["training"], 
+            concatenated_features["training"],
             concatenated_features["validation"],
-            concatenated_features["testing"]
+            concatenated_features["testing"],
         )
         training_targets, validation_targets, testing_targets = (
             concatenated_targets["training"],
-            concatenated_targets["validation"], 
-            concatenated_targets["testing"]
+            concatenated_targets["validation"],
+            concatenated_targets["testing"],
         )
 
         preprocessing_results_obj = {}
@@ -214,10 +248,10 @@ class Experiment_Manager:
         rrmse_dict = calculate_and_save_rrmse(
             features_dict,
             targets_dict,
-            save_path=f'{self.experiment_directory}/rrmse_dict.json',
+            save_path=f"{self.experiment_directory}/rrmse_dict.json",
             dadi_analysis=self.dadi_analysis,
             moments_analysis=self.moments_analysis,
-            momentsLD_analysis=self.momentsLD_analysis
+            momentsLD_analysis=self.momentsLD_analysis,
         )
 
         # preprocessing_results_obj['rrmse'] = rrmse_dict
@@ -229,7 +263,7 @@ class Experiment_Manager:
             pickle.dump(preprocessing_results_obj, file)
 
         # TODO: This function should be modified to properly consider outliers.
-        # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots. 
+        # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots.
         visualizing_results(
             preprocessing_results_obj,
             save_loc=self.experiment_directory,
@@ -244,16 +278,15 @@ class Experiment_Manager:
             stages=["testing"],
         )
 
-
         ## LINEAR REGRESSION
         linear_mdl = LinearRegression()
-        linear_mdl.fit(training_features, training_targets) #type:ignore
+        linear_mdl.fit(training_features, training_targets)  # type:ignore
 
-        training_predictions = linear_mdl.predict(training_features) #type:ignore
-        validation_predictions = linear_mdl.predict(validation_features) #type:ignore
-        testing_predictions = linear_mdl.predict(testing_features) #type:ignore
+        training_predictions = linear_mdl.predict(training_features)  # type:ignore
+        validation_predictions = linear_mdl.predict(validation_features)  # type:ignore
+        testing_predictions = linear_mdl.predict(testing_features)  # type:ignore
 
-        #TODO: Linear regression should be moded to the models module. 
+        # TODO: Linear regression should be moded to the models module.
         linear_mdl_obj = {}
         linear_mdl_obj["model"] = linear_mdl
 
@@ -271,24 +304,32 @@ class Experiment_Manager:
         linear_mdl_obj["testing"]["targets"] = testing_targets
 
         # Now calculate the linear model error
-        
-        rrmse_dict = {}
-        rrmse_dict["training"] = root_mean_squared_error(y_true = training_targets, y_pred = training_predictions)
-        rrmse_dict["validation"] = root_mean_squared_error(y_true = validation_targets, y_pred = validation_predictions)
-        rrmse_dict["testing"] = root_mean_squared_error(y_true = testing_targets, y_pred = testing_predictions)
 
-        # linear_mdl_obj["rrmse"] = rrmse_dict      
+        rrmse_dict = {}
+        rrmse_dict["training"] = root_mean_squared_error(
+            y_true=training_targets, y_pred=training_predictions
+        )
+        rrmse_dict["validation"] = root_mean_squared_error(
+            y_true=validation_targets, y_pred=validation_predictions
+        )
+        rrmse_dict["testing"] = root_mean_squared_error(
+            y_true=testing_targets, y_pred=testing_predictions
+        )
+
+        # linear_mdl_obj["rrmse"] = rrmse_dict
 
         # Open a file to save the object
         with open(
             f"{self.experiment_directory}/linear_mdl_obj.pkl", "wb"
         ) as file:  # "wb" mode opens the file in binary write mode
             pickle.dump(linear_mdl_obj, file)
-        
+
         # Save rrmse_dict to a JSON file
-        with open(f'{self.experiment_directory}/linear_model_error.json', 'w') as json_file:
+        with open(
+            f"{self.experiment_directory}/linear_model_error.json", "w"
+        ) as json_file:
             json.dump(rrmse_dict, json_file, indent=4)
-            
+
         # targets
         visualizing_results(
             linear_mdl_obj,

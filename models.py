@@ -16,7 +16,7 @@ class XGBoost:
         self,
         feature_names,
         target_names,
-        objective="reg:squarederror", 
+        objective="reg:squarederror",
         n_estimators=100,
         learning_rate=0.1,
         max_depth=5,
@@ -112,51 +112,60 @@ class XGBoost:
 #         print(f"Total parameters: {total_params}")
 #         print(f"Trainable parameters: {trainable_params}")
 
-    # def train_and_evaluate(
-    #     self, X_train, y_train, X_val, y_val, num_epochs, learning_rate
-    # ):
-    #     criterion = nn.MSELoss()
-    #     optimizer = Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-4) 
+# def train_and_evaluate(
+#     self, X_train, y_train, X_val, y_val, num_epochs, learning_rate
+# ):
+#     criterion = nn.MSELoss()
+#     optimizer = Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
-    #     train_loss_curve = []
-    #     val_loss_curve = []
+#     train_loss_curve = []
+#     val_loss_curve = []
 
-    #     X_train, y_train = X_train.cuda(), y_train.cuda()
-    #     X_val, y_val = X_val.cuda(), y_val.cuda()
+#     X_train, y_train = X_train.cuda(), y_train.cuda()
+#     X_val, y_val = X_val.cuda(), y_val.cuda()
 
-    #     for epoch in range(num_epochs):
-    #         self.model.train()
-    #         optimizer.zero_grad()
-    #         outputs = self.model(X_train)
-    #         loss = criterion(outputs, y_train)
-    #         loss.backward()
-    #         optimizer.step()
+#     for epoch in range(num_epochs):
+#         self.model.train()
+#         optimizer.zero_grad()
+#         outputs = self.model(X_train)
+#         loss = criterion(outputs, y_train)
+#         loss.backward()
+#         optimizer.step()
 
-    #         # Evaluate on the validation set
-    #         self.model.eval()
-    #         with torch.no_grad():
-    #             val_outputs = self.model(X_val)
-    #             val_loss = criterion(val_outputs, y_val).item()
+#         # Evaluate on the validation set
+#         self.model.eval()
+#         with torch.no_grad():
+#             val_outputs = self.model(X_val)
+#             val_loss = criterion(val_outputs, y_val).item()
 
-    #         # Record the training and validation loss for this epoch
-    #         train_loss_curve.append(loss.item())
-    #         val_loss_curve.append(val_loss)
+#         # Record the training and validation loss for this epoch
+#         train_loss_curve.append(loss.item())
+#         val_loss_curve.append(val_loss)
 
-    #     # Final evaluation and predictions
-    #     self.model.eval()
-    #     with torch.no_grad():
-    #         y_pred = self.model(X_val)
+#     # Final evaluation and predictions
+#     self.model.eval()
+#     with torch.no_grad():
+#         y_pred = self.model(X_val)
 
-    #     return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
+#     return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
+
 
 # Hook function to inspect BatchNorm outputs
 def inspect_batchnorm_output(module, input, output):
-    print(f'BatchNorm Output Mean: {output.mean().item()}')
-    print(f'BatchNorm Output Variance: {output.var().item()}')
+    print(f"BatchNorm Output Mean: {output.mean().item()}")
+    print(f"BatchNorm Output Variance: {output.var().item()}")
 
 
 class ShallowNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers=3, dropout_rate=0.1, weight_decay=1e-4):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        output_size,
+        num_layers=3,
+        dropout_rate=0.1,
+        weight_decay=1e-4,
+    ):
         super(ShallowNN, self).__init__()
         self.num_layers = num_layers
         self.dropout_rate = dropout_rate
@@ -185,7 +194,7 @@ class ShallowNN(nn.Module):
 
     def forward(self, x):
         return self.network(x)
-    
+
     def predict(self, X):
         """
         Make predictions using the trained model.
@@ -221,11 +230,20 @@ class ShallowNN(nn.Module):
         weight_decay=1e-4,
         dropout_rate=0.1,
         batch_size=64,
-        use_FIM = True
+        use_FIM=True,
     ):
-        model = ShallowNN(input_size, hidden_size, output_size, num_layers, dropout_rate=dropout_rate, weight_decay=weight_decay).cuda()
+        model = ShallowNN(
+            input_size,
+            hidden_size,
+            output_size,
+            num_layers,
+            dropout_rate=dropout_rate,
+            weight_decay=weight_decay,
+        ).cuda()
         criterion = nn.MSELoss()
-        optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay) 
+        optimizer = Adam(
+            model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
 
         # Convert training and validation data into PyTorch tensors
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).cuda()
@@ -246,7 +264,7 @@ class ShallowNN(nn.Module):
 
         # running_mean_mean = []
         # running_var_mean = []
-        
+
         for epoch in range(num_epochs):
             model.train()
             for inputs, targets in train_loader:
@@ -264,8 +282,6 @@ class ShallowNN(nn.Module):
                 # for layer in model.modules():
                 #     if isinstance(layer, nn.BatchNorm1d) or isinstance(layer, nn.BatchNorm2d):
                 #         layer.register_forward_hook(inspect_batchnorm_output)
-
-
 
                 # Validate on the full validation set
                 model.eval()
@@ -286,6 +302,7 @@ class ShallowNN(nn.Module):
     @staticmethod
     def plot_loss_curves(train_losses, val_losses, save_path):
         import matplotlib.pyplot as plt
+
         plt.figure(figsize=(10, 6))
         plt.plot(train_losses, label="Train Loss", color="blue", linewidth=2)
         plt.plot(val_losses, label="Validation Loss", color="red", linewidth=2)

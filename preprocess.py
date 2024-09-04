@@ -23,8 +23,9 @@ from parameter_inference import (
 
 import allel
 
+
 def generate_window(ts, window_length, n_samples):
-    start = np.random.randint(0, n_samples- window_length)
+    start = np.random.randint(0, n_samples - window_length)
     end = start + window_length
     return ts.keep_intervals([[start, end]])
 
@@ -224,9 +225,17 @@ class FeatureExtractor:
         self.moments_analysis = moments_analysis
         self.momentsLD_analysis = momentsLD_analysis
 
-    def process_batch(self, batch_data, analysis_type, stage, features_dict = {}, targets_dict = {}, feature_names = [], normalization=False):
+    def process_batch(
+        self,
+        batch_data,
+        analysis_type,
+        stage,
+        features_dict={},
+        targets_dict={},
+        feature_names=[],
+        normalization=False,
+    ):
 
-        
         if stage != "inference":
             # Original condition that applies when stage is not 'inference'
             if (
@@ -241,20 +250,19 @@ class FeatureExtractor:
             if "opt_params" not in batch_data:
                 print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
                 return
-        
+
         if stage != "inference":
             features, targets = extract_features(
                 simulated_params=batch_data["simulated_params"],
                 opt_params=batch_data[f"opt_params_{analysis_type}"],
-                normalization=normalization
+                normalization=normalization,
             )
         else:
             features = extract_features(
                 simulated_params=None,
                 opt_params=batch_data[f"opt_params"],
-                normalization=normalization
+                normalization=normalization,
             )
-
 
         if analysis_type not in features_dict[stage]:
             features_dict[stage][analysis_type] = []
@@ -262,7 +270,7 @@ class FeatureExtractor:
                 targets_dict[stage][analysis_type] = []
 
         features_dict[stage][analysis_type].extend(features)
-        
+
         if stage != "inference":
             targets_dict[stage][analysis_type].extend(targets)
 
@@ -271,24 +279,25 @@ class FeatureExtractor:
                 f"Nb_opt_{analysis_type}",
                 f"N_recover_opt_{analysis_type}",
                 f"t_bottleneck_start_opt_{analysis_type}",
-                f"t_bottleneck_end_opt_{analysis_type}"
+                f"t_bottleneck_end_opt_{analysis_type}",
             ]
 
         if stage != "inference":
-        
+
             return features_dict, targets_dict, feature_names
         else:
             return features_dict, feature_names
-            
 
         # error_value = root_mean_squared_error(targets, features)
         # print(f"Batch error value for {analysis_type} {stage}: {error_value}")
 
         # visualizing_results(batch_data, save_loc = self.experiment_directory, analysis=f"{analysis_type}_{stage}")
 
-    def finalize_processing(self, features_dict, targets_dict, feature_names, remove_outliers=True):
-        #TODO: I really need to rewrite this whole function. So many errors. 
-        #TODO: Maybe I can just eliminate this entire function altogether. 
+    def finalize_processing(
+        self, features_dict, targets_dict, feature_names, remove_outliers=True
+    ):
+        # TODO: I really need to rewrite this whole function. So many errors.
+        # TODO: Maybe I can just eliminate this entire function altogether.
         """
         This function will create the numpy array of features and targets across all analysis types and stages. If the user specifies to remove outliers, it will remove them from the data and then resample the rows for concatenation
         """
@@ -297,7 +306,7 @@ class FeatureExtractor:
             for analysis_type in features_dict[stage]:
                 features = np.array(features_dict[stage][analysis_type])
 
-                if targets_dict: # i.e. if we are not in inference mode
+                if targets_dict:  # i.e. if we are not in inference mode
                     targets = np.array(targets_dict[stage][analysis_type])
 
                     outlier_indices = find_outlier_indices(features)
@@ -315,7 +324,7 @@ class FeatureExtractor:
                         features = np.delete(features, outlier_indices, axis=0)
                         targets = np.delete(targets, outlier_indices, axis=0)
                         # self.resample_features_and_targets(stage)
-                
+
                     targets_dict[stage][analysis_type] = targets
 
                 features_dict[stage][analysis_type] = features
@@ -325,12 +334,20 @@ class FeatureExtractor:
 
         if targets_dict:
             concatenated_features, concatenated_targets = (
-                self.concatenate_features_and_targets(stage = stage, feature_names=feature_names, features_dict=features_dict, targets_dict=targets_dict)
-            ) #type:ignore
+                self.concatenate_features_and_targets(
+                    stage=stage,
+                    feature_names=feature_names,
+                    features_dict=features_dict,
+                    targets_dict=targets_dict,
+                )
+            )  # type:ignore
         else:
-            concatenated_features = (
-                self.concatenate_features_and_targets(stage = stage, feature_names=feature_names, features_dict=features_dict, targets_dict=None)
-            ) #type:ignore
+            concatenated_features = self.concatenate_features_and_targets(
+                stage=stage,
+                feature_names=feature_names,
+                features_dict=features_dict,
+                targets_dict=None,
+            )  # type:ignore
 
         if targets_dict:
             return concatenated_features, concatenated_targets, feature_names
@@ -339,7 +356,9 @@ class FeatureExtractor:
 
     # TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
     @staticmethod
-    def concatenate_features_and_targets(feature_names, features_dict, targets_dict, stage):
+    def concatenate_features_and_targets(
+        feature_names, features_dict, targets_dict, stage
+    ):
         concatenated_features = {}
         concatenated_targets = {}
         concatenated_feature_names = []
@@ -350,42 +369,48 @@ class FeatureExtractor:
 
         for stage_key in features_dict:
             all_features = []
-            all_targets = [] if stage != 'inference' else None
-            
-            for analysis_type in sorted(features_dict[stage_key].keys()):  # Sort to ensure consistent order
+            all_targets = [] if stage != "inference" else None
+
+            for analysis_type in sorted(
+                features_dict[stage_key].keys()
+            ):  # Sort to ensure consistent order
                 all_features.append(features_dict[stage_key][analysis_type])
-                if stage != 'inference':
-                    all_targets.append(targets_dict[stage_key][analysis_type]) #type:ignore
+                if stage != "inference":
+                    all_targets.append(
+                        targets_dict[stage_key][analysis_type]
+                    )  # type:ignore
 
             # Find the minimum number of samples across all analysis types
             min_samples = min(len(features) for features in all_features)
 
             # Resample features (and targets, if not in inference mode) to have the same number of samples
             resampled_features = []
-            resampled_targets = [] if stage != 'inference' else None
-            
+            resampled_targets = [] if stage != "inference" else None
+
             for features, targets in zip(all_features, all_targets or []):
                 if len(features) > min_samples:
                     resampled_features.append(
                         resample(features, n_samples=min_samples, random_state=42)
                     )
-                    if stage != 'inference':
-                        resampled_targets.append( #type:ignore
+                    if stage != "inference":
+                        resampled_targets.append(  # type:ignore
                             resample(targets, n_samples=min_samples, random_state=42)
-                        ) 
+                        )
                 else:
                     resampled_features.append(features)
-                    if stage != 'inference':
-                        resampled_targets.append(targets) #type:ignore
+                    if stage != "inference":
+                        resampled_targets.append(targets)  # type:ignore
 
             # Concatenate the resampled features (and targets, if not in inference mode)
             if targets_dict == {}:
                 resampled_features = all_features.copy()
-            
+
             concatenated_features[stage_key] = np.hstack(resampled_features)
-            
-            if stage != 'inference':
-                concatenated_targets[stage_key] = resampled_targets[0]  # Assuming targets are the same for all analysis types #type:ignore
+
+            if stage != "inference":
+                concatenated_targets[stage_key] = resampled_targets[
+                    0
+                ]  # Assuming targets are the same for all analysis types #type:ignore
 
             # Uncomment these lines if you need to debug shapes
             # print(f"Stage: {stage_key}")
@@ -394,12 +419,11 @@ class FeatureExtractor:
             #     print(f"  Concatenated targets shape: {concatenated_targets[stage_key].shape}")
 
             # Return concatenated_features if stage is 'inference'
-            if stage == 'inference':
+            if stage == "inference":
                 return concatenated_features
 
             # Otherwise, return both concatenated_features and concatenated_targets
             return concatenated_features, concatenated_targets
-
 
     # TODO: Again, need to modify this s.t. I am not relying on the class instances for any of this.
     def resample_features_and_targets(self, features_dict, targets_dict, stage):
@@ -425,10 +449,11 @@ class FeatureExtractor:
         # for analysis_type in analysis_types:
         #     print(f"Samples for {stage}:{analysis_type} after resampling: {len(self.features[stage][analysis_type])}")
 
+
 def get_dicts(list_of_mega_result_dicts):
-    '''
+    """
     Concatenate the values for each subdict and each main key across list elements
-    '''
+    """
 
     merged_dict = {}
 
@@ -455,7 +480,6 @@ def get_dicts(list_of_mega_result_dicts):
                 merged_dict[key] = value
 
     return merged_dict
-
 
 
 class Processor:
@@ -497,10 +521,6 @@ class Processor:
 
         self.folderpath = f"{self.experiment_directory}/sampled_genome_windows"
 
-        # Not sure if the below code is necessary yet.
-        # self.temporary_realizations_location = os.path.join(os.getcwd(), "temporary_folder_realizations")
-        # os.makedirs(self.temporary_realizations_location, exist_ok=True)
-
     def bottleneck_model(self, sampled_params):
 
         N0, nuB, nuF, t_bottleneck_start, t_bottleneck_end = (
@@ -523,28 +543,6 @@ class Processor:
 
         return g
 
-    # @ray.remote
-    # def get_random_windows(self, ts, window_length, num_windows):
-    #     """
-    #     Get random windows from the tree sequence.
-
-    #     Parameters:
-    #     - ts: tskit.TreeSequence object
-    #     - window_length: Length of each window (in base pairs)
-    #     - num_windows: Number of random windows to extract
-
-    #     Returns:
-    #     - windows: List of tskit.TreeSequence objects containing the random windows
-    #     """
-    #     windows = []
-    #     n_samples = int(ts.sequence_length - window_length)
-    #     for _ in range(num_windows):
-    #         start = np.random.randint(0, n_samples)
-    #         end = start + window_length
-    #         windows.append(ts.keep_intervals([[start, end]])) #TODO: Use genetic distance instead of base pairs
-
-    #     return windows
-
     def run_msprime_replicates(self, g):
         delete_vcf_files(self.folderpath)
         demog = msprime.Demography.from_demes(g)
@@ -560,18 +558,15 @@ class Processor:
         self.folderpath = f"{self.experiment_directory}/sampled_genome_windows"
         os.makedirs(self.folderpath, exist_ok=True)
 
-        # delete_vcf_files(self.folderpath)
-
         # Generate random windows in parallel
 
-        windows = [generate_window(ts, self.window_length, self.L) for _ in range(self.num_windows)]
+        windows = [
+            generate_window(ts, self.window_length, self.L)
+            for _ in range(self.num_windows)
+        ]
 
-        # windows = self.get_random_windows(ts, self.window_length, self.num_windows)
-
-        # parallel_process_windows(windows, self.folderpath)
-
-        for ii, ts_window in tqdm(enumerate(windows), total = len(windows)):
-            vcf_name = os.path.join(self.folderpath,f"bottleneck_window.{ii}.vcf")
+        for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
+            vcf_name = os.path.join(self.folderpath, f"bottleneck_window.{ii}.vcf")
             with open(vcf_name, "w+") as fout:
                 ts_window.write_vcf(fout, allow_position_zero=True)
             os.system(f"gzip {vcf_name}")
@@ -603,83 +598,77 @@ class Processor:
 
         return sampled_params
 
-    @staticmethod
-    def create_SFS(sampled_params, mode, num_samples, length = 1e7, mutation_rate = 1.26e-8, **kwargs):
+    def create_SFS(self, 
+        sampled_params, mode, num_samples, length=1e7, mutation_rate=1.26e-8, **kwargs
+    ):
         """
         If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
 
         """
 
         if mode == "pretrain":
-
-            demography = msprime.Demography()
-            demography.add_population(
-                name="A", initial_size=sampled_params["N_recover"]
+        
+            g = self.bottleneck_model(sampled_params)
+                
+            demog = msprime.Demography.from_demes(g)
+            ts = msprime.sim_ancestry(
+                {"A": self.num_samples},
+                demography=demog,
+                sequence_length=self.L,
+                recombination_rate=self.recombination_rate,
+                random_seed=295,
             )
-            demography.add_population_parameters_change(
-                sampled_params["t_bottleneck_end"], initial_size=sampled_params["Nb"]
-            )
-            demography.add_population_parameters_change(
-                sampled_params["t_bottleneck_start"], initial_size=sampled_params["N0"]
-            )
+            ts = msprime.sim_mutations(ts, rate=mutation_rate)
+            
+            # Now create the SFS
+            sfs = ts.allele_frequency_spectrum(mode="site", polarised=True)
+                        
+            # multiply sfs by L
+            sfs *= length
 
-            demes_model = demography.to_demes()
+            sfs = moments.Spectrum(sfs)
 
-            sfs = demes_obj.SFS(
-                demes_model,
-                sampled_demes=["A"],
-                sample_sizes=[2 * num_samples],
-                # Ne = sampled_params["N0"]
-                u = mutation_rate
-            )
-
-            #multiply sfs by L
-            sfs*=length
-
+            
+            
         elif mode == "inference":
-            vcf_file = kwargs.get('vcf_file', None)
-            pop_file = kwargs.get('pop_file', None)
-            popname = kwargs.get('popname', None)
-            
+            vcf_file = kwargs.get("vcf_file", None)
+            pop_file = kwargs.get("pop_file", None)
+            popname = kwargs.get("popname", None)
+
             if vcf_file is None or pop_file is None:
-                raise ValueError("vcf_file and pop_file must be provided in inference mode.")
-            
+                raise ValueError(
+                    "vcf_file and pop_file must be provided in inference mode."
+                )
+
             dd = dadi.Misc.make_data_dict_vcf(vcf_file, pop_file)
-            sfs = dadi.Spectrum.from_data_dict(dd, [popname], projections = [2*num_samples], polarized = True)
+            sfs = dadi.Spectrum.from_data_dict(
+                dd, [popname], projections=[2 * num_samples], polarized=True
+            )
 
         return sfs
 
     def pretrain_processing(self, indices_of_interest):
-        '''
-        This really should be subdivided into more functions so that when we do inference I can separately call the helper functions. 
-        '''
-
-        # Initialize lists to store results
-        # sample_params_storage = []
-        # model_sfs = []
-
-        # opt_params_dadi_list = []
-        # model_sfs_dadi_list = []
-        # opt_theta_dadi_list = []
-
-        # opt_params_moments_list = []
-        # model_sfs_moments_list = []
-        # opt_theta_moments_list = []
-
-        # opt_params_momentsLD_list = []
+        """
+        This really should be subdivided into more functions so that when we do inference I can separately call the helper functions.
+        """
 
         list_of_mega_result_dicts = []
 
         for i in tqdm(range(len(indices_of_interest))):
-            mega_result_dict = {} # This will store all the results (downstream postprocessing) later
+            mega_result_dict = (
+                {}
+            )  # This will store all the results (downstream postprocessing) later
 
             sampled_params = self.sample_params()
-            sfs = self.create_SFS(sampled_params, mode = "pretrain", num_samples=self.num_samples, length = self.L, mutation_rate=self.mutation_rate)
+            sfs = self.create_SFS(
+                sampled_params,
+                mode="pretrain",
+                num_samples=self.num_samples,
+                length=self.L,
+                mutation_rate=self.mutation_rate,
+            )
 
-            mega_result_dict = {
-                "simulated_params": sampled_params,
-                "sfs": sfs
-            }
+            mega_result_dict = {"simulated_params": sampled_params, "sfs": sfs}
 
             # Simulate process and save windows as VCF files
             if self.experiment_config["momentsLD_analysis"]:
@@ -688,35 +677,31 @@ class Processor:
                 samples_file, flat_map_file = self.write_samples_and_rec_map()
 
             # Conditional analysis based on provided functions
-            if self.experiment_config['dadi_analysis']:
-                model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi(
-                    sfs,
-                    p0=[0.25, 0.75, 0.1, 0.05],
-                    lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
-                    upper_bound=[None, None, None, None],
-                    sampled_params=sampled_params,
-                    num_samples=self.num_samples,
-                    maxiter=self.maxiter,
-                    mutation_rate=self.mutation_rate,
-                    length = self.L
+            if self.experiment_config["dadi_analysis"]:
+                model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = (
+                    run_inference_dadi(
+                        sfs,
+                        p0=[0.25, 0.75, 0.1, 0.05],
+                        lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+                        upper_bound=[None, None, None, None],
+                        sampled_params=sampled_params,
+                        num_samples=self.num_samples,
+                        maxiter=self.maxiter,
+                        mutation_rate=self.mutation_rate,
+                        length=self.L,
+                    )
                 )
-                # results.update(
-                #     {
-                #         "opt_params_dict_dadi": opt_params_dict_dadi,
-                #         "model_sfs_dadi": model_sfs_dadi,
-                #         "opt_theta_dadi": opt_theta_dadi,
-                #     }
-                # )
+
 
                 dadi_results = {
-                    'model_sfs_dadi': model_sfs_dadi, 
-                    'opt_theta_dadi': opt_theta_dadi,
-                    'opt_params_dadi': opt_params_dict_dadi
+                    "model_sfs_dadi": model_sfs_dadi,
+                    "opt_theta_dadi": opt_theta_dadi,
+                    "opt_params_dadi": opt_params_dict_dadi,
                 }
 
                 mega_result_dict.update(dadi_results)
 
-            if self.experiment_config['moments_analysis']:
+            if self.experiment_config["moments_analysis"]:
                 model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
                     run_inference_moments(
                         sfs,
@@ -725,16 +710,16 @@ class Processor:
                         upper_bound=[None, None, None, None],
                         sampled_params=sampled_params,
                         maxiter=self.maxiter,
-                        use_FIM = self.experiment_config["use_FIM"],
+                        use_FIM=self.experiment_config["use_FIM"],
                         mutation_rate=self.mutation_rate,
-                        length = self.L
+                        length=self.L,
                     )
                 )
 
                 moments_results = {
-                    'model_sfs_moments': model_sfs_moments,
-                    'opt_theta_moments': opt_theta_moments,
-                    'opt_params_moments': opt_params_dict_moments
+                    "model_sfs_moments": model_sfs_moments,
+                    "opt_theta_moments": opt_theta_moments,
+                    "opt_params_moments": opt_params_dict_moments,
                 }
 
                 mega_result_dict.update(moments_results)
@@ -747,123 +732,21 @@ class Processor:
                 #     }
                 # )
 
-            if self.experiment_config['momentsLD_analysis']:
+            if self.experiment_config["momentsLD_analysis"]:
                 opt_params_momentsLD = run_inference_momentsLD(
                     folderpath=self.folderpath,
                     num_windows=self.num_windows,
                     param_sample=sampled_params,
                     p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
-                    maxiter=self.maxiter
+                    maxiter=self.maxiter,
                 )
 
-                momentsLD_results = {
-                    'opt_params_momentsLD': opt_params_momentsLD
-                }
+                momentsLD_results = {"opt_params_momentsLD": opt_params_momentsLD}
 
                 mega_result_dict.update(momentsLD_results)
 
                 # results.update({"opt_params_momentsLD": opt_params_momentsLD})
-            
+
             list_of_mega_result_dicts.append(mega_result_dict)
 
         return get_dicts(list_of_mega_result_dicts)
-
-            # sample_params_storage.append(results["sampled_params"])
-            # model_sfs.append(results["sfs"])
-
-            # if self.experiment_config["dadi_analysis"]:
-            #     opt_params_dadi_list.append(results["opt_params_dict_dadi"])
-            #     model_sfs_dadi_list.append(results["model_sfs_dadi"])
-            #     opt_theta_dadi_list.append(results["opt_theta_dadi"])
-
-            # if self.experiment_config["moments_analysis"]:
-            #     opt_params_moments_list.append(results["opt_params_dict_moments"])
-            #     model_sfs_moments_list.append(results["model_sfs_moments"])
-            #     opt_theta_moments_list.append(results["opt_theta_moments"])
-
-            # if self.experiment_config["momentsLD_analysis"]:
-            #     opt_params_momentsLD_list.append(results["opt_params_momentsLD"])
-
-        # Create the output dictionaries
-        #TODO: Modify these data dictionary creations to remove "simulated_params". Or just modify it to be compatible with the inference mode object. 
-        # dadi_dict = (
-        #     {
-        #         "model_sfs": model_sfs,
-        #         "simulated_params": sample_params_storage,
-        #         "opt_params": opt_params_dadi_list,
-        #         "model_sfs": model_sfs_dadi_list,
-        #         "opt_theta": opt_theta_dadi_list,
-        #     }
-        #     if self.experiment_config["dadi_analysis"]
-        #     else {}
-        # )
-
-        # moments_dict = (
-        #     {
-        #         "model_sfs": model_sfs,
-        #         "simulated_params": sample_params_storage,
-        #         "opt_params": opt_params_moments_list,
-        #         "model_sfs": model_sfs_moments_list,
-        #         "opt_theta": opt_theta_moments_list,
-        #     }
-        #     if self.experiment_config["moments_analysis"]
-        #     else {}
-        # )
-
-        # momentsLD_dict = (
-        #     {
-        #         "simulated_params": sample_params_storage,
-        #         "opt_params": opt_params_momentsLD_list,
-        #     }
-        #     if self.experiment_config["momentsLD_analysis"]
-        #     else {}
-        # )
-
-        # print("Length of dadi preprocessing (i.e. number of simulations): ", len(dadi_dict["model_sfs"]))
-        # print("Length of moments preprocessing (i.e. number of simulations): ", len(moments_dict["model_sfs"]))
-        # # print("Length of momentsLD preprocessing (i.e. number of simulations): ", len(momentsLD_dict["opt_params"]))
-
-        # return dadi_dict, moments_dict, momentsLD_dict
-
-
-    # def inference(self, vcf_file, popinfo_file, popname):
-    #     '''
-    #     Placeholder code for evaluating the trained model on the GHIST data. 
-    #     '''
-
-    #     # vcf_data = allel.read_vcf(vcf_file)
-    #     # num_samples = len(vcf_data['samples'])
-
-    #     dd = dadi.Misc.make_data_dict_vcf(vcf_data, popinfo_file)
-    #     fs = dadi.Spectrum.from_data_dict(dd, [popname], projections = [2*self.num_samples], polarized = True)
-
-    #     p0=[0.25, 0.75, 0.1, 0.05]
-    #     lower_bound=[0.001, 0.001, 0.001, 0.001]
-    #     upper_bound=[10, 10, 10, 10]
-    #     sampled_params = None
-
-    #     model, opt_theta, opt_params_dict = run_inference_dadi(
-    #         fs,
-    #         p0,
-    #         sampled_params,
-    #         self.num_samples,
-    #         lower_bound=[0.001, 0.001, 0.001, 0.001],
-    #         upper_bound=[10, 10, 10, 10],
-    #         maxiter=self.maxiter
-    #     )
-
-    #     for name, data in [
-    #         ("dadi", dadi_dict),
-    #         ("moments", moments_dict),
-    #         ("momentsLD", momentsLD_dict),
-    #     ]:
-    #         filename = f"{name}_dict_{data_type}.pkl"
-    #         save_dict_to_pickle(data, filename, experiment_directory)
-
-
-
-
-
-
-
-

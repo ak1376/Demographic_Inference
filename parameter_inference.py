@@ -7,6 +7,8 @@ import ray
 import time
 from dadi.Godambe import get_godambe
 from moments.Godambe import _get_godambe
+import nlopt
+
 
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
     start_time = time.time()
@@ -46,25 +48,24 @@ def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
     return futures
 
 
-# TODO: Get rid of sampled_params
 def run_inference_dadi(
     sfs,
     p0,
     sampled_params,
     num_samples,
-    lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
-    upper_bound=[100, 100, 100, 100],
-    maxiter=20,
-    mutation_rate = 1.26e-8,
-    length = 1e7
-    
-    ):
+    lower_bound=[0.001, 0.001, 0.001, 0.001],
+    upper_bound=[1, 1, 1, 1],
+    maxiter=100,
+    mutation_rate=1.26e-8,
+    length=1e8
+):
     """
     This should do the parameter inference for dadi
     """
 
     model_func = dadi.Demographics1D.three_epoch
-
+    pts_ext = [40, 50, 60]
+    func_ex = dadi.Numerics.make_extrap_log_func(model_func)
     # Make the extrapolating version of our demographic model function.
     # func_ex = dadi.Numerics.make_extrap_log_func(model_func)
 
@@ -72,37 +73,46 @@ def run_inference_dadi(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
     start = time.time()
-    
-    opt_params = dadi.Inference.optimize_log_lbfgsb(
+
+    # print(f'GUESS PARAMETER: {p_guess}')
+
+    opt_params = dadi.Inference.opt(
         p_guess,
         sfs,
-        model_func,
-        pts=2 * num_samples,
+        func_ex,
+        pts=pts_ext,
         lower_bound=lower_bound,
         upper_bound=upper_bound,
-        maxiter=maxiter, 
+        algorithm=nlopt.LN_BOBYQA,
+        maxeval=10
+        # maxiter=maxiter,
     )
+
+    opt_params = opt_params[0]
+
+    print(f'OPT DADI PARAMETER: {opt_params}')
+
+
     end = time.time()
     # print(f"Dadi optimization took {end - start} seconds")
 
-    model = model_func(opt_params, sfs.sample_sizes, 2 * num_samples)
-
+    model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
 
-    N_ref = opt_theta/(4*mutation_rate*length)
+    N_ref = opt_theta / (4 * mutation_rate * length)
+
+    
 
     opt_params_dict = {
         "N0": N_ref,
         "Nb": opt_params[0] * N_ref,
         "N_recover": opt_params[1] * N_ref,
-        "t_bottleneck_end": opt_params[3] * 2 * N_ref, #type: ignore
-        "t_bottleneck_start": opt_params[2] * 2 * N_ref  # type: ignore
+        "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
+        "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
     }
 
     model = model * opt_theta
-
     return model, opt_theta, opt_params_dict
-
 
 def run_inference_moments(
     sfs,
@@ -112,8 +122,8 @@ def run_inference_moments(
     upper_bound=[100, 100, 100, 100],
     maxiter=20,
     use_FIM=False,
-    mutation_rate = 1.26e-8,
-    length = 1e7,
+    mutation_rate=1.26e-8,
+    length=1e7,
 ):
     """
     This should do the parameter inference for moments
@@ -126,7 +136,7 @@ def run_inference_moments(
 
     start = time.time()
 
-    opt_params = moments.Inference.optimize_log_lbfgsb(
+    opt_params = moments.Inference.optimize_log_fmin(
         p_guess,
         sfs,
         model_func,
@@ -135,11 +145,14 @@ def run_inference_moments(
         maxiter=maxiter,
     )
 
+    print(f'OPT MOMENTS PARAMETER: {opt_params}')
+
+
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
 
-    N_ref = opt_theta/(4*mutation_rate*length)
-    
+    N_ref = opt_theta / (4 * mutation_rate * length)
+
     end = time.time()
 
     # uncerts = moments.Godambe.FIM_uncert(
@@ -149,14 +162,22 @@ def run_inference_moments(
 
         # Let's extract the hessian
         # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
-        H = _get_godambe(model_func, all_boot = [], p0 = opt_params, data = sfs, eps = 1e-6, log=False, just_hess=True)
-        FIM = -1*H
+        H = _get_godambe(
+            model_func,
+            all_boot=[],
+            p0=opt_params,
+            data=sfs,
+            eps=1e-6,
+            log=False,
+            just_hess=True,
+        )
+        FIM = -1 * H
 
         # Get the indices of the upper triangular part (including the diagonal)
-        upper_tri_indices = np.triu_indices(FIM.shape[0]) #type: ignore
+        upper_tri_indices = np.triu_indices(FIM.shape[0])  # type: ignore
 
         # Extract the upper triangular elements
-        upper_triangular = FIM[upper_tri_indices] #type: ignore
+        upper_triangular = FIM[upper_tri_indices]  # type: ignore
 
     else:
         upper_triangular = None
@@ -173,9 +194,9 @@ def run_inference_moments(
         "N0": N_ref,
         "Nb": opt_params[0] * N_ref,
         "N_recover": opt_params[1] * N_ref,
-        "t_bottleneck_end": opt_params[3] * 2 * N_ref, #type: ignore
-        "t_bottleneck_start": opt_params[2] * 2 * N_ref, #type: ignore
-        "upper_triangular_FIM": upper_triangular
+        "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
+        "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
+        "upper_triangular_FIM": upper_triangular,
     }
 
     if opt_params_dict["upper_triangular_FIM"] is None:

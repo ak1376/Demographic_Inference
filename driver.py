@@ -36,35 +36,35 @@ warnings.filterwarnings(
 # }
 
 upper_bound_params = {
-"N0": 10000,
-"Nb": 5000,
-"N_recover": 7000,
-"t_bottleneck_end": 1000,
-"t_bottleneck_start": 2000
+    "N0": 10000,
+    "Nb": 5000,
+    "N_recover": 7000,
+    "t_bottleneck_end": 1000,
+    "t_bottleneck_start": 2000,
 }
 lower_bound_params = {
-"N0": 8000,
-"Nb": 4000,
-"N_recover": 6000,
-"t_bottleneck_end": 800,
-"t_bottleneck_start": 1500
+    "N0": 8000,
+    "Nb": 4000,
+    "N_recover": 6000,
+    "t_bottleneck_end": 800,
+    "t_bottleneck_start": 1500,
 }
 model_config = {
-"input_size": 10,
-"hidden_size": 1000,
-"output_size": 5,
-"num_epochs": 1000,
-"learning_rate": 3e-4,
-"num_layers": 3,
-"dropout_rate": 0,
-"weight_decay": 0
+    "input_size": 10,
+    "hidden_size": 1000,
+    "output_size": 5,
+    "num_epochs": 1000,
+    "learning_rate": 3e-4,
+    "num_layers": 3,
+    "dropout_rate": 0,
+    "weight_decay": 0,
 }
 
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 10,
-    "num_sims_inference": 10,
+    "num_sims_pretrain": 5,
+    "num_sims_inference": 5,
     "num_samples": 20,
     "experiment_name": "dadi_moments_analysis_new",
     "dadi_analysis": True,
@@ -80,12 +80,14 @@ config = {
     "normalization": False,
     "remove_outliers": True,
     "use_FIM": False,
-    "neural_net_hyperparameters": model_config
+    "neural_net_hyperparameters": model_config,
 }
 
 linear_experiment = Experiment_Manager(config)
 linear_experiment.obtaining_features()
-preprocessing_results_obj = linear_experiment.load_features(f"{os.getcwd()}/experiments/dadi_moments_analysis_new/preprocessing_results_obj.pkl")
+preprocessing_results_obj = linear_experiment.load_features(
+    f"{os.getcwd()}/experiments/dadi_moments_analysis_new/preprocessing_results_obj.pkl"
+)
 # preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/Demographic_Inference/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]
 training_targets = preprocessing_results_obj["training"]["targets"]
@@ -95,13 +97,39 @@ validation_targets = preprocessing_results_obj["validation"]["targets"]
 testing_features = preprocessing_results_obj["testing"]["predictions"]
 testing_targets = preprocessing_results_obj["testing"]["targets"]
 
-trainer = Trainer(experiment_directory=linear_experiment.experiment_directory, model_config=model_config, use_FIM=config['use_FIM'])
-snn_model, train_losses, val_losses = trainer.train(training_features, training_targets, validation_features, validation_targets, visualize = True)
-trainer.predict(snn_model, training_features, validation_features, training_targets, validation_targets, visualize = True)
-inference_obj = Inference(vcf_filepath = 'GHIST-bottleneck.vcf.gz', txt_filepath='wisent.txt', popname = 'wisent', config = config, experiment_directory=linear_experiment.experiment_directory)
+trainer = Trainer(
+    experiment_directory=linear_experiment.experiment_directory,
+    model_config=model_config,
+    use_FIM=config["use_FIM"],
+)
+snn_model, train_losses, val_losses = trainer.train(
+    training_features,
+    training_targets,
+    validation_features,
+    validation_targets,
+    visualize=True,
+)
+trainer.predict(
+    snn_model,
+    training_features,
+    validation_features,
+    training_targets,
+    validation_targets,
+    visualize=True,
+)
+inference_obj = Inference(
+    vcf_filepath="GHIST-bottleneck.vcf.gz",
+    txt_filepath="wisent.txt",
+    popname="wisent",
+    config=config,
+    experiment_directory=linear_experiment.experiment_directory,
+)
 inference_obj.obtain_features()
 
-with open(f"{os.getcwd()}/experiments/dadi_moments_analysis_new/inference_results_obj.pkl", 'rb') as file:
+with open(
+    f"{os.getcwd()}/experiments/dadi_moments_analysis_new/inference_results_obj.pkl",
+    "rb",
+) as file:
     inference_results = pickle.load(file)
 
 inference_obj.evaluate_model(snn_model, inference_results)
