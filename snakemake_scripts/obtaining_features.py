@@ -12,6 +12,7 @@ from utils import (
     calculate_model_errors,
     root_mean_squared_error,
     calculate_and_save_rrmse,
+    find_outlier_indices
 )
 import json
 
@@ -194,6 +195,21 @@ def obtain_features(
 
     preprocessing_results_obj["testing"]["predictions"] = testing_features
     preprocessing_results_obj["testing"]["targets"] = testing_targets
+
+    for stage in preprocessing_results_obj:
+
+        features = preprocessing_results_obj[stage]["predictions"]
+        targets = preprocessing_results_obj[stage]["targets"]
+
+        print(f'FEATURES SHAPE: {features.shape}')
+        outlier_indices = find_outlier_indices(features)
+        # print(outlier_indices)
+
+        if remove_outliers:
+            features = np.delete(features, outlier_indices, axis=0)
+            targets = np.delete(targets, outlier_indices, axis=0)
+
+            print(f"Removed {len(outlier_indices)} outliers from {stage} set.")
 
     # Assuming features_dict and targets_dict are already defined
     rrmse_dict = calculate_and_save_rrmse(

@@ -494,6 +494,9 @@ def find_outlier_indices(data, threshold=3):
     z_scores = np.abs((data - np.mean(data, axis=0)) / np.std(data, axis=0))
     outliers_indices = np.where(z_scores > threshold)[0]  # I only want the rows
 
+    if len(outliers_indices)>0:
+        print(f"Found {len(outliers_indices)} outliers")
+
     return outliers_indices
 
 

@@ -18,6 +18,7 @@ from utils import (
     process_and_save_data,
     calculate_and_save_rrmse,
     root_mean_squared_error,
+    find_outlier_indices
 )
 from sklearn.linear_model import LinearRegression
 import joblib
@@ -158,6 +159,10 @@ class Experiment_Manager:
                 concatenated_array = np.column_stack(
                     [dadi_dict["opt_params"][key] for key in dadi_dict["opt_params"]]
                 )
+
+                # Need to find the outliers 
+                outlier_indices = find_outlier_indices(concatenated_array)
+
                 features_dict[stage]["dadi"] = concatenated_array
 
                 if dadi_dict["simulated_params"]:
@@ -244,6 +249,16 @@ class Experiment_Manager:
         preprocessing_results_obj["testing"]["predictions"] = testing_features
         preprocessing_results_obj["testing"]["targets"] = testing_targets
 
+        for stage in preprocessing_results_obj:
+
+            features = preprocessing_results_obj[stage]["predictions"]
+            outlier_indices = find_outlier_indices(features)
+            print(outlier_indices)
+
+            if self.remove_outliers:
+                features = np.delete(features, outlier_indices, axis=0)
+
+        
         # Assuming features_dict and targets_dict are already defined
         rrmse_dict = calculate_and_save_rrmse(
             features_dict,
