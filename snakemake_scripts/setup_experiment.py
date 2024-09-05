@@ -27,10 +27,6 @@ def main(config_path):
     with open(config_file, "r") as f:
         config = json.load(f)
 
-    print("====================================================")
-    print(f"CONFIGURATION FILE: {config['momentsLD_analysis']}")
-    print("====================================================")
-
     # Create the Experiment_Manager object
     linear_experiment = create_experiment(config)
 
@@ -42,7 +38,6 @@ def main(config_path):
 
     # Define file paths
     config_file = os.path.join(experiment_directory, "config.json")
-    print(f"CONFIG FILE PATH: {config_file}")
     experiment_obj_file = os.path.join(experiment_directory, "experiment_obj.pkl")
     model_config_file = os.path.join(experiment_directory, "model_config.json")
 

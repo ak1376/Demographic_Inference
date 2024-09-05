@@ -1,38 +1,46 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import pickle 
+import pickle
 import moments
 
-dadi_dict = '/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/dadi_dict.pkl'
-with open(dadi_dict, 'rb') as f:
+dadi_dict = (
+    "/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/dadi_dict.pkl"
+)
+with open(dadi_dict, "rb") as f:
     dadi_dict = pickle.load(f)
 
-moments_dict = '/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/moments_dict.pkl'
-with open(moments_dict, 'rb') as f:
+moments_dict = "/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/moments_dict.pkl"
+with open(moments_dict, "rb") as f:
     moments_dict = pickle.load(f)
 
-# Load in the generative demographic parameters 
+# Load in the generative demographic parameters
 
-generative_params = '/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/generative_params.pkl'
-with open(generative_params, 'rb') as f:
+generative_params = "/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/generative_params.pkl"
+with open(generative_params, "rb") as f:
     generative_params = pickle.load(f)
 
-# Load in the indices for the outliers for both moments and dadi 
-moments_outliers = pd.read_csv('/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/outlier_indices_moments.csv', header = None)
-moments_outliers = moments_outliers[0].values.astype(int)   
+# Load in the indices for the outliers for both moments and dadi
+moments_outliers = pd.read_csv(
+    "/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/outlier_indices_moments.csv",
+    header=None,
+)
+moments_outliers = moments_outliers[0].values.astype(int)
 generative_params_outliers_moments = [generative_params[i] for i in moments_outliers]
 
 # Read the CSV file
-dadi_outliers = pd.read_csv('/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/outlier_indices_dadi.csv', header=None)
+dadi_outliers = pd.read_csv(
+    "/sietch_colab/akapoor/experiments/archive/linear_model_bottleneck_5/outlier_indices_dadi.csv",
+    header=None,
+)
 dadi_outliers = dadi_outliers[0].values.astype(int)
 generative_params_outliers_dadi = [generative_params[i] for i in dadi_outliers]
 
-# Let's do moments first 
+# Let's do moments first
 
-# I want to see detailed information on the optimization procedure for these outlier values . 
+# I want to see detailed information on the optimization procedure for these outlier values .
 
-# Let's just do one example first: 
+# Let's just do one example first:
 
 sampled_params = generative_params_outliers_moments[0]
 
@@ -44,17 +52,19 @@ input_theta = 10000
 
 sampled_params = {}
 
-sampled_params['N0'] = 10000
-sampled_params['Nb'] = 8000
-sampled_params['N_recover'] = 9000
-sampled_params['t_bottleneck_end'] = 400
-sampled_params['t_bottleneck_start'] = 500
+sampled_params["N0"] = 10000
+sampled_params["Nb"] = 8000
+sampled_params["N_recover"] = 9000
+sampled_params["t_bottleneck_end"] = 400
+sampled_params["t_bottleneck_start"] = 500
 
 
-nuB = sampled_params['Nb']/sampled_params['N0']
-nuF = sampled_params['N_recover']/sampled_params['N0']
-TB = (sampled_params['t_bottleneck_start'] - sampled_params['t_bottleneck_end'])/(2*sampled_params['N0'])
-TF = sampled_params['t_bottleneck_end']/(2*sampled_params['N0'])
+nuB = sampled_params["Nb"] / sampled_params["N0"]
+nuF = sampled_params["N_recover"] / sampled_params["N0"]
+TB = (sampled_params["t_bottleneck_start"] - sampled_params["t_bottleneck_end"]) / (
+    2 * sampled_params["N0"]
+)
+TF = sampled_params["t_bottleneck_end"] / (2 * sampled_params["N0"])
 
 params = [nuB, nuF, TB, TF]
 model_func = moments.Demographics1D.three_epoch
@@ -65,40 +75,54 @@ data = model.sample()
 plt.figure()
 plt.hist(np.array(data))
 plt.show()
-plt.savefig('bottleneck_sfs.png')
+plt.savefig("bottleneck_sfs.png")
 
 p_guess = [0.75, 0.85, 0.1, 0.01]
 lower_bound = [1e-4, 1e-4, 1e-4, 1e-4]
 upper_bound = [1, 1, 1, 1]
 
 p_guess = moments.Misc.perturb_params(
-    p_guess, lower_bound=lower_bound, upper_bound=upper_bound)
+    p_guess, lower_bound=lower_bound, upper_bound=upper_bound
+)
 
 opt_params = moments.Inference.optimize_log_fmin(
-    p_guess, data, model_func,
-    lower_bound=lower_bound, upper_bound=upper_bound,
-    verbose=20) # report every 20 iterations
+    p_guess,
+    data,
+    model_func,
+    lower_bound=lower_bound,
+    upper_bound=upper_bound,
+    verbose=20,
+)  # report every 20 iterations
 
 # refit_theta = moments.Inference.optimal_sfs_scaling(
 #     model_func(opt_params, data.sample_sizes), data)
 
 p_guess = moments.Misc.perturb_params(
-    opt_params, lower_bound=lower_bound, upper_bound=upper_bound, fold = 2)
+    opt_params, lower_bound=lower_bound, upper_bound=upper_bound, fold=2
+)
 
 
 opt_params = moments.Inference.optimize_log_fmin(
-    p_guess, data, model_func,
-    lower_bound=lower_bound, upper_bound=upper_bound,
-    verbose=20) # report every 20 iterations
+    p_guess,
+    data,
+    model_func,
+    lower_bound=lower_bound,
+    upper_bound=upper_bound,
+    verbose=20,
+)  # report every 20 iterations
 
 p_guess = moments.Misc.perturb_params(
-    opt_params, lower_bound=lower_bound, upper_bound=upper_bound)
+    opt_params, lower_bound=lower_bound, upper_bound=upper_bound
+)
 
 opt_params = moments.Inference.optimize_log_fmin(
-    p_guess, data, model_func,
-    lower_bound=lower_bound, upper_bound=upper_bound,
-    verbose=20) # report every 20 iterations
-
+    p_guess,
+    data,
+    model_func,
+    lower_bound=lower_bound,
+    upper_bound=upper_bound,
+    verbose=20,
+)  # report every 20 iterations
 
 
 # uncerts = moments.Godambe.FIM_uncert(
@@ -130,7 +154,7 @@ opt_params = moments.Inference.optimize_log_fmin(
 #     for gtol in gtol_grid:
 #         for maxiter in maxiter_grid:
 #             print(f"Running optimization with epsilon={epsilon}, gtol={gtol}, maxiter={maxiter}")
-            
+
 #             # Run the optimization
 #             result = moments.Inference.optimize_log(
 #                 p0=p_guess,
@@ -141,7 +165,7 @@ opt_params = moments.Inference.optimize_log_fmin(
 #                 maxiter=maxiter,
 #                 verbose=0
 #             )
-            
+
 #             # Store the result with the hyperparameters
 #             results.append({
 #                 'epsilon': epsilon,

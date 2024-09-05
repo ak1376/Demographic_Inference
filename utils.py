@@ -6,7 +6,8 @@ import os
 from sklearn.preprocessing import StandardScaler
 import pickle
 import json
-
+import colorsys
+import math
 
 def extract_features(simulated_params, opt_params, normalization=True):
     """
@@ -91,35 +92,49 @@ def extract_features(simulated_params, opt_params, normalization=True):
 
 
 def visualizing_results(
-    linear_mdl_obj, analysis, save_loc="results", outlier_indices=None, stages=None
+    linear_mdl_obj, analysis, save_loc="results", outlier_indices=None, stages=None, color_shades = None, main_colors = None
 ):
     # Default to all stages if not specified
     if stages is None:
         stages = ["training", "validation", "testing"]
 
-    params = ["Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
-    main_colors = ["blue", "green", "red", "purple"]
+    params = linear_mdl_obj['param_names']
+    num_params = len(params)
 
-    # Define color shades for each stage
-    color_shades = {
-        "blue": [
-            "#1e90ff",
-            "#4169e1",
-            "#0000cd",
-        ],  # Dodger blue, Royal blue, Medium blue
-        "green": [
-            "#90ee90",
-            "#32cd32",
-            "#006400",
-        ],  # Light green, Lime green, Dark green
-        "red": ["#ff6347", "#dc143c", "#8b0000"],  # Tomato, Crimson, Dark red
-        "purple": ["#da70d6", "#9370db", "#4b0082"],  # Orchid, Medium purple, Indigo
-    }
+    if color_shades == None:
+    
+        main_colors = []
+        color_shades = {}
+        
+        for i in range(num_params):
+            # Generate main color using HSV color space
+            hue = i / num_params
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            
+            # Convert RGB to hex
+            main_color = '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+            main_colors.append(main_color)
+            
+            # Generate shades
+            shades = []
+            for j in range(3):
+                # Adjust saturation and value for shades
+                sat = 1.0 - (j * 0.3)
+                val = 1.0 - (j * 0.2)
+                shade_rgb = colorsys.hsv_to_rgb(hue, sat, val)
+                shade = '#{:02x}{:02x}{:02x}'.format(int(shade_rgb[0]*255), int(shade_rgb[1]*255), int(shade_rgb[2]*255))
+                shades.append(shade)
+            
+            color_shades[main_color] = shades
 
-    plt.figure(figsize=(20, 15))
+
+    rows = math.ceil(math.sqrt(num_params))
+    cols = math.ceil(num_params / rows)
+
+    plt.figure(figsize=(5*cols, 5*rows))
 
     for i, param in enumerate(params):
-        plt.subplot(2, 2, i + 1)
+        plt.subplot(rows, cols, i + 1)
 
         for j, stage in enumerate(stages):
             predictions = linear_mdl_obj[stage]["predictions"][:, i]
@@ -133,7 +148,7 @@ def visualizing_results(
                 targets,
                 predictions,
                 alpha=0.5,
-                color=color_shades[main_colors[i]][j],
+                color=color_shades[main_colors[i % len(main_colors)]][j], #type:ignore
                 label=f"{stage.capitalize()}",
             )
 
@@ -168,6 +183,9 @@ def visualizing_results(
     plt.savefig(filename, format="png", dpi=300)
     print(f"Saved figure to: {filename}")
     plt.show()
+
+    return color_shades, main_colors
+
 
 
 def calculate_model_errors(model_obj, model_name, datasets):
@@ -600,3 +618,79 @@ def process_and_save_data(
         print(f"Warning: No ground truth found for {data_type}")
 
     return dadi_dict, moments_dict, momentsLD_dict
+
+
+def creating_features_dict(stage, dadi_dict, moments_dict, momentsLD_dict, features_dict, targets_dict, dadi_analysis, moments_analysis, momentsLD_analysis):
+    #TODO: This code could be paired down even more. 
+    if dadi_analysis:
+        concatenated_array = np.column_stack(
+            [dadi_dict["opt_params"][key] for key in dadi_dict["opt_params"]]
+            )
+
+        features_dict[stage]["dadi"] = concatenated_array
+
+        if dadi_dict["simulated_params"]:
+            concatenated_array = np.column_stack(
+                [
+                    dadi_dict["simulated_params"][key]
+                    for key in dadi_dict["simulated_params"]
+                ]
+            )
+            targets_dict[stage]["dadi"] = concatenated_array
+
+    if moments_analysis:
+        concatenated_array = np.column_stack(
+            [
+                moments_dict["opt_params"][key]
+                for key in moments_dict["opt_params"]
+            ]
+        )
+        features_dict[stage]["moments"] = concatenated_array
+
+        if moments_dict["simulated_params"]:
+            concatenated_array = np.column_stack(
+                [
+                    moments_dict["simulated_params"][key]
+                    for key in moments_dict["simulated_params"]
+                ]
+            )
+            targets_dict[stage]["moments"] = concatenated_array
+
+    if momentsLD_analysis:
+        concatenated_array = np.column_stack(
+            [
+                momentsLD_dict["opt_params"][key]
+                for key in momentsLD_dict["opt_params"]
+            ]
+        )
+        features_dict[stage]["momentsLD"] = concatenated_array
+
+        if momentsLD_dict["simulated_params"]:
+            concatenated_array = np.column_stack(
+                [
+                    momentsLD_dict["simulated_params"][key]
+                    for key in momentsLD_dict["simulated_params"]
+                ]
+            )
+            targets_dict[stage]["momentsLD"] = concatenated_array
+
+    return features_dict, targets_dict
+
+
+def concatenating_features(stage, concatenated_features, concatenated_targets, features_dict, targets_dict):
+
+    # Now columnwise the dadi, moments, and momentsLD inferences to get a concatenated features and targets array
+    concat_feats = np.column_stack(
+        [features_dict[stage][subkey] for subkey in features_dict[stage]]
+    )
+
+    if targets_dict[stage]:
+        concat_targets = np.column_stack(
+            [targets_dict[stage]["dadi"]]
+        )  # dadi because dadi and moments values for the targets are the same.
+
+    concatenated_features = concat_feats
+    concatenated_targets = concat_targets
+
+
+    return concatenated_features, concatenated_targets

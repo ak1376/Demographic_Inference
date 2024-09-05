@@ -23,14 +23,15 @@ model_config = {
 "learning_rate": 3e-4,
 "num_layers": 3,
 "dropout_rate": 0,
-"weight_decay": 0
+"weight_decay": 0,
+"parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"]
 }
 
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 500,
-    "num_sims_inference": 500,
+    "num_sims_pretrain": 10,
+    "num_sims_inference": 10,
     "num_samples": 20,
     "experiment_name": "bottleneck_experiment_test_new",
     "dadi_analysis": True,
@@ -47,9 +48,11 @@ config = {
     "remove_outliers": True,
     "use_FIM": False,
     "neural_net_hyperparameters": model_config, 
+    "demographic_model": "bottleneck",
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"],
     'vcf_filepath': '/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz',
     'txt_filepath': '/sietch_colab/akapoor/wisent.txt',
-    'popname': 'wisent',
+    'popname': 'wisent'
 }
 
     # inference = Inference(
@@ -81,7 +84,9 @@ rule all:
         f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt",
         f"{EXPERIMENT_DIRECTORY}/dadi_dict_inference.pkl",
         f"{EXPERIMENT_DIRECTORY}/moments_dict_inference.pkl",
-        f"{EXPERIMENT_DIRECTORY}/momentsLD_dict_inference.pkl"
+        f"{EXPERIMENT_DIRECTORY}/momentsLD_dict_inference.pkl",
+        f'{EXPERIMENT_DIRECTORY}/color_shades.pkl',
+        f'{EXPERIMENT_DIRECTORY}/main_colors.pkl',
 
 rule create_experiment:
     output:
@@ -106,7 +111,9 @@ rule obtain_features:
         experiment_obj_file = rules.create_experiment.output.experiment_obj_file
     output:
         preprocessing_results = f"{EXPERIMENT_DIRECTORY}/preprocessing_results_obj.pkl",
-        linear_model = f"{EXPERIMENT_DIRECTORY}/linear_regression_model.pkl"
+        linear_model = f"{EXPERIMENT_DIRECTORY}/linear_regression_model.pkl",
+        color_shades = f'{EXPERIMENT_DIRECTORY}/color_shades.pkl',
+        main_colors = f'{EXPERIMENT_DIRECTORY}/main_colors.pkl'
     params:
         experiment_name = EXPERIMENT_NAME,
         num_sims_pretrain = config['num_sims_pretrain'],
@@ -145,7 +152,9 @@ rule get_features:
 rule train_and_predict:
     input:
         model_config_file = rules.create_experiment.output.model_config_file,
-        features_file = rules.get_features.output.features_output
+        features_file = rules.get_features.output.features_output,
+        main_colors = rules.obtain_features.output.main_colors,
+        color_shades = rules.obtain_features.output.color_shades
     params:
         use_FIM = False,
         experiment_directory = EXPERIMENT_DIRECTORY
@@ -161,6 +170,8 @@ rule train_and_predict:
         --model_config {input.model_config_file} \
         --experiment_directory {params.experiment_directory} \
         --features_file {input.features_file} \
+        --color_shades {input.color_shades} \
+        --main_colors {input.main_colors} \
         --use_FIM {params.use_FIM}
         """
 
