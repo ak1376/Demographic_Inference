@@ -19,11 +19,13 @@ def str2bool(v):
 
 
 class Trainer:
-    def __init__(self, experiment_directory, model_config, use_FIM=True):
+    def __init__(self, experiment_directory, model_config, color_shades, main_colors, use_FIM=True):
         self.experiment_directory = experiment_directory
         self.model_config = model_config
         self.num_epochs = self.model_config["num_epochs"]
         self.learning_rate = self.model_config["learning_rate"]
+        self.color_shades = color_shades
+        self.main_colors = main_colors
         self.use_FIM = use_FIM
 
     def train(
@@ -86,6 +88,10 @@ class Trainer:
         snn_mdl_obj["validation"]["predictions"] = validation_predictions
         snn_mdl_obj["validation"]["targets"] = validation_targets
 
+        print(f'MODEL CONFIG KEYS: {self.model_config.keys()}')
+
+        snn_mdl_obj['param_names'] = self.model_config['parameter_names']
+
         if visualize:
             visualizing_results(
                 snn_mdl_obj,
@@ -111,7 +117,7 @@ class Trainer:
         return snn_mdl_obj
 
 
-def main(experiment_directory, model_config_file, features_file, use_FIM=True):
+def main(experiment_directory, model_config_file, features_file, color_shades, main_colors, use_FIM=True):
     # Load model config
     with open(model_config_file, "r") as f:
         model_config = json.load(f)
@@ -119,6 +125,14 @@ def main(experiment_directory, model_config_file, features_file, use_FIM=True):
     # Load features
     with open(features_file, "rb") as f:
         features = pickle.load(f)
+
+    # Load the list back
+    with open(color_shades, 'rb') as f:
+        color_shades = pickle.load(f)
+
+    with open(main_colors, 'rb') as f:
+        main_colors = pickle.load(f)
+
 
     # print(features['training']['features'])
     # print()
@@ -132,7 +146,7 @@ def main(experiment_directory, model_config_file, features_file, use_FIM=True):
     # print(features.keys())
     # print(features['training'].keys())
 
-    trainer = Trainer(experiment_directory, model_config, use_FIM=use_FIM)
+    trainer = Trainer(experiment_directory, model_config, color_shades, main_colors, use_FIM=use_FIM)
 
     # Train the model
     snn_model, train_losses, val_losses = trainer.train(
@@ -166,6 +180,8 @@ if __name__ == "__main__":
     parser.add_argument("--experiment_directory", type=str, required=True)
     parser.add_argument("--model_config_file", type=str, required=True)
     parser.add_argument("--features_file", type=str, required=True)
+    parser.add_argument("--color_shades", type=str, required=True)
+    parser.add_argument("--main_colors", type=str, required=True)
     parser.add_argument("--use_FIM", type=str2bool, default=True)
     args = parser.parse_args()
 
@@ -173,5 +189,7 @@ if __name__ == "__main__":
         args.experiment_directory,
         args.model_config_file,
         args.features_file,
-        args.use_FIM,
+        args.color_shades,
+        args.main_colors,
+        args.use_FIM
     )

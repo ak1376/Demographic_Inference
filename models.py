@@ -9,7 +9,54 @@ from torch.optim.adam import Adam
 from sklearn.model_selection import cross_val_score, cross_val_predict
 from torch.optim.adam import Adam
 from torch.utils.data import DataLoader, TensorDataset
+from sklearn.linear_model import LinearRegression
 
+class LinearReg:
+    def __init__(self, training_features, training_targets, validation_features, validation_targets, testing_features, testing_targets):
+
+        self.training_features = training_features
+        self.training_targets = training_targets
+        self.validation_features = validation_features
+        self.validation_targets = validation_targets
+        self.testing_features = testing_features
+        self.testing_targets = testing_targets
+
+        self.model = LinearRegression()
+
+    def train_and_validate(self):
+        """
+        Train the model
+        """
+        # Train the model on the training data
+        self.model.fit(self.training_features, self.training_targets)
+
+        training_predictions = self.model.predict(self.training_features)  
+        validation_predictions = self.model.predict(self.validation_features) 
+        testing_predictions = self.model.predict(self.testing_features)
+
+
+        return training_predictions, validation_predictions, testing_predictions
+    
+    def organizing_results(self, preprocessing_results_obj, training_predictions, validation_predictions, testing_predictions):
+
+        # TODO: Linear regression should be moded to the models module.
+        linear_mdl_obj = {}
+        linear_mdl_obj["model"] = self.model
+
+        linear_mdl_obj["training"] = {}
+        linear_mdl_obj["validation"] = {}
+        linear_mdl_obj["testing"] = {}
+
+        linear_mdl_obj["training"]["predictions"] = training_predictions
+        linear_mdl_obj["training"]["targets"] = preprocessing_results_obj["training"]["targets"].copy()
+
+        linear_mdl_obj["validation"]["predictions"] = validation_predictions
+        linear_mdl_obj["validation"]["targets"] = preprocessing_results_obj["validation"]["targets"].copy()
+
+        linear_mdl_obj["testing"]["predictions"] = testing_predictions
+        linear_mdl_obj["testing"]["targets"] = preprocessing_results_obj["testing"]["targets"].copy()
+
+        return linear_mdl_obj
 
 class XGBoost:
     def __init__(
@@ -96,58 +143,6 @@ class XGBoost:
             validation_error = root_mean_squared_error(y_test, y_pred_test)
 
             return train_error, validation_error, y_pred_test
-
-
-# @ray.remote(num_gpus=1)
-# class ModelActor:
-#     def __init__(self, model_config):
-#         self.model = ShallowNN(**model_config) #type: ignore
-#         self.model = self.model.cuda()
-
-#         total_params = sum(p.numel() for p in self.model.parameters())
-#         trainable_params = sum(
-#             p.numel() for p in self.model.parameters() if p.requires_grad
-#         )
-
-#         print(f"Total parameters: {total_params}")
-#         print(f"Trainable parameters: {trainable_params}")
-
-# def train_and_evaluate(
-#     self, X_train, y_train, X_val, y_val, num_epochs, learning_rate
-# ):
-#     criterion = nn.MSELoss()
-#     optimizer = Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-4)
-
-#     train_loss_curve = []
-#     val_loss_curve = []
-
-#     X_train, y_train = X_train.cuda(), y_train.cuda()
-#     X_val, y_val = X_val.cuda(), y_val.cuda()
-
-#     for epoch in range(num_epochs):
-#         self.model.train()
-#         optimizer.zero_grad()
-#         outputs = self.model(X_train)
-#         loss = criterion(outputs, y_train)
-#         loss.backward()
-#         optimizer.step()
-
-#         # Evaluate on the validation set
-#         self.model.eval()
-#         with torch.no_grad():
-#             val_outputs = self.model(X_val)
-#             val_loss = criterion(val_outputs, y_val).item()
-
-#         # Record the training and validation loss for this epoch
-#         train_loss_curve.append(loss.item())
-#         val_loss_curve.append(val_loss)
-
-#     # Final evaluation and predictions
-#     self.model.eval()
-#     with torch.no_grad():
-#         y_pred = self.model(X_val)
-
-#     return train_loss_curve, val_loss_curve, y_pred.cpu().numpy(), val_loss
 
 
 # Hook function to inspect BatchNorm outputs

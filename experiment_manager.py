@@ -18,9 +18,12 @@ from utils import (
     process_and_save_data,
     calculate_and_save_rrmse,
     root_mean_squared_error,
-    find_outlier_indices
+    find_outlier_indices,
+    creating_features_dict,
+    concatenating_features,
 )
-from sklearn.linear_model import LinearRegression
+from models import LinearReg
+
 import joblib
 
 
@@ -48,6 +51,10 @@ class Experiment_Manager:
         self.normalization = config_file["normalization"]
         self.remove_outliers = config_file["remove_outliers"]
         self.neural_net_hyperparameters = config_file["neural_net_hyperparameters"]
+
+        self.demographic_model = config_file["demographic_model"]
+        self.parameter_names = config_file["parameter_names"]
+
         self.create_directory(self.experiment_name)
         np.random.seed(self.seed)
 
@@ -123,12 +130,15 @@ class Experiment_Manager:
 
         features_dict = {stage: {} for stage in ["training", "validation", "testing"]}
         targets_dict = {stage: {} for stage in ["training", "validation", "testing"]}
-        feature_names = {}
 
         concatenated_features = {
             stage: {} for stage in ["training", "validation", "testing"]
         }
         concatenated_targets = {
+            stage: {} for stage in ["training", "validation", "testing"]
+        }
+
+        preprocessing_results_obj = {
             stage: {} for stage in ["training", "validation", "testing"]
         }
 
@@ -152,114 +162,34 @@ class Experiment_Manager:
                 self.momentsLD_analysis,
             )
 
-            # Now let's take the information from each dictionary above and put it in the features_dict and, if in pretrain mode, the targets_dict.
-            # TODO: Maybe put in a helper function?
-
-            if self.dadi_analysis:
-                concatenated_array = np.column_stack(
-                    [dadi_dict["opt_params"][key] for key in dadi_dict["opt_params"]]
-                )
-
-                # Need to find the outliers 
-                outlier_indices = find_outlier_indices(concatenated_array)
-
-                features_dict[stage]["dadi"] = concatenated_array
-
-                if dadi_dict["simulated_params"]:
-                    concatenated_array = np.column_stack(
-                        [
-                            dadi_dict["simulated_params"][key]
-                            for key in dadi_dict["simulated_params"]
-                        ]
-                    )
-                    targets_dict[stage]["dadi"] = concatenated_array
-
-            if self.moments_analysis:
-                concatenated_array = np.column_stack(
-                    [
-                        moments_dict["opt_params"][key]
-                        for key in moments_dict["opt_params"]
-                    ]
-                )
-                features_dict[stage]["moments"] = concatenated_array
-
-                if moments_dict["simulated_params"]:
-                    concatenated_array = np.column_stack(
-                        [
-                            moments_dict["simulated_params"][key]
-                            for key in moments_dict["simulated_params"]
-                        ]
-                    )
-                    targets_dict[stage]["moments"] = concatenated_array
-
-            if self.momentsLD_analysis:
-                concatenated_array = np.column_stack(
-                    [
-                        momentsLD_dict["opt_params"][key]
-                        for key in momentsLD_dict["opt_params"]
-                    ]
-                )
-                features_dict[stage]["momentsLD"] = concatenated_array
-
-                if momentsLD_dict["simulated_params"]:
-                    concatenated_array = np.column_stack(
-                        [
-                            momentsLD_dict["simulated_params"][key]
-                            for key in momentsLD_dict["simulated_params"]
-                        ]
-                    )
-                    targets_dict[stage]["momentsLD"] = concatenated_array
-
-            # Now columnwise the dadi, moments, and momentsLD inferences to get a concatenated features and targets array
-            concat_feats = np.column_stack(
-                [features_dict[stage][subkey] for subkey in features_dict[stage]]
+            features_dict, targets_dict = creating_features_dict(
+                stage,
+                dadi_dict,
+                moments_dict,
+                momentsLD_dict,
+                features_dict,
+                targets_dict,
+                self.dadi_analysis,
+                self.moments_analysis,
+                self.momentsLD_analysis,
             )
 
-            if targets_dict[stage]:
-                concat_targets = np.column_stack(
-                    [targets_dict[stage]["dadi"]]
-                )  # dadi because dadi and moments values for the targets are the same.
+            concatenated_features, concatenated_targets= concatenating_features( stage, concatenated_features, concatenated_targets, features_dict, targets_dict)
 
-            concatenated_features[stage] = concat_feats  # type:ignore
-            concatenated_targets[stage] = concat_targets  # type:ignore
 
-        training_features, validation_features, testing_features = (
-            concatenated_features["training"],
-            concatenated_features["validation"],
-            concatenated_features["testing"],
-        )
-        training_targets, validation_targets, testing_targets = (
-            concatenated_targets["training"],
-            concatenated_targets["validation"],
-            concatenated_targets["testing"],
-        )
-
-        preprocessing_results_obj = {}
-
-        preprocessing_results_obj["training"] = {}
-        preprocessing_results_obj["validation"] = {}
-        preprocessing_results_obj["testing"] = {}
-
-        preprocessing_results_obj["training"]["predictions"] = training_features
-        preprocessing_results_obj["training"]["targets"] = training_targets
-
-        preprocessing_results_obj["validation"]["predictions"] = validation_features
-        preprocessing_results_obj["validation"]["targets"] = validation_targets
-
-        preprocessing_results_obj["testing"]["predictions"] = testing_features
-        preprocessing_results_obj["testing"]["targets"] = testing_targets
-
-        for stage in preprocessing_results_obj:
-
-            features = preprocessing_results_obj[stage]["predictions"]
-            outlier_indices = find_outlier_indices(features)
+            outlier_indices = find_outlier_indices(concatenated_features)
             print(outlier_indices)
 
             if self.remove_outliers:
-                features = np.delete(features, outlier_indices, axis=0)
+                concatenated_features = np.delete(concatenated_features, outlier_indices, axis=0)
+                concatenated_targets = np.delete(concatenated_targets, outlier_indices, axis=0)
 
-        
-        # Assuming features_dict and targets_dict are already defined
+            preprocessing_results_obj[stage]["predictions"] = concatenated_features
+            preprocessing_results_obj[stage]["targets"] = concatenated_targets
+
+            preprocessing_results_obj["param_names"] = self.parameter_names
+
+        #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
         rrmse_dict = calculate_and_save_rrmse(
             features_dict,
             targets_dict,
@@ -269,69 +199,58 @@ class Experiment_Manager:
             momentsLD_analysis=self.momentsLD_analysis,
         )
 
-        # preprocessing_results_obj['rrmse'] = rrmse_dict
-
         # Open a file to save the object
         with open(
             f"{self.experiment_directory}/preprocessing_results_obj.pkl", "wb"
         ) as file:  # "wb" mode opens the file in binary write mode
             pickle.dump(preprocessing_results_obj, file)
 
-        # TODO: This function should be modified to properly consider outliers.
         # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots.
-        visualizing_results(
+        color_shades, main_colors = visualizing_results(
             preprocessing_results_obj,
             save_loc=self.experiment_directory,
             analysis=f"preprocessing_results",
             stages=["training", "validation"],
+            color_shades=None,
+            main_colors=None
         )
 
-        visualizing_results(
+        _ = visualizing_results(
             preprocessing_results_obj,
             save_loc=self.experiment_directory,
             analysis=f"preprocessing_results_testing",
             stages=["testing"],
+            color_shades=color_shades,
+            main_colors=main_colors
         )
 
         ## LINEAR REGRESSION
-        linear_mdl = LinearRegression()
-        linear_mdl.fit(training_features, training_targets)  # type:ignore
 
-        training_predictions = linear_mdl.predict(training_features)  # type:ignore
-        validation_predictions = linear_mdl.predict(validation_features)  # type:ignore
-        testing_predictions = linear_mdl.predict(testing_features)  # type:ignore
+        linear_mdl = LinearReg(training_features = preprocessing_results_obj["training"]["predictions"] ,
+                                training_targets = preprocessing_results_obj["training"]["targets"],
+                                  validation_features = preprocessing_results_obj["validation"]["predictions"], 
+                                  validation_targets = preprocessing_results_obj["validation"]["targets"],
+                                    testing_features = preprocessing_results_obj["testing"]["predictions"],
+                                      testing_targets = preprocessing_results_obj["testing"]["targets"] )
+                               
+        training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate()
 
-        # TODO: Linear regression should be moded to the models module.
-        linear_mdl_obj = {}
-        linear_mdl_obj["model"] = linear_mdl
-
-        linear_mdl_obj["training"] = {}
-        linear_mdl_obj["validation"] = {}
-        linear_mdl_obj["testing"] = {}
-
-        linear_mdl_obj["training"]["predictions"] = training_predictions
-        linear_mdl_obj["training"]["targets"] = training_targets
-
-        linear_mdl_obj["validation"]["predictions"] = validation_predictions
-        linear_mdl_obj["validation"]["targets"] = validation_targets
-
-        linear_mdl_obj["testing"]["predictions"] = testing_predictions
-        linear_mdl_obj["testing"]["targets"] = testing_targets
+        linear_mdl_obj = linear_mdl.organizing_results(preprocessing_results_obj, training_predictions, validation_predictions, testing_predictions)
+        
+        linear_mdl_obj["param_names"] = self.parameter_names
 
         # Now calculate the linear model error
 
         rrmse_dict = {}
         rrmse_dict["training"] = root_mean_squared_error(
-            y_true=training_targets, y_pred=training_predictions
+            y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
         )
         rrmse_dict["validation"] = root_mean_squared_error(
-            y_true=validation_targets, y_pred=validation_predictions
+            y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
         )
         rrmse_dict["testing"] = root_mean_squared_error(
-            y_true=testing_targets, y_pred=testing_predictions
+            y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
         )
-
-        # linear_mdl_obj["rrmse"] = rrmse_dict
 
         # Open a file to save the object
         with open(
@@ -346,11 +265,13 @@ class Experiment_Manager:
             json.dump(rrmse_dict, json_file, indent=4)
 
         # targets
-        visualizing_results(
+        _, _ = visualizing_results(
             linear_mdl_obj,
             "linear_results",
             save_loc=self.experiment_directory,
             stages=["training", "validation"],
+            color_shades=color_shades,
+            main_colors=main_colors
         )
 
         joblib.dump(
@@ -360,5 +281,20 @@ class Experiment_Manager:
         #     snn_model.state_dict(),
         #     f"{self.experiment_directory}/neural_network_model.pth",
         # )
+        
+        # Save the color shades and main colors for usage with the neural network
+
+        file_path = f'{self.experiment_directory}/color_shades.pkl'
+
+        # Save the list using pickle
+        with open(file_path, 'wb') as f:
+            pickle.dump(color_shades, f)
+
+        file_path = f'{self.experiment_directory}/main_colors.pkl'
+
+        # Save the list using pickle
+        with open(file_path, 'wb') as f:
+            pickle.dump(main_colors, f)
+
 
         print("Training complete!")

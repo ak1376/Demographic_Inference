@@ -81,6 +81,8 @@ config = {
     "remove_outliers": True,
     "use_FIM": False,
     "neural_net_hyperparameters": model_config,
+    "demographic_model": "bottleneck",
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"]
 }
 
 linear_experiment = Experiment_Manager(config)
@@ -97,10 +99,14 @@ validation_targets = preprocessing_results_obj["validation"]["targets"]
 testing_features = preprocessing_results_obj["testing"]["predictions"]
 testing_targets = preprocessing_results_obj["testing"]["targets"]
 
+# Load in the main colors and color shades
+
 trainer = Trainer(
     experiment_directory=linear_experiment.experiment_directory,
     model_config=model_config,
     use_FIM=config["use_FIM"],
+    color_shades=linear_experiment.color_shades,
+    main_colors=linear_experiment.main_colors,
 )
 snn_model, train_losses, val_losses = trainer.train(
     training_features,
