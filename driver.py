@@ -3,20 +3,12 @@ import os
 import warnings
 from train import Trainer
 from inference import Inference
-from preprocess import Processor
 import pickle
-import torch
-import numpy as np
 
 # Suppress the specific warning about delim_whitespace
 warnings.filterwarnings(
     "ignore", message="The 'delim_whitespace' keyword in pd.read_csv is deprecated"
 )
-
-# os.chdir("Demographic_Inference")  # Feel like this is too hacky
-
-# total_cores = multiprocessing.cpu_count()
-
 
 # Let's define
 # upper_bound_params = {
@@ -73,7 +65,7 @@ config = {
     "num_windows": 50,
     "window_length": 1e6,
     "maxiter": 100,
-    "genome_length": 1e8,
+    "genome_length": 1e6,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
     "seed": 42,
@@ -81,8 +73,9 @@ config = {
     "remove_outliers": True,
     "use_FIM": False,
     "neural_net_hyperparameters": model_config,
-    "demographic_model": "bottleneck",
-    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"]
+    "demographic_model": "bottleneck_model",
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"], # these should be a list of parameters that we want to optimize 
+    "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05]
 }
 
 linear_experiment = Experiment_Manager(config)
@@ -91,15 +84,14 @@ preprocessing_results_obj = linear_experiment.load_features(
     f"{os.getcwd()}/experiments/dadi_moments_analysis_new/preprocessing_results_obj.pkl"
 )
 # preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/Demographic_Inference/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
-training_features = preprocessing_results_obj["training"]["predictions"]
-training_targets = preprocessing_results_obj["training"]["targets"]
-validation_features = preprocessing_results_obj["validation"]["predictions"]
-validation_targets = preprocessing_results_obj["validation"]["targets"]
+training_features = preprocessing_results_obj["training"]["reshaped_features"]
+training_targets = preprocessing_results_obj["training"]["reshaped_targets"]
+validation_features = preprocessing_results_obj["validation"]["reshaped_features"]
+validation_targets = preprocessing_results_obj["validation"]["reshaped_targets"]
 
-testing_features = preprocessing_results_obj["testing"]["predictions"]
-testing_targets = preprocessing_results_obj["testing"]["targets"]
+testing_features = preprocessing_results_obj["testing"]["reshape_features"]
+testing_targets = preprocessing_results_obj["testing"]["reshaped_targets"]
 
-# Load in the main colors and color shades
 
 trainer = Trainer(
     experiment_directory=linear_experiment.experiment_directory,
@@ -107,6 +99,7 @@ trainer = Trainer(
     use_FIM=config["use_FIM"],
     color_shades=linear_experiment.color_shades,
     main_colors=linear_experiment.main_colors,
+    param_names=config["parameter_names"]
 )
 snn_model, train_losses, val_losses = trainer.train(
     training_features,

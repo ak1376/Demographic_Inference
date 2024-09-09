@@ -52,23 +52,26 @@ class Inference(Processor):
         self,
         fs,
         p0,
+        demographic_model,
         sampled_params,
         lower_bound,
         upper_bound,
         maxiter,
         mutation_rate,
         genome_length,
+        num_samples
     ):
         model, opt_theta, opt_params_dict = run_inference_dadi(
-            fs,
-            p0,
-            sampled_params,
-            self.num_samples,
-            lower_bound,
-            upper_bound,
-            maxiter,
-            mutation_rate=mutation_rate,
-            length=genome_length,
+        sfs = fs,
+        p0 = p0,
+        sampled_params = sampled_params,
+        num_samples = num_samples,
+        demographic_model = demographic_model,
+        lower_bound=[0.001, 0.001, 0.001, 0.001],
+        upper_bound=[1, 1, 1, 1],
+        maxiter=100,
+        mutation_rate=1.26e-8,
+        length=1e8
         )
 
         return model, opt_theta, opt_params_dict
@@ -77,16 +80,18 @@ class Inference(Processor):
         self,
         fs,
         p0,
+        demographic_model,
         sampled_params,
         lower_bound,
         upper_bound,
         maxiter,
         mutation_rate,
-        genome_length,
+        genome_length
     ):
         model, opt_theta, opt_params_dict = run_inference_moments(
             fs,
             p0,
+            demographic_model,
             sampled_params,
             lower_bound=lower_bound,
             upper_bound=upper_bound,
@@ -94,6 +99,7 @@ class Inference(Processor):
             use_FIM=False,
             mutation_rate=mutation_rate,
             length=genome_length,
+
         )
 
         return model, opt_theta, opt_params_dict
@@ -109,19 +115,19 @@ class Inference(Processor):
             {}
         )  # This will store all the results (downstream postprocessing) later
 
-        p0 = [0.25, 0.75, 0.1, 0.05]
-
         if self.config["dadi_analysis"]:
 
             model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = self.dadi_inference(
                 sfs,
-                p0,
+                p0 = self.config['optimization_initial_guess'],
+                demographic_model = self.config["demographic_model"],
                 sampled_params=None,
                 lower_bound=[0.001, 0.001, 0.001, 0.001],
-                upper_bound=[10, 10, 10, 10],
+                upper_bound=[1, 1, 1, 1],
                 maxiter=self.config["maxiter"],
                 mutation_rate=self.config["mutation_rate"],
                 genome_length=self.config["genome_length"],
+                num_samples=self.config['num_samples']
             )
 
             dadi_results = {
@@ -133,19 +139,17 @@ class Inference(Processor):
             mega_result_dict.update(dadi_results)
 
         if self.config["moments_analysis"]:
-            model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
-                run_inference_moments(
-                    sfs,
-                    p0=[0.25, 0.75, 0.1, 0.05],
+            model_sfs_moments, opt_theta_moments, opt_params_dict_moments =run_inference_moments(sfs,
+                    p0 = self.config['optimization_initial_guess'],
+                    demographic_model=self.config["demographic_model"],
                     lower_bound=[0.001, 0.001, 0.001, 0.001],
-                    upper_bound=[10, 10, 10, 10],
+                    upper_bound=[1, 1, 1, 1],
                     sampled_params=None,
                     maxiter=self.config["maxiter"],
                     use_FIM=self.config["use_FIM"],
                     mutation_rate=self.config["mutation_rate"],
-                    length=self.config["genome_length"],
+                    length=self.config["genome_length"]
                 )
-            )
 
             moments_results = {
                 "model_sfs_moments": model_sfs_moments,
@@ -160,7 +164,8 @@ class Inference(Processor):
                 folderpath=self.folderpath,
                 num_windows=self.num_windows,
                 param_sample=None,
-                p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
+                demographic_model=self.config["demographic_model"],
+                p_guess=self.config['optimization_initial_guess'].append(20000), #TODO: Change this later
                 maxiter=self.maxiter,
             )
 

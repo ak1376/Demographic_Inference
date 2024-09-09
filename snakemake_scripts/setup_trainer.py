@@ -68,8 +68,11 @@ class Trainer:
         validation_data,
         training_targets,
         validation_targets,
-        visualize=True,
+        visualize=True
     ):
+        
+        print(self.model_config.keys())
+
 
         # print(f'Training data shape: {training_data.shape}')
         # print(f'Validation data shape: {validation_data.shape}')
@@ -88,8 +91,6 @@ class Trainer:
         snn_mdl_obj["validation"]["predictions"] = validation_predictions
         snn_mdl_obj["validation"]["targets"] = validation_targets
 
-        print(f'MODEL CONFIG KEYS: {self.model_config.keys()}')
-
         snn_mdl_obj['param_names'] = self.model_config['parameter_names']
 
         if visualize:
@@ -97,7 +98,9 @@ class Trainer:
                 snn_mdl_obj,
                 "snn_results",
                 save_loc=self.experiment_directory,
-                stages=["training", "validation"],
+                color_shades=self.color_shades,
+                main_colors=self.main_colors,
+                stages=["training", "validation"]
             )
 
         model_error = calculate_model_errors(

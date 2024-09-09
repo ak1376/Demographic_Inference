@@ -13,6 +13,10 @@ from utils import (
     root_mean_squared_error,
     find_outlier_indices,
 )
+import time
+
+import demographic_models
+
 from sklearn.utils import resample
 
 from parameter_inference import (
@@ -30,31 +34,6 @@ def generate_window(ts, window_length, n_samples):
     return ts.keep_intervals([[start, end]])
 
 
-# def get_random_windows_parallel(ts, window_length, num_windows):
-#     """
-#     Get random windows from the tree sequence in parallel.
-
-#     Parameters:
-#     - ts: tskit.TreeSequence object
-#     - window_length: Length of each window (in base pairs)
-#     - num_windows: Number of random windows to extract
-
-#     Returns:
-#     - windows: List of tskit.TreeSequence objects containing the random windows
-#     """
-#     n_samples = int(ts.sequence_length - window_length)
-
-#     # Distribute the window creation tasks across multiple workers
-#     futures = [
-#         generate_window.remote(ts, window_length, n_samples) for _ in range(num_windows)
-#     ]
-
-#     # Collect the results
-#     windows = ray.get(futures)
-
-#     return windows
-
-
 def process_window(ts_window, folderpath, ii):
     vcf_name = os.path.join(folderpath, f"bottleneck_window.{ii}.vcf")
 
@@ -66,27 +45,6 @@ def process_window(ts_window, folderpath, ii):
     return vcf_name  # Optionally return the filename or any other relevant information
 
 
-# def parallel_process_windows(windows, folderpath):
-#     # Initialize Ray if not already initialized
-#     if not ray.is_initialized():
-#         ray.init(num_cpus=os.cpu_count())
-
-#     # Create a list to store futures
-#     futures = []
-
-#     # Launch tasks in parallel
-#     for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
-#         future = process_window.remote(ts_window, folderpath, ii)
-#         futures.append(future)
-
-#     # Collect results (this will block until all tasks are done)
-#     results = ray.get(futures)
-
-#     # Optionally, print or return results
-#     print("All windows have been processed.")
-#     return results
-
-
 def delete_vcf_files(directory):
     # Get a list of all files in the directory
     files = glob.glob(os.path.join(directory, "*"))
@@ -95,122 +53,6 @@ def delete_vcf_files(directory):
     [os.remove(file) for file in files]
 
     print(f"Deleted {len(files)} files from {directory}")
-
-
-# def process_single_simulation(
-#     i,
-#     sample_params_func,
-#     create_SFS_func,
-#     bottleneck_model_func,
-#     run_msprime_replicates_func,
-#     write_samples_and_rec_map_func,
-#     run_inference_dadi_func=None,
-#     run_inference_moments_func=None,
-#     run_inference_momentsLD_func=None,
-#     folderpath=None,
-#     num_windows=None,
-#     num_samples=None,
-#     maxiter=None,
-#     mutation_rate = 1.26e-8
-# ):
-#     sampled_params = sample_params_func()
-#     sfs = create_SFS_func(sampled_params, num_samples)
-
-#     # Simulate process and save windows as VCF files
-#     if run_inference_momentsLD_func:
-#         g = bottleneck_model_func(sampled_params)
-#         run_msprime_replicates_func(g)
-#         samples_file, flat_map_file = write_samples_and_rec_map_func()
-
-#     # Initialize result dictionary
-#     results = {
-#         "sampled_params": sampled_params,
-#         "sfs": sfs,
-#     }
-
-#     # Conditional analysis based on provided functions
-#     if run_inference_dadi_func:
-#         model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = run_inference_dadi_func(
-#             sfs,
-#             p0=[0.25, 0.75, 0.1, 0.05],
-#             lower_bound=[0.001, 0.001, 0.001, 0.001],
-#             upper_bound=[10, 10, 10, 10],
-#             sampled_params=sampled_params,
-#             num_samples=num_samples,
-#             maxiter=maxiter,
-#             mutation_rate = mutation_rate
-#         )
-#         results.update(
-#             {
-#                 "opt_params_dict_dadi": opt_params_dict_dadi,
-#                 "model_sfs_dadi": model_sfs_dadi,
-#                 "opt_theta_dadi": opt_theta_dadi,
-#             }
-#         )
-
-#     if run_inference_moments_func:
-#         model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
-#             run_inference_moments_func(
-#                 sfs,
-#                 p0=[0.25, 0.75, 0.1, 0.05],
-#                 lower_bound=[0.001, 0.001, 0.001, 0.001],
-#                 upper_bound=[10, 10, 10, 10],
-#                 sampled_params=sampled_params,
-#                 maxiter=maxiter,
-#                 mutation_rate = mutation_rate
-#             )
-#         )
-#         results.update(
-#             {
-#                 "opt_params_dict_moments": opt_params_dict_moments,
-#                 "model_sfs_moments": model_sfs_moments,
-#                 "opt_theta_moments": opt_theta_moments,
-#             }
-#         )
-
-#     if run_inference_momentsLD_func:
-#         opt_params_momentsLD = run_inference_momentsLD_func(
-#             folderpath=folderpath,
-#             num_windows=num_windows,
-#             param_sample=sampled_params,
-#             p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
-#             maxiter=maxiter
-#         )
-#         results["opt_params_momentsLD"] = opt_params_momentsLD
-
-#     return results
-
-
-# def extract_and_process_features(simulated_params, opt_params, analysis_type, stage, experiment_directory, remove_outliers=True):
-#     if not simulated_params or not opt_params:
-#         print(f"Skipping {analysis_type} {stage} due to empty data")
-#         return None, None, None
-
-#     features, targets = extract_features(simulated_params, opt_params, normalization=False)
-#     # error_value = root_mean_squared_error(y_true=targets, y_pred=features)
-#     # print(f"The error value for {analysis_type} {stage} is: {error_value}")
-
-#     outlier_indices = find_outlier_indices(features)
-#     np.savetxt(os.path.join(experiment_directory, f"outlier_indices_{analysis_type}_{stage}.csv"), outlier_indices, delimiter=",")
-
-#     if remove_outliers:
-#         features = np.delete(features, np.unique(outlier_indices), axis=0)
-#         targets = np.delete(targets, outlier_indices, axis=0)
-
-#     visualizing_results({
-#         "simulated_params": simulated_params,
-#         "opt_params": opt_params
-#     }, f"{analysis_type}_{stage}", save_loc=experiment_directory, outlier_indices=outlier_indices)
-
-#     feature_names = [
-#         f"Nb_opt_{analysis_type}",
-#         f"N_recover_opt_{analysis_type}",
-#         f"t_bottleneck_start_opt_{analysis_type}",
-#         f"t_bottleneck_end_opt_{analysis_type}"
-#     ]
-
-#     return features, targets, feature_names
-
 
 class FeatureExtractor:
     def __init__(
@@ -376,7 +218,7 @@ class FeatureExtractor:
             ):  # Sort to ensure consistent order
                 all_features.append(features_dict[stage_key][analysis_type])
                 if stage != "inference":
-                    all_targets.append(
+                    all_targets.append( # type:ignore
                         targets_dict[stage_key][analysis_type]
                     )  # type:ignore
 
@@ -408,15 +250,9 @@ class FeatureExtractor:
             concatenated_features[stage_key] = np.hstack(resampled_features)
 
             if stage != "inference":
-                concatenated_targets[stage_key] = resampled_targets[
+                concatenated_targets[stage_key] = resampled_targets[ # type:ignore
                     0
                 ]  # Assuming targets are the same for all analysis types #type:ignore
-
-            # Uncomment these lines if you need to debug shapes
-            # print(f"Stage: {stage_key}")
-            # print(f"  Concatenated features shape: {concatenated_features[stage_key].shape}")
-            # if stage != 'inference':
-            #     print(f"  Concatenated targets shape: {concatenated_targets[stage_key].shape}")
 
             # Return concatenated_features if stage is 'inference'
             if stage == "inference":
@@ -444,11 +280,6 @@ class FeatureExtractor:
                 indices = np.random.choice(len(features), min_samples, replace=False)
                 features_dict[stage][analysis_type] = features[indices]
                 targets_dict[stage][analysis_type] = targets[indices]
-
-        # Print the number of samples after resampling
-        # for analysis_type in analysis_types:
-        #     print(f"Samples for {stage}:{analysis_type} after resampling: {len(self.features[stage][analysis_type])}")
-
 
 def get_dicts(list_of_mega_result_dicts):
     """
@@ -521,27 +352,10 @@ class Processor:
 
         self.folderpath = f"{self.experiment_directory}/sampled_genome_windows"
 
-    def bottleneck_model(self, sampled_params):
+        self.demographic_model = self.experiment_config["demographic_model"]
 
-        N0, nuB, nuF, t_bottleneck_start, t_bottleneck_end = (
-            sampled_params["N0"],
-            sampled_params["Nb"],
-            sampled_params["N_recover"],
-            sampled_params["t_bottleneck_start"],
-            sampled_params["t_bottleneck_end"],
-        )
-        b = demes.Builder()
-        b.add_deme(
-            "A",
-            epochs=[
-                dict(start_size=N0, end_time=t_bottleneck_start),
-                dict(start_size=nuB, end_time=t_bottleneck_end),
-                dict(start_size=nuF, end_time=0),
-            ],
-        )
-        g = b.resolve()
+        self.optimization_initial_guess = self.experiment_config['optimization_initial_guess']
 
-        return g
 
     def run_msprime_replicates(self, g):
         delete_vcf_files(self.folderpath)
@@ -599,7 +413,7 @@ class Processor:
         return sampled_params
 
     def create_SFS(self, 
-        sampled_params, mode, num_samples, length=1e7, mutation_rate=1.26e-8, **kwargs
+        sampled_params, mode, num_samples, demographic_model, length=1e7, mutation_rate=1.26e-8, **kwargs
     ):
         """
         If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
@@ -608,7 +422,7 @@ class Processor:
 
         if mode == "pretrain":
         
-            g = self.bottleneck_model(sampled_params)
+            g = demographic_model(sampled_params)
                 
             demog = msprime.Demography.from_demes(g)
             ts = msprime.sim_ancestry(
@@ -652,6 +466,10 @@ class Processor:
         This really should be subdivided into more functions so that when we do inference I can separately call the helper functions.
         """
 
+        # Placeholder if statements 
+        if self.experiment_config["demographic_model"] == "bottleneck_model":
+            demographic_model_simulation = demographic_models.bottleneck_model
+
         list_of_mega_result_dicts = []
 
         for i in tqdm(range(len(indices_of_interest))):
@@ -660,19 +478,26 @@ class Processor:
             )  # This will store all the results (downstream postprocessing) later
 
             sampled_params = self.sample_params()
+
+            start = time.time()
             sfs = self.create_SFS(
                 sampled_params,
                 mode="pretrain",
                 num_samples=self.num_samples,
+                demographic_model=demographic_model_simulation,
                 length=self.L,
                 mutation_rate=self.mutation_rate,
             )
 
+            end = time.time()
+
             mega_result_dict = {"simulated_params": sampled_params, "sfs": sfs}
+
+            print(f'Simulation Time: {end - start}')
 
             # Simulate process and save windows as VCF files
             if self.experiment_config["momentsLD_analysis"]:
-                g = self.bottleneck_model(sampled_params)
+                g = demographic_model_simulation(sampled_params)
                 self.run_msprime_replicates(g)
                 samples_file, flat_map_file = self.write_samples_and_rec_map()
 
@@ -681,11 +506,12 @@ class Processor:
                 model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = (
                     run_inference_dadi(
                         sfs,
-                        p0=[0.25, 0.75, 0.1, 0.05],
+                        p0= self.experiment_config['optimization_initial_guess'],
                         lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
                         upper_bound=[None, None, None, None],
                         sampled_params=sampled_params,
                         num_samples=self.num_samples,
+                        demographic_model=self.experiment_config['demographic_model'],
                         maxiter=self.maxiter,
                         mutation_rate=self.mutation_rate,
                         length=self.L,
@@ -705,10 +531,11 @@ class Processor:
                 model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
                     run_inference_moments(
                         sfs,
-                        p0=[0.25, 0.75, 0.1, 0.05],
+                        p0=self.experiment_config['optimization_initial_guess'],
                         lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
                         upper_bound=[None, None, None, None],
                         sampled_params=sampled_params,
+                        demographic_model=self.experiment_config['demographic_model'],
                         maxiter=self.maxiter,
                         use_FIM=self.experiment_config["use_FIM"],
                         mutation_rate=self.mutation_rate,
@@ -733,12 +560,19 @@ class Processor:
                 # )
 
             if self.experiment_config["momentsLD_analysis"]:
+
+                p_guess = self.experiment_config['optimization_initial_guess'].copy()
+                
+                p_guess.extend([20000])
+                print(f"p_guess: {p_guess}")
+
                 opt_params_momentsLD = run_inference_momentsLD(
                     folderpath=self.folderpath,
                     num_windows=self.num_windows,
                     param_sample=sampled_params,
-                    p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
-                    maxiter=self.maxiter,
+                    p_guess=p_guess, #TODO: Need to change this to not rely on a hardcoded value
+                    demographic_model=self.experiment_config['demographic_model'],
+                    maxiter=self.maxiter
                 )
 
                 momentsLD_results = {"opt_params_momentsLD": opt_params_momentsLD}

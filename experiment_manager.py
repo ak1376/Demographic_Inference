@@ -11,6 +11,7 @@ import pickle
 import ray
 import time
 import json
+import colorsys
 
 from preprocess import Processor, FeatureExtractor
 from utils import (
@@ -54,15 +55,49 @@ class Experiment_Manager:
 
         self.demographic_model = config_file["demographic_model"]
         self.parameter_names = config_file["parameter_names"]
+        self.optimization_initial_guess = config_file["optimization_initial_guess"]
 
         self.create_directory(self.experiment_name)
         np.random.seed(self.seed)
+
+        self.create_color_scheme()
 
         # Open a file in write mode and save the dictionary as JSON
         with open(f"{self.experiment_directory}/config.json", "w") as json_file:
             json.dump(
                 self.experiment_config, json_file, indent=4
             )  # indent=4 makes the JSON file more readable
+
+    def create_color_scheme(self):
+
+        num_params = len(self.parameter_names)
+        main_colors = []
+        color_shades = {}
+        
+        for i in range(num_params):
+            # Generate main color using HSV color space
+            hue = i / num_params
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            
+            # Convert RGB to hex
+            main_color = '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+            main_colors.append(main_color)
+            
+            # Generate shades
+            shades = []
+            for j in range(3):
+                # Adjust saturation and value for shades
+                sat = 1.0 - (j * 0.3)
+                val = 1.0 - (j * 0.2)
+                shade_rgb = colorsys.hsv_to_rgb(hue, sat, val)
+                shade = '#{:02x}{:02x}{:02x}'.format(int(shade_rgb[0]*255), int(shade_rgb[1]*255), int(shade_rgb[2]*255))
+                shades.append(shade)
+            
+            color_shades[main_color] = shades
+
+        
+        self.color_shades = color_shades
+        self.main_colors = main_colors
 
     def create_directory(
         self, folder_name, base_dir="experiments", archive_subdir="archive"
@@ -162,6 +197,25 @@ class Experiment_Manager:
                 self.momentsLD_analysis,
             )
 
+            # Maybe create the feature names here ? 
+
+            feature_names = []
+
+            if self.dadi_analysis: 
+                feature_names.extend(f"{element}_dadi" for element in list(dadi_dict['opt_params'].keys()))
+
+            if self.moments_analysis:
+                if self.experiment_config['use_FIM']:
+                    feature_names.extend(f"{element}_moments" for element in list(moments_dict['opt_params'].keys())[0:-1]) # excluding upper_triangular_FIM
+                    feature_names.extend(f"upper_triangular_FIM_{i}" for i in np.arange(moments_dict['opt_params']['upper_triangular_FIM'].shape[0]))
+                
+                else:
+                    feature_names.extend(f"{element}_moments" for element in list(moments_dict['opt_params'].keys()))
+
+            if self.momentsLD_analysis:
+                feature_names.extend(f"{element}_momentsLD" for element in list(momentsLD_dict['opt_params'].keys()))
+
+            
             features_dict, targets_dict = creating_features_dict(
                 stage,
                 dadi_dict,
@@ -172,11 +226,12 @@ class Experiment_Manager:
                 self.dadi_analysis,
                 self.moments_analysis,
                 self.momentsLD_analysis,
+                use_FIM = self.experiment_config["use_FIM"]
             )
 
             concatenated_features, concatenated_targets= concatenating_features( stage, concatenated_features, concatenated_targets, features_dict, targets_dict)
 
-
+        
             outlier_indices = find_outlier_indices(concatenated_features)
             print(outlier_indices)
 
@@ -184,11 +239,35 @@ class Experiment_Manager:
                 concatenated_features = np.delete(concatenated_features, outlier_indices, axis=0)
                 concatenated_targets = np.delete(concatenated_targets, outlier_indices, axis=0)
 
-            preprocessing_results_obj[stage]["predictions"] = concatenated_features
+            preprocessing_results_obj[stage]["predictions"] = concatenated_features # This is for input to the ML model
             preprocessing_results_obj[stage]["targets"] = concatenated_targets
 
             preprocessing_results_obj["param_names"] = self.parameter_names
 
+            # Add some more fields to the preprocessing_results_obj for plotting easier
+
+            num_analyses = self.dadi_analysis + self.moments_analysis + self.momentsLD_analysis
+
+            # Now reshape the features and targets so that there are num_params columns 
+
+            # Step 1: Reshape to (num_sim, num_analyses, num_param)
+            num_sim = concatenated_features.shape[0]
+            num_param = len(self.parameter_names)
+            
+            reshaped_features = concatenated_features.reshape(num_sim, num_analyses, num_param)
+
+            # Step 2: Swap axes and flatten to increase the number of rows
+            # This increases the number of rows by a factor of num_analyses
+            final_array = reshaped_features.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
+
+            preprocessing_results_obj[stage]["reshaped_features"] = final_array
+
+            reshaped_targets = concatenated_targets.reshape(num_sim, num_analyses, num_param)
+            final_targets = reshaped_targets.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
+
+            preprocessing_results_obj[stage]["reshaped_targets"] = final_targets
+        
+        
         #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
         rrmse_dict = calculate_and_save_rrmse(
             features_dict,
@@ -206,22 +285,23 @@ class Experiment_Manager:
             pickle.dump(preprocessing_results_obj, file)
 
         # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots.
-        color_shades, main_colors = visualizing_results(
+        
+        visualizing_results(
             preprocessing_results_obj,
             save_loc=self.experiment_directory,
             analysis=f"preprocessing_results",
             stages=["training", "validation"],
-            color_shades=None,
-            main_colors=None
+            color_shades=self.color_shades,
+            main_colors=self.main_colors
         )
 
-        _ = visualizing_results(
+        visualizing_results(
             preprocessing_results_obj,
             save_loc=self.experiment_directory,
             analysis=f"preprocessing_results_testing",
             stages=["testing"],
-            color_shades=color_shades,
-            main_colors=main_colors
+            color_shades=self.color_shades,
+            main_colors=self.main_colors
         )
 
         ## LINEAR REGRESSION
@@ -243,13 +323,13 @@ class Experiment_Manager:
 
         rrmse_dict = {}
         rrmse_dict["training"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
+            y_true=linear_mdl_obj["training"]["reshaped_targets"], y_pred=training_predictions
         )
         rrmse_dict["validation"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
+            y_true=linear_mdl_obj["validation"]["reshaped_targets"], y_pred=validation_predictions
         )
         rrmse_dict["testing"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
+            y_true=linear_mdl_obj["testing"]["reshaped_targets"], y_pred=testing_predictions
         )
 
         # Open a file to save the object
@@ -265,13 +345,13 @@ class Experiment_Manager:
             json.dump(rrmse_dict, json_file, indent=4)
 
         # targets
-        _, _ = visualizing_results(
+        visualizing_results(
             linear_mdl_obj,
             "linear_results",
             save_loc=self.experiment_directory,
             stages=["training", "validation"],
-            color_shades=color_shades,
-            main_colors=main_colors
+            color_shades=self.color_shades,
+            main_colors=self.main_colors
         )
 
         joblib.dump(
@@ -285,16 +365,5 @@ class Experiment_Manager:
         # Save the color shades and main colors for usage with the neural network
 
         file_path = f'{self.experiment_directory}/color_shades.pkl'
-
-        # Save the list using pickle
-        with open(file_path, 'wb') as f:
-            pickle.dump(color_shades, f)
-
-        file_path = f'{self.experiment_directory}/main_colors.pkl'
-
-        # Save the list using pickle
-        with open(file_path, 'wb') as f:
-            pickle.dump(main_colors, f)
-
 
         print("Training complete!")

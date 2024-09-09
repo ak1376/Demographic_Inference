@@ -5,13 +5,14 @@ import pickle
 
 
 class Trainer:
-    def __init__(self, experiment_directory, model_config, color_shades, main_colors, use_FIM=True):
+    def __init__(self, experiment_directory, model_config, color_shades, main_colors, param_names, use_FIM=True):
         self.experiment_directory = experiment_directory
         self.model_config = model_config
         self.num_epochs = self.model_config["num_epochs"]
         self.learning_rate = self.model_config["learning_rate"]
         self.color_shades = color_shades
         self.main_colors = main_colors
+        self.param_names = param_names
         self.use_FIM = use_FIM
 
     def train(
@@ -78,6 +79,8 @@ class Trainer:
 
         snn_mdl_obj["validation"]["predictions"] = validation_predictions
         snn_mdl_obj["validation"]["targets"] = validation_targets
+
+        snn_mdl_obj["param_names"] = self.param_names
 
         if visualize:
             visualizing_results(

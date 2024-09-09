@@ -64,14 +64,16 @@ class Inference(Processor):
         mutation_rate,
         genome_length,
     ):
+        
         model, opt_theta, opt_params_dict = run_inference_dadi(
-            fs,
-            p0,
-            sampled_params,
-            self.num_samples,
-            lower_bound,
-            upper_bound,
-            maxiter,
+            sfs = fs,
+            p0 = p0,
+            sampled_params = sampled_params,
+            num_samples = self.num_samples,
+            demographic_model="bottleneck_model",
+            lower_bound = lower_bound,
+            upper_bound = upper_bound,
+            maxiter= maxiter,
             mutation_rate=mutation_rate,
             length=genome_length,
         )
@@ -88,10 +90,12 @@ class Inference(Processor):
         mutation_rate,
         genome_length,
     ):
+        
         model, opt_theta, opt_params_dict = run_inference_moments(
-            fs,
-            p0,
-            sampled_params,
+            sfs = fs,
+            p0 = p0,
+            sampled_params = sampled_params,
+            demographic_model="bottleneck_model",
             lower_bound=lower_bound,
             upper_bound=upper_bound,
             maxiter=maxiter,
@@ -106,12 +110,10 @@ class Inference(Processor):
         sfs = self.create_SFS(data_dict)
         mega_result_dict = {}
 
-        p0 = [0.25, 0.75, 0.1, 0.05]
-
         if self.config["dadi_analysis"]:
             model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = self.dadi_inference(
                 sfs,
-                p0,
+                self.config['optimization_initial_guess'],
                 sampled_params=None,
                 lower_bound=[0.001, 0.001, 0.001, 0.001],
                 upper_bound=[10, 10, 10, 10],
@@ -131,6 +133,7 @@ class Inference(Processor):
                 run_inference_moments(
                     sfs,
                     p0=[0.25, 0.75, 0.1, 0.05],
+                    demographic_model="bottleneck_model",
                     lower_bound=[0.001, 0.001, 0.001, 0.001],
                     upper_bound=[10, 10, 10, 10],
                     sampled_params=None,
@@ -152,8 +155,9 @@ class Inference(Processor):
                 folderpath=self.experiment_directory,
                 num_windows=self.config["num_windows"],
                 param_sample=None,
-                p_guess=[0.25, 0.75, 0.1, 0.05, 20000],
-                maxiter=self.config["maxiter"],
+                p_guess=self.config["optimization_initial_guess"],
+                demographic_model="bottleneck_model",
+                maxiter=self.config["maxiter"]
             )
             momentsLD_results = {"opt_params_momentsLD": opt_params_momentsLD}
             mega_result_dict.update(momentsLD_results)
@@ -215,11 +219,53 @@ class Inference(Processor):
                 )
                 targets_dict[stage]["dadi"] = concatenated_array
 
-        if self.config["moments_analysis"]:
-            concatenated_array = np.column_stack(
-                [moments_dict["opt_params"][key] for key in moments_dict["opt_params"]]
-            )
+
+
+        if self.config['moments_analysis']:
+            if self.config['use_FIM'] == False:
+                concatenated_array = np.column_stack(
+                    [
+                        moments_dict["opt_params"][key]
+                        for key in moments_dict["opt_params"]
+                    ]
+                )
+            else:
+                # Concatenate all features except for "upper_triangular_FIM"
+                concatenated_array = np.column_stack(
+                    [
+                        np.array(moments_dict["opt_params"][key]).flatten()
+                        if isinstance(moments_dict["opt_params"][key], (np.ndarray, list))
+                        else np.array([moments_dict["opt_params"][key]])
+                        for key in moments_dict["opt_params"]
+                        if key != "upper_triangular_FIM"
+                    ]
+                )
+
+                # Concatenate the "upper_triangular_FIM" separately (if it exists)
+                if "upper_triangular_FIM" in moments_dict["opt_params"]:
+                    if isinstance(moments_dict['opt_params']['N0'], np.floating):
+                        upper_triangular_FIM_array = np.expand_dims(np.array(moments_dict["opt_params"]["upper_triangular_FIM"]), axis = 0)
+                    else:
+                        upper_triangular_FIM_array = np.array(moments_dict["opt_params"]["upper_triangular_FIM"])
+                    # Optionally concatenate with the rest of the array or process separately
+                    concatenated_array = np.column_stack([concatenated_array, upper_triangular_FIM_array])
+
             features_dict[stage]["moments"] = concatenated_array
+
+
+
+
+
+
+
+
+
+
+        # if self.config["moments_analysis"]:
+        #     concatenated_array = np.column_stack(
+        #         [moments_dict["opt_params"][key] for key in moments_dict["opt_params"]]
+        #     )
+        #     features_dict[stage]["moments"] = concatenated_array
             if "simulated_params" in moments_dict:
                 concatenated_array = np.column_stack(
                     [

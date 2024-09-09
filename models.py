@@ -47,14 +47,14 @@ class LinearReg:
         linear_mdl_obj["validation"] = {}
         linear_mdl_obj["testing"] = {}
 
-        linear_mdl_obj["training"]["predictions"] = training_predictions
-        linear_mdl_obj["training"]["targets"] = preprocessing_results_obj["training"]["targets"].copy()
+        linear_mdl_obj["training"]["reshaped_features"] = training_predictions
+        linear_mdl_obj["training"]["reshaped_targets"] = preprocessing_results_obj["training"]["targets"].copy()
 
-        linear_mdl_obj["validation"]["predictions"] = validation_predictions
-        linear_mdl_obj["validation"]["targets"] = preprocessing_results_obj["validation"]["targets"].copy()
+        linear_mdl_obj["validation"]["reshaped_features"] = validation_predictions
+        linear_mdl_obj["validation"]["reshaped_targets"] = preprocessing_results_obj["validation"]["targets"].copy()
 
-        linear_mdl_obj["testing"]["predictions"] = testing_predictions
-        linear_mdl_obj["testing"]["targets"] = preprocessing_results_obj["testing"]["targets"].copy()
+        linear_mdl_obj["testing"]["reshaped_features"] = testing_predictions
+        linear_mdl_obj["testing"]["reshaped_targets"] = preprocessing_results_obj["testing"]["targets"].copy()
 
         return linear_mdl_obj
 
@@ -265,6 +265,8 @@ class ShallowNN(nn.Module):
             for inputs, targets in train_loader:
                 optimizer.zero_grad()
                 outputs = model(inputs)
+                print(f'Output shape: {outputs}')
+                print(f'Targets shape: {targets}')
                 train_loss = criterion(outputs, targets)
                 train_loss.backward()
                 optimizer.step()

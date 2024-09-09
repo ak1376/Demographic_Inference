@@ -37,11 +37,11 @@ def obtain_features(
     experiment_directory,
     num_sims_pretrain,
     num_sims_inference,
+    color_shades_file,
+    main_colors_file,
     normalization=False,
     remove_outliers=True,
 ):
-
-    # print(f'Normalization option: {normalization}')
 
     # Load the experiment config
     with open(experiment_config, "r") as f:
@@ -53,6 +53,13 @@ def obtain_features(
     with open(f"{experiment_directory}/experiment_obj.pkl", "rb") as f:
         experiment_obj = pickle.load(f)
     experiment_directory = experiment_obj.experiment_directory
+
+    # Load in the color schemes and main colors
+    with open(color_shades_file, "rb") as f:
+        color_shades = pickle.load(f)
+     
+    with open(main_colors_file, "rb") as f:
+        main_colors = pickle.load(f)
 
     processor = Processor(
         experiment_config,
@@ -128,9 +135,12 @@ def obtain_features(
 
         concatenated_features, concatenated_targets= concatenating_features( stage, concatenated_features, concatenated_targets, features_dict, targets_dict)
 
+        print("========================================")
+        print(f"Number of features: {concatenated_features.shape}")
+        print(f"Number of targets: {concatenated_targets.shape}")
+        print("========================================")
 
         outlier_indices = find_outlier_indices(concatenated_features)
-        print(outlier_indices)
 
         if remove_outliers:
             concatenated_features = np.delete(concatenated_features, outlier_indices, axis=0)
@@ -139,6 +149,28 @@ def obtain_features(
         preprocessing_results_obj[stage]["predictions"] = concatenated_features
         preprocessing_results_obj[stage]["targets"] = concatenated_targets
         preprocessing_results_obj["param_names"] = experiment_config['parameter_names']
+
+        # Add some more fields to the preprocessing_results_obj for plotting easier
+
+        num_analyses = experiment_config['dadi_analysis'] + experiment_config['moments_analysis'] + experiment_config['momentsLD_analysis']
+        # Now reshape the features and targets so that there are num_params columns 
+
+        # Step 1: Reshape to (num_sim, num_analyses, num_param)
+        num_sim = concatenated_features.shape[0]
+        num_param = len(experiment_config['parameter_names'])
+        
+        reshaped_features = concatenated_features.reshape(num_sim, num_analyses, num_param)
+
+        # Step 2: Swap axes and flatten to increase the number of rows
+        # This increases the number of rows by a factor of num_analyses
+        final_array = reshaped_features.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
+
+        preprocessing_results_obj[stage]["reshaped_features"] = final_array
+
+        reshaped_targets = concatenated_targets.reshape(num_sim, num_analyses, num_param)
+        final_targets = reshaped_targets.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
+
+        preprocessing_results_obj[stage]["reshaped_targets"] = final_targets
 
 
     #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
@@ -158,16 +190,16 @@ def obtain_features(
         pickle.dump(preprocessing_results_obj, file)
 
     # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots.
-    color_shades, main_colors = visualizing_results(
+    visualizing_results(
         preprocessing_results_obj,
         save_loc=experiment_directory,
         analysis=f"preprocessing_results",
         stages=["training", "validation"],
-        color_shades=None,
-        main_colors=None
+        color_shades=color_shades,
+        main_colors=main_colors
     )
 
-    _, _ = visualizing_results(
+    visualizing_results(
         preprocessing_results_obj,
         save_loc=experiment_directory,
         analysis=f"preprocessing_results_testing",
@@ -195,13 +227,13 @@ def obtain_features(
 
     rrmse_dict = {}
     rrmse_dict["training"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
+        y_true=linear_mdl_obj["training"]["reshaped_targets"], y_pred=training_predictions
     )
     rrmse_dict["validation"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
+        y_true=linear_mdl_obj["validation"]["reshaped_targets"], y_pred=validation_predictions
     )
     rrmse_dict["testing"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
+        y_true=linear_mdl_obj["testing"]["reshaped_targets"], y_pred=testing_predictions
     )
 
     # Open a file to save the object
@@ -217,7 +249,7 @@ def obtain_features(
         json.dump(rrmse_dict, json_file, indent=4)
 
     # targets
-    _, _ = visualizing_results(
+    visualizing_results(
         linear_mdl_obj,
         "linear_results",
         save_loc=experiment_directory,
@@ -234,18 +266,6 @@ def obtain_features(
     #     f"{self.experiment_directory}/neural_network_model.pth",
     # )
 
-    file_path = f'{experiment_directory}/color_shades.pkl'
-
-    # Save the list using pickle
-    with open(file_path, 'wb') as f:
-        pickle.dump(color_shades, f)
-
-    file_path = f'{experiment_directory}/main_colors.pkl'
-
-    # Save the list using pickle
-    with open(file_path, 'wb') as f:
-        pickle.dump(main_colors, f)
-
     print("Training complete!")
 
 if __name__ == "__main__":
@@ -256,15 +276,25 @@ if __name__ == "__main__":
     parser.add_argument("--experiment_directory", type=str, required=True)
     parser.add_argument("--num_sims_pretrain", type=int, required=True)
     parser.add_argument("--num_sims_inference", type=int, required=True)
+    parser.add_argument("--color_shades_file", type=str, required=True)
+    parser.add_argument("--main_colors_file", type=str, required=True)
     parser.add_argument("--normalization", type=str2bool, default=True)
     parser.add_argument("--remove_outliers", type=str2bool, default=True)
     args = parser.parse_args()
 
+    print("========================================")
+    print(args.color_shades_file)
+    print(args.main_colors_file)
+    print("========================================")
+
     obtain_features(
-        args.experiment_config,
-        args.experiment_directory,
-        args.num_sims_pretrain,
-        args.num_sims_inference,
-        args.normalization,
-        args.remove_outliers,
+
+        experiment_config=args.experiment_config,
+        experiment_directory=args.experiment_directory,
+        num_sims_pretrain = args.num_sims_pretrain,
+        num_sims_inference=args.num_sims_inference,
+        color_shades_file = args.color_shades_file,
+        main_colors_file = args.main_colors_file,
+        normalization = args.normalization,
+        remove_outliers = args.remove_outliers,
     )

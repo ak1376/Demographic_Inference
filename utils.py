@@ -9,90 +9,8 @@ import json
 import colorsys
 import math
 
-def extract_features(simulated_params, opt_params, normalization=True):
-    """
-    opt_params can come from any of the inference methods.
-    """
-
-    # TODO: Rewrite this code s.t. I am not assuming a priori the demographic model .
-
-    # Extracting parameters from the flattened lists
-    Nb_opt = opt_params["Nb"]
-    N_recover_opt = opt_params["N_recover"]
-    t_bottleneck_start_opt = opt_params["t_bottleneck_start"]
-    t_bottleneck_end_opt = opt_params["t_bottleneck_end"]
-
-    if simulated_params is not None:
-
-        Nb_sample = simulated_params["Nb"]
-        N_recover_sample = simulated_params["N_recover"]
-        t_bottleneck_start_sample = simulated_params["t_bottleneck_start"]
-        t_bottleneck_end_sample = simulated_params["t_bottleneck_end"]
-
-    # TODO: Make this a bit more elegant and streamlined.
-    if "upper_triangular_FIM" in opt_params.keys():
-        upper_triangular_FIM = [d["upper_triangular_FIM"] for d in opt_params]
-
-        # Add the FIM values to the features
-        opt_params_array = np.column_stack(
-            (
-                Nb_opt,
-                N_recover_opt,
-                t_bottleneck_start_opt,
-                t_bottleneck_end_opt,
-                upper_triangular_FIM,
-            )
-        )
-
-    # Put all these features into a single 2D array
-    if "upper_triangular_FIM" in opt_params.keys():
-        opt_params_array = np.column_stack(
-            (
-                Nb_opt,
-                N_recover_opt,
-                t_bottleneck_start_opt,
-                t_bottleneck_end_opt,
-                upper_triangular_FIM,
-            )
-        )
-    else:
-        opt_params_array = np.column_stack(
-            (Nb_opt, N_recover_opt, t_bottleneck_start_opt, t_bottleneck_end_opt)
-        )
-
-    # Combine simulated parameters into targets
-    if simulated_params is not None:
-        targets = np.column_stack(
-            (
-                Nb_sample,
-                N_recover_sample,
-                t_bottleneck_start_sample,
-                t_bottleneck_end_sample,
-            )
-        )
-
-    if normalization:
-        # Feature scaling
-        feature_scaler = StandardScaler()
-        features = feature_scaler.fit_transform(opt_params_array)
-
-        # Target scaling
-        if simulated_params is not None:
-            target_scaler = StandardScaler()
-            targets = target_scaler.fit_transform(targets)
-
-    else:
-        # Features are the optimized parameters
-        features = opt_params_array
-
-    if simulated_params is not None:
-        return features, targets
-    else:
-        return features
-
-
 def visualizing_results(
-    linear_mdl_obj, analysis, save_loc="results", outlier_indices=None, stages=None, color_shades = None, main_colors = None
+    linear_mdl_obj, analysis, save_loc="results", outlier_indices=None, stages=None, color_shades=None, main_colors=None
 ):
     # Default to all stages if not specified
     if stages is None:
@@ -101,80 +19,63 @@ def visualizing_results(
     params = linear_mdl_obj['param_names']
     num_params = len(params)
 
-    if color_shades == None:
-    
-        main_colors = []
-        color_shades = {}
-        
-        for i in range(num_params):
-            # Generate main color using HSV color space
-            hue = i / num_params
-            rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-            
-            # Convert RGB to hex
-            main_color = '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
-            main_colors.append(main_color)
-            
-            # Generate shades
-            shades = []
-            for j in range(3):
-                # Adjust saturation and value for shades
-                sat = 1.0 - (j * 0.3)
-                val = 1.0 - (j * 0.2)
-                shade_rgb = colorsys.hsv_to_rgb(hue, sat, val)
-                shade = '#{:02x}{:02x}{:02x}'.format(int(shade_rgb[0]*255), int(shade_rgb[1]*255), int(shade_rgb[2]*255))
-                shades.append(shade)
-            
-            color_shades[main_color] = shades
-
-
     rows = math.ceil(math.sqrt(num_params))
     cols = math.ceil(num_params / rows)
 
-    plt.figure(figsize=(5*cols, 5*rows))
+    plt.figure(figsize=(5 * cols, 5 * rows))
 
     for i, param in enumerate(params):
         plt.subplot(rows, cols, i + 1)
 
+        all_predictions = []
+        all_targets = []
+
         for j, stage in enumerate(stages):
-            predictions = linear_mdl_obj[stage]["predictions"][:, i]
-            targets = linear_mdl_obj[stage]["targets"][:, i]
+            predictions = linear_mdl_obj[stage]["reshaped_features"][:, i]
+            targets = linear_mdl_obj[stage]["reshaped_targets"][:, i]
 
-            if outlier_indices is not None:
-                predictions = np.delete(predictions, outlier_indices)
-                targets = np.delete(targets, outlier_indices)
+            # Append all predictions and targets to determine the global min/max for each plot
+            all_predictions.extend(predictions)
+            all_targets.extend(targets)
 
+            # Scatter plot for each stage
             plt.scatter(
                 targets,
                 predictions,
                 alpha=0.5,
-                color=color_shades[main_colors[i % len(main_colors)]][j], #type:ignore
+                color=color_shades[main_colors[i % len(main_colors)]][j],  # type: ignore
                 label=f"{stage.capitalize()}",
             )
 
-        plt.xlabel(f"True {param}")
-        plt.ylabel(f"Predicted {param}")
-        plt.title(f"{param}: True vs Predicted")
+        # Set equal axis limits
+        max_value = max(max(all_predictions), max(all_targets))
+        min_value = min(min(all_predictions), min(all_targets))
+        
+        plt.xlim([min_value, max_value])
+        plt.ylim([min_value, max_value])
 
-        max_value = max(
-            max(linear_mdl_obj[stage]["targets"][:, i].max() for stage in stages),
-            max(linear_mdl_obj[stage]["predictions"][:, i].max() for stage in stages),
-        )
-        min_value = min(
-            min(linear_mdl_obj[stage]["targets"][:, i].min() for stage in stages),
-            min(linear_mdl_obj[stage]["predictions"][:, i].min() for stage in stages),
-        )
+        # Add the ideal line y = x
         plt.plot(
             [min_value, max_value],
             [min_value, max_value],
             color="black",
             linestyle="--",
+            label="Ideal: Prediction = Target",
         )
+
+        # Set equal aspect ratio
+        plt.gca().set_aspect('equal', 'box')
+
+        # Labels and title
+        plt.xlabel(f"True {param}")
+        plt.ylabel(f"Predicted {param}")
+        plt.title(f"{param}: True vs Predicted")
 
         plt.legend()
 
     plt.tight_layout()
 
+    # Save the figure
     filename = f"{save_loc}/{analysis}"
     if outlier_indices is not None:
         filename += "_outliers_removed"
@@ -183,9 +84,6 @@ def visualizing_results(
     plt.savefig(filename, format="png", dpi=300)
     print(f"Saved figure to: {filename}")
     plt.show()
-
-    return color_shades, main_colors
-
 
 
 def calculate_model_errors(model_obj, model_name, datasets):
@@ -241,6 +139,7 @@ def calculate_and_save_rrmse(
         }
 
     if moments_analysis:
+
         rrmse_training_moments = root_mean_squared_error(
             features_dict["training"]["moments"], targets_dict["training"]["moments"]
         )
@@ -293,166 +192,6 @@ def calculate_and_save_rrmse(
         json.dump(rrmse_dict, json_file, indent=4)
 
     return rrmse_dict
-
-
-def feature_importance(
-    multi_output_model, model_number, feature_names, target_names, save_loc="results"
-):
-    # Plot feature importance for each output
-    first_output_model = multi_output_model.estimators_[model_number]
-    fig, ax = plt.subplots(figsize=(22, 8))
-    xgb.plot_importance(first_output_model, ax=ax)
-    plt.title(f"Feature importance for output {target_names[model_number]}")
-
-    # Replace the feature indices with their names using the feature_names dictionary
-    labels = ax.get_yticklabels()
-    new_labels = []
-    for label in labels:
-        text = label.get_text()
-        index = int(re.findall(r"\d+", text)[0])  # Extract the index
-        new_labels.append(
-            feature_names.get(index, text)
-        )  # Use the dictionary to get the name
-
-    # Set the ticks and the new labels
-    ax.set_yticks(ax.get_yticks())  # Fix the number of ticks
-    ax.set_yticklabels(new_labels)
-
-    # Save the plot as a PDF
-    plt.savefig(
-        os.path.join(
-            os.getcwd(),
-            f"{save_loc}/feature_importance_output_{target_names[model_number]}.png",
-        ),
-        format="png",
-    )
-    plt.show()
-
-
-def visualize_model_predictions(
-    y_test, y_pred, target_names, folder_loc, fileprefix="model_predictions"
-):
-    num_outputs = y_test.shape[1]
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # Create a 2x2 grid of subplots
-
-    for i, ax in enumerate(axes.flatten()):
-        if i < num_outputs:
-            ax.scatter(y_test[:, i], y_pred[:, i])
-            ax.set_xlabel("True values")
-            ax.set_ylabel("Predicted values")
-            ax.set_title(f"True vs predicted values for output {target_names[i]}")
-        else:
-            fig.delaxes(ax)  # Remove empty subplot
-
-    # Adjust layout
-    plt.tight_layout()
-
-    # Save the figure as a PDF
-    file_name = f"{folder_loc}/{fileprefix}.png"
-    plt.savefig(file_name, format="png")
-    plt.show()
-
-    print(f"Figure saved to {file_name}")
-
-
-# def shap_values_plot(
-#     X_test,
-#     multi_output_model,
-#     feature_names,
-#     target_names,
-#     folder_loc,
-#     fileprefix="shap_values",
-# ):
-#     # TODO: Fix this error message: 'XGBoost' object has no attribute 'estimators_'
-#     num_outputs = len(multi_output_model.n_estimators)
-
-#     if not os.path.exists("results"):
-#         os.makedirs("results")
-
-#     # Save individual SHAP plots as images
-#     for i in range(num_outputs):
-#         output_model = multi_output_model.estimators_[i]
-#         explainer = shap.Explainer(output_model)
-#         shap_values = explainer.shap_values(X_test)
-
-#         plt.figure()
-#         shap.summary_plot(
-#             shap_values,
-#             X_test,
-#             plot_type="bar",
-#             feature_names=feature_names,
-#             show=False,
-#         )
-#         plt.title(f"SHAP values for output {i}", pad=20)
-#         plt.savefig(f"results/{fileprefix}_feature_{i}.png", format="png")
-#         plt.close()
-
-#     # Create a 2x2 grid of subplots to display the saved images
-#     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-#     for i, ax in enumerate(axes.flatten()):
-#         if i < num_outputs:
-#             img = plt.imread(f"{folder_loc}/{fileprefix}_feature_{i}.png")
-#             ax.imshow(img)
-#             ax.axis("off")  # Hide axes
-#             ax.set_title(
-#                 f"SHAP values for output {target_names[i]}", fontsize=14, pad=20
-#             )
-#         else:
-#             fig.delaxes(ax)  # Remove empty subplot
-
-#     # Adjust layout and save the combined figure as a PNG
-#     plt.tight_layout()
-#     combined_file_name = f"results/{fileprefix}.png"
-#     plt.savefig(combined_file_name, format="png")
-#     plt.show()
-
-#     print(f"Figure saved to {combined_file_name}")
-
-
-# def partial_dependence_plots(
-#     multi_output_model,
-#     X_test,
-#     index,
-#     features,
-#     feature_names,
-#     target_names,
-#     fileprefix="partial_dependence",
-# ):
-#     output_model = multi_output_model.estimators_[index]
-
-#     # Calculate the number of rows and columns for the grid
-#     n_features = len(features)
-#     n_cols = 2
-#     n_rows = (n_features + 1) // n_cols
-
-#     # Partial dependence plots for the specified output
-#     fig, ax = plt.subplots(
-#         n_rows, n_cols, figsize=(12, 10), constrained_layout=True
-#     )  # Adjust the figure size
-#     ax = ax.flatten()  # Flatten the axes array for easy indexing
-
-#     # Create partial dependence plots and label each subplot
-#     disp = PartialDependenceDisplay.from_estimator(
-#         output_model, X_test, features, ax=ax, feature_names=feature_names
-#     )
-
-#     # Set the title for each subplot
-#     for i, axi in enumerate(ax):
-#         if i < n_features:
-#             axi.set_ylabel(feature_names[i])
-#         else:
-#             axi.set_visible(False)  # Hide any unused subplots
-
-#     plt.suptitle(f"Partial Dependence Plots for output {target_names[index]}")
-#     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to fit the title
-
-#     # Save the plot as a PNG
-#     file_name = f"{fileprefix}_feature_{target_names[index]}.png"
-#     plt.savefig(file_name, format="png")
-
-#     # Show the plot
-#     plt.show()
-
 
 def root_mean_squared_error(y_true, y_pred):
     """
@@ -620,8 +359,12 @@ def process_and_save_data(
     return dadi_dict, moments_dict, momentsLD_dict
 
 
-def creating_features_dict(stage, dadi_dict, moments_dict, momentsLD_dict, features_dict, targets_dict, dadi_analysis, moments_analysis, momentsLD_analysis):
+def creating_features_dict(stage, dadi_dict, moments_dict, momentsLD_dict, features_dict, targets_dict, dadi_analysis, moments_analysis, momentsLD_analysis, use_FIM = False): 
     #TODO: This code could be paired down even more. 
+    # This function assumed that the parameters of interest are the first num_params keys in the dictionary. This is only applicable to use_FIM = True in moments. 
+    
+    feature_names = []
+    
     if dadi_analysis:
         concatenated_array = np.column_stack(
             [dadi_dict["opt_params"][key] for key in dadi_dict["opt_params"]]
@@ -637,14 +380,41 @@ def creating_features_dict(stage, dadi_dict, moments_dict, momentsLD_dict, featu
                 ]
             )
             targets_dict[stage]["dadi"] = concatenated_array
+        
+        key_names = [key + "_dadi" for key in list(dadi_dict['opt_params'].keys())]
+
+        feature_names.extend(key_names)
+
 
     if moments_analysis:
-        concatenated_array = np.column_stack(
-            [
-                moments_dict["opt_params"][key]
-                for key in moments_dict["opt_params"]
-            ]
-        )
+        if use_FIM == False:
+            concatenated_array = np.column_stack(
+                [
+                    moments_dict["opt_params"][key]
+                    for key in moments_dict["opt_params"]
+                ]
+            )
+        else:
+            # Concatenate all features except for "upper_triangular_FIM"
+            concatenated_array = np.column_stack(
+                [
+                    np.array(moments_dict["opt_params"][key]).flatten()
+                    if isinstance(moments_dict["opt_params"][key], (np.ndarray, list))
+                    else np.array([moments_dict["opt_params"][key]])
+                    for key in moments_dict["opt_params"]
+                    if key != "upper_triangular_FIM"
+                ]
+            )
+
+            # Concatenate the "upper_triangular_FIM" separately (if it exists)
+            if "upper_triangular_FIM" in moments_dict["opt_params"]:
+                if isinstance(moments_dict['opt_params']['N0'], np.floating):
+                    upper_triangular_FIM_array = np.expand_dims(np.array(moments_dict["opt_params"]["upper_triangular_FIM"]), axis = 0)
+                else:
+                    upper_triangular_FIM_array = np.array(moments_dict["opt_params"]["upper_triangular_FIM"])
+                # Optionally concatenate with the rest of the array or process separately
+                concatenated_array = np.column_stack([concatenated_array, upper_triangular_FIM_array])
+
         features_dict[stage]["moments"] = concatenated_array
 
         if moments_dict["simulated_params"]:
@@ -655,6 +425,10 @@ def creating_features_dict(stage, dadi_dict, moments_dict, momentsLD_dict, featu
                 ]
             )
             targets_dict[stage]["moments"] = concatenated_array
+
+        
+        key_names = [key + "_moments" for key in list(moments_dict['opt_params'].keys())]
+        feature_names.extend(key_names)
 
     if momentsLD_analysis:
         concatenated_array = np.column_stack(
@@ -674,6 +448,10 @@ def creating_features_dict(stage, dadi_dict, moments_dict, momentsLD_dict, featu
             )
             targets_dict[stage]["momentsLD"] = concatenated_array
 
+        key_names = [key + "_momentsLD" for key in list(momentsLD_dict['opt_params'].keys())]
+
+        feature_names.extend(key_names)
+
     return features_dict, targets_dict
 
 
@@ -686,11 +464,40 @@ def concatenating_features(stage, concatenated_features, concatenated_targets, f
 
     if targets_dict[stage]:
         concat_targets = np.column_stack(
-            [targets_dict[stage]["dadi"]]
-        )  # dadi because dadi and moments values for the targets are the same.
+        [targets_dict[stage]['dadi'] for subkey in features_dict[stage]] # dadi because dadi, moments, and momentsLD values for the targets are the same.
+    )
 
     concatenated_features = concat_feats
     concatenated_targets = concat_targets
 
 
     return concatenated_features, concatenated_targets
+
+
+def create_color_scheme(num_params):
+
+    main_colors = []
+    color_shades = {}
+    
+    for i in range(num_params):
+        # Generate main color using HSV color space
+        hue = i / num_params
+        rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+        
+        # Convert RGB to hex
+        main_color = '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+        main_colors.append(main_color)
+        
+        # Generate shades
+        shades = []
+        for j in range(3):
+            # Adjust saturation and value for shades
+            sat = 1.0 - (j * 0.3)
+            val = 1.0 - (j * 0.2)
+            shade_rgb = colorsys.hsv_to_rgb(hue, sat, val)
+            shade = '#{:02x}{:02x}{:02x}'.format(int(shade_rgb[0]*255), int(shade_rgb[1]*255), int(shade_rgb[2]*255))
+            shades.append(shade)
+        
+        color_shades[main_color] = shades
+
+    return color_shades, main_colors

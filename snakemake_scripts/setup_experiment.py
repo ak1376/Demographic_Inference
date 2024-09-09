@@ -3,7 +3,7 @@ from experiment_manager import Experiment_Manager
 import os
 import argparse
 import json
-
+from utils import create_color_scheme
 
 def save_config(experiment_directory, experiment_config):
     # Save the full config
@@ -35,6 +35,17 @@ def main(config_path):
 
     # Save the config files
     save_config(experiment_directory, config)
+
+    # Now create the color scheme we will use for visualizing. Save them as pkl files
+    color_shades, main_colors = create_color_scheme(len(config["parameter_names"]))
+
+
+
+    with open(f'{linear_experiment.experiment_directory}/color_shades.pkl', "wb") as f:
+        pickle.dump(color_shades, f)
+
+    with open(f'{linear_experiment.experiment_directory}/main_colors.pkl', "wb") as f:
+        pickle.dump(main_colors, f)
 
     # Define file paths
     config_file = os.path.join(experiment_directory, "config.json")

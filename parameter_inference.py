@@ -53,21 +53,21 @@ def run_inference_dadi(
     p0,
     sampled_params,
     num_samples,
+    demographic_model,
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
     maxiter=100,
     mutation_rate=1.26e-8,
-    length=1e8
+    length=1e8,
 ):
     """
     This should do the parameter inference for dadi
     """
+    if demographic_model == "bottleneck_model":
+        model_func = dadi.Demographics1D.three_epoch
 
-    model_func = dadi.Demographics1D.three_epoch
-    pts_ext = [40, 50, 60]
     func_ex = dadi.Numerics.make_extrap_log_func(model_func)
-    # Make the extrapolating version of our demographic model function.
-    # func_ex = dadi.Numerics.make_extrap_log_func(model_func)
+    pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
 
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
@@ -84,14 +84,12 @@ def run_inference_dadi(
         lower_bound=lower_bound,
         upper_bound=upper_bound,
         algorithm=nlopt.LN_BOBYQA,
-        maxeval=10
-        # maxiter=maxiter,
+        maxeval=10,
     )
 
     opt_params = opt_params[0]
 
-    print(f'OPT DADI PARAMETER: {opt_params}')
-
+    print(f"OPT DADI PARAMETER: {opt_params}")
 
     end = time.time()
     # print(f"Dadi optimization took {end - start} seconds")
@@ -99,27 +97,29 @@ def run_inference_dadi(
     model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
 
-    N_ref = opt_theta / (4 * mutation_rate * length)
+    opt_params_dict = {}
 
-    
-
-    opt_params_dict = {
-        "N0": N_ref,
-        "Nb": opt_params[0] * N_ref,
-        "N_recover": opt_params[1] * N_ref,
-        "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
-        "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
-    }
+    if demographic_model == "bottleneck_model":
+        N_ref = opt_theta / (4 * mutation_rate * length)
+        opt_params_dict = {
+            "N0": N_ref,
+            "Nb": opt_params[0] * N_ref,
+            "N_recover": opt_params[1] * N_ref,
+            "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
+            "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
+        }
 
     model = model * opt_theta
     return model, opt_theta, opt_params_dict
+
 
 def run_inference_moments(
     sfs,
     p0,
     sampled_params,
-    lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
-    upper_bound=[100, 100, 100, 100],
+    demographic_model,
+    lower_bound=[0.001, 0.001, 0.001, 0.001],
+    upper_bound=[1, 1, 1, 1],
     maxiter=20,
     use_FIM=False,
     mutation_rate=1.26e-8,
@@ -132,7 +132,8 @@ def run_inference_moments(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
 
-    model_func = moments.Demographics1D.three_epoch
+    if demographic_model == "bottleneck_model":
+        model_func = moments.Demographics1D.three_epoch
 
     start = time.time()
 
@@ -145,8 +146,7 @@ def run_inference_moments(
         maxiter=maxiter,
     )
 
-    print(f'OPT MOMENTS PARAMETER: {opt_params}')
-
+    print(f"OPT MOMENTS PARAMETER: {opt_params}")
 
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
@@ -154,9 +154,6 @@ def run_inference_moments(
     N_ref = opt_theta / (4 * mutation_rate * length)
 
     end = time.time()
-
-    # uncerts = moments.Godambe.FIM_uncert(
-    # model_func, opt_params, sfs)
 
     if use_FIM:
 
@@ -182,34 +179,30 @@ def run_inference_moments(
     else:
         upper_triangular = None
 
-    # opt_params_dict = {
-    #     'N0': N0_opt,
-    #     'Nb': opt_params[0]*N0_opt,
-    #     'N_recover': opt_params[1]*N0_opt,
-    #     't_bottleneck_end': opt_params[3]*2*N0_opt,
-    #     't_bottleneck_start': opt_params[2]*2*N0_opt
-    # }
+    opt_params_dict = {}
 
-    opt_params_dict = {
-        "N0": N_ref,
-        "Nb": opt_params[0] * N_ref,
-        "N_recover": opt_params[1] * N_ref,
-        "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
-        "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
-        "upper_triangular_FIM": upper_triangular,
-    }
+    if demographic_model == "bottleneck_model":
 
-    if opt_params_dict["upper_triangular_FIM"] is None:
-        del opt_params_dict["upper_triangular_FIM"]
+        opt_params_dict = {
+            "N0": N_ref,
+            "Nb": opt_params[0] * N_ref,
+            "N_recover": opt_params[1] * N_ref,
+            "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
+            "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
+            "upper_triangular_FIM": upper_triangular,
+        }
+
+        if opt_params_dict["upper_triangular_FIM"] is None:
+            del opt_params_dict["upper_triangular_FIM"]
 
     model = model * opt_theta
-
-    # print(f"Moments optimization took {end - start} seconds")
 
     return model, opt_theta, opt_params_dict
 
 
-def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxiter=20):
+def run_inference_momentsLD(
+    folderpath, num_windows, param_sample, p_guess, demographic_model, maxiter=20
+):
     """
     This should do the parameter inference for momentsLD
     """
@@ -232,7 +225,7 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
     demo_func = moments.LD.Demographics1D.three_epoch  # type: ignore
     # Set up the initial guess
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
-    opt_params, LL = moments.LD.Inference.optimize_lbfgsb(  # type: ignore
+    opt_params, LL = moments.LD.Inference.optimize_log_fmin(  # type: ignore
         p_guess,
         [mv["means"], mv["varcovs"]],
         [demo_func],
@@ -240,12 +233,15 @@ def run_inference_momentsLD(folderpath, num_windows, param_sample, p_guess, maxi
         maxiter=maxiter,
     )
 
-    opt_params_dict = {
-        "N0": opt_params[4],
-        "Nb": opt_params[0] * opt_params[4],
-        "N_recover": opt_params[1] * opt_params[4],
-        "t_bottleneck_end": opt_params[3] * 2 * opt_params[4],
-        "t_bottleneck_start": opt_params[2] * 2 * opt_params[4],
-    }
+    opt_params_dict = {}
+    if demographic_model == "bottleneck_model":
+
+        opt_params_dict = {
+            "N0": opt_params[4],
+            "Nb": opt_params[0] * opt_params[4],
+            "N_recover": opt_params[1] * opt_params[4],
+            "t_bottleneck_end": opt_params[3] * 2 * opt_params[4],
+            "t_bottleneck_start": opt_params[2] * 2 * opt_params[4],
+        }
 
     return opt_params_dict
