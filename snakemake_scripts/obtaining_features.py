@@ -4,17 +4,12 @@ import numpy as np
 import time
 import pickle
 import joblib
-from sklearn.linear_model import LinearRegression
-from preprocess import Processor, FeatureExtractor
+from preprocess import Processor
 from utils import (
-    process_and_save_data,
     visualizing_results,
-    calculate_model_errors,
     root_mean_squared_error,
     calculate_and_save_rrmse,
     find_outlier_indices,
-    creating_features_dict,
-    concatenating_features,
 )
 
 from models import LinearReg
@@ -35,12 +30,8 @@ def str2bool(v):
 def obtain_features(
     experiment_config,
     experiment_directory,
-    num_sims_pretrain,
-    num_sims_inference,
     color_shades_file,
     main_colors_file,
-    normalization=False,
-    remove_outliers=True,
 ):
 
     # Load the experiment config
@@ -68,34 +59,19 @@ def obtain_features(
         mutation_rate=experiment_config["mutation_rate"],
         window_length=experiment_config["window_length"],
     )
-    extractor = FeatureExtractor(
-        experiment_directory,
-        dadi_analysis=experiment_config["dadi_analysis"],
-        moments_analysis=experiment_config["moments_analysis"],
-        momentsLD_analysis=experiment_config["momentsLD_analysis"],
-    )
 
-    all_indices = np.arange(num_sims_pretrain)
+    # Now I want to define training, validation, and testing indices:
+
+    # Generate all indices and shuffle them
+    all_indices = np.arange(experiment_config['num_sims_pretrain'])
     np.random.shuffle(all_indices)
-    n_train = int(0.8 * num_sims_pretrain)
+
+    # Split into training and validation indices
+    n_train = int(0.8 * experiment_config['num_sims_pretrain'])
 
     training_indices = all_indices[:n_train]
     validation_indices = all_indices[n_train:]
-    testing_indices = np.arange(num_sims_inference)
-
-    print(f"Number of Training Indices: {len(training_indices)}")
-    print(f"Number of Validation Indices: {len(validation_indices)}")
-    print(f"Number of Testing Indices: {len(testing_indices)}")
-
-    features_dict = {stage: {} for stage in ["training", "validation", "testing"]}
-    targets_dict = {stage: {} for stage in ["training", "validation", "testing"]}
-    feature_names = {}
-    concatenated_features = {
-        stage: {} for stage in ["training", "validation", "testing"]
-    }
-    concatenated_targets = {
-        stage: {} for stage in ["training", "validation", "testing"]
-    }
+    testing_indices = np.arange(experiment_config['num_sims_inference'])
 
     preprocessing_results_obj = {
             stage: {} for stage in ["training", "validation", "testing"]
@@ -110,77 +86,20 @@ def obtain_features(
         # Your existing process_and_save_data function
 
         # Call the remote function and get the ObjectRef
-        merged_dict = processor.pretrain_processing(indices)
+        features, targets = processor.pretrain_processing(indices)
 
-        dadi_dict, moments_dict, momentsLD_dict = process_and_save_data(
-            merged_dict,
-            stage,
-            experiment_directory,
-            experiment_config["dadi_analysis"],
-            experiment_config["moments_analysis"],
-            experiment_config["momentsLD_analysis"],
-        )
+        preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model
+        preprocessing_results_obj[stage]["targets"] = targets
 
-        features_dict, targets_dict = creating_features_dict(
-            stage,
-            dadi_dict,
-            moments_dict,
-            momentsLD_dict,
-            features_dict,
-            targets_dict,
-            experiment_config["dadi_analysis"],
-            experiment_config["moments_analysis"],
-            experiment_config["momentsLD_analysis"]
-        )
-
-        concatenated_features, concatenated_targets= concatenating_features( stage, concatenated_features, concatenated_targets, features_dict, targets_dict)
-
-        print("========================================")
-        print(f"Number of features: {concatenated_features.shape}")
-        print(f"Number of targets: {concatenated_targets.shape}")
-        print("========================================")
-
-        outlier_indices = find_outlier_indices(concatenated_features)
-
-        if remove_outliers:
-            concatenated_features = np.delete(concatenated_features, outlier_indices, axis=0)
-            concatenated_targets = np.delete(concatenated_targets, outlier_indices, axis=0)
-
-        preprocessing_results_obj[stage]["predictions"] = concatenated_features
-        preprocessing_results_obj[stage]["targets"] = concatenated_targets
-        preprocessing_results_obj["param_names"] = experiment_config['parameter_names']
-
-        # Add some more fields to the preprocessing_results_obj for plotting easier
-
-        num_analyses = experiment_config['dadi_analysis'] + experiment_config['moments_analysis'] + experiment_config['momentsLD_analysis']
-        # Now reshape the features and targets so that there are num_params columns 
-
-        # Step 1: Reshape to (num_sim, num_analyses, num_param)
-        num_sim = concatenated_features.shape[0]
-        num_param = len(experiment_config['parameter_names'])
-        
-        reshaped_features = concatenated_features.reshape(num_sim, num_analyses, num_param)
-
-        # Step 2: Swap axes and flatten to increase the number of rows
-        # This increases the number of rows by a factor of num_analyses
-        final_array = reshaped_features.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
-
-        preprocessing_results_obj[stage]["reshaped_features"] = final_array
-
-        reshaped_targets = concatenated_targets.reshape(num_sim, num_analyses, num_param)
-        final_targets = reshaped_targets.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
-
-        preprocessing_results_obj[stage]["reshaped_targets"] = final_targets
-
+    preprocessing_results_obj["param_names"] = experiment_config['parameter_names']
 
     #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
     rrmse_dict = calculate_and_save_rrmse(
-        features_dict,
-        targets_dict,
+        preprocessing_results_obj,
         save_path=f"{experiment_directory}/rrmse_dict.json",
-        dadi_analysis=experiment_config["dadi_analysis"],
-        moments_analysis=experiment_config["moments_analysis"],
-        momentsLD_analysis=experiment_config["momentsLD_analysis"]
+        dadi_analysis=experiment_config['dadi_analysis'],
+        moments_analysis=experiment_config['moments_analysis'],
+        momentsLD_analysis=experiment_config['momentsLD_analysis'],
     )
 
     # Open a file to save the object
@@ -190,6 +109,7 @@ def obtain_features(
         pickle.dump(preprocessing_results_obj, file)
 
     # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots.
+    
     visualizing_results(
         preprocessing_results_obj,
         save_loc=experiment_directory,
@@ -227,13 +147,13 @@ def obtain_features(
 
     rrmse_dict = {}
     rrmse_dict["training"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["training"]["reshaped_targets"], y_pred=training_predictions
+        y_true=linear_mdl_obj["training"]["targets"], y_pred=np.squeeze(training_predictions, axis = 1)
     )
     rrmse_dict["validation"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["validation"]["reshaped_targets"], y_pred=validation_predictions
+        y_true=linear_mdl_obj["validation"]["targets"], y_pred=np.squeeze(validation_predictions, axis = 1)
     )
     rrmse_dict["testing"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["testing"]["reshaped_targets"], y_pred=testing_predictions
+        y_true=linear_mdl_obj["testing"]["targets"], y_pred=np.squeeze(testing_predictions, axis = 1)
     )
 
     # Open a file to save the object
@@ -265,8 +185,11 @@ def obtain_features(
     #     snn_model.state_dict(),
     #     f"{self.experiment_directory}/neural_network_model.pth",
     # )
+    
+    # Save the color shades and main colors for usage with the neural network
 
     print("Training complete!")
+
 
 if __name__ == "__main__":
     import argparse
@@ -274,12 +197,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_config", type=str, required=True)
     parser.add_argument("--experiment_directory", type=str, required=True)
-    parser.add_argument("--num_sims_pretrain", type=int, required=True)
-    parser.add_argument("--num_sims_inference", type=int, required=True)
     parser.add_argument("--color_shades_file", type=str, required=True)
     parser.add_argument("--main_colors_file", type=str, required=True)
-    parser.add_argument("--normalization", type=str2bool, default=True)
-    parser.add_argument("--remove_outliers", type=str2bool, default=True)
     args = parser.parse_args()
 
     print("========================================")
@@ -291,10 +210,6 @@ if __name__ == "__main__":
 
         experiment_config=args.experiment_config,
         experiment_directory=args.experiment_directory,
-        num_sims_pretrain = args.num_sims_pretrain,
-        num_sims_inference=args.num_sims_inference,
         color_shades_file = args.color_shades_file,
         main_colors_file = args.main_colors_file,
-        normalization = args.normalization,
-        remove_outliers = args.remove_outliers,
     )

@@ -71,7 +71,7 @@ config = {
     "seed": 42,
     "normalization": False,
     "remove_outliers": True,
-    "use_FIM": False,
+    "use_FIM": True,
     "neural_net_hyperparameters": model_config,
     "demographic_model": "bottleneck_model",
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"], # these should be a list of parameters that we want to optimize 
@@ -108,7 +108,7 @@ snn_model, train_losses, val_losses = trainer.train(
     validation_targets,
     visualize=True,
 )
-trainer.predict(
+snn_results = trainer.predict(
     snn_model,
     training_features,
     validation_features,

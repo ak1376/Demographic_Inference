@@ -109,9 +109,9 @@ def calculate_model_errors(model_obj, model_name, datasets):
     for dataset in datasets:
         errors[dataset] = root_mean_squared_error(
             model_obj[dataset]["targets"],
-            model_obj[dataset][
+            np.squeeze(model_obj[dataset][
                 "predictions"
-            ],  # The :4 is to only consider the first 4 columns which are the parameters of interest. For moments I also get the upper triangle of the FIM, and those aren't parameters we are inferring.
+            ], axis = 1),  # The :4 is to only consider the first 4 columns which are the parameters of interest. For moments I also get the upper triangle of the FIM, and those aren't parameters we are inferring.
         )
 
     return {model_name: errors}

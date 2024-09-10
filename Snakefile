@@ -21,9 +21,9 @@ model_config = {
     "output_size": 5,
     "num_epochs": 1000,
     "learning_rate": 3e-4,
-    "num_layers": 3,
-    "dropout_rate": 0,
-    "weight_decay": 0,
+    "num_layers": 1,
+    "dropout_rate": 0.1,
+    "weight_decay": 1e-4,
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"], # these should be a list of parameters that we want to optimize 
 
 }
@@ -31,17 +31,17 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 20,
-    "num_sims_inference": 20,
+    "num_sims_pretrain": 10,
+    "num_sims_inference": 1,
     "num_samples": 20,
-    "experiment_name": "dadi_moments_analysis_debug",
+    "experiment_name": "dadi_moments_analysis_new_analysis_optimize_big_length_check",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e4,
     "maxiter": 100,
-    "genome_length": 1e6,
+    "genome_length": 1e8,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
     "seed": 42,
@@ -85,9 +85,6 @@ rule all:
         f"{EXPERIMENT_DIRECTORY}/snn_model.pth",
         f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl",
         f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt",
-        f"{EXPERIMENT_DIRECTORY}/dadi_dict_inference.pkl",
-        f"{EXPERIMENT_DIRECTORY}/moments_dict_inference.pkl",
-        f"{EXPERIMENT_DIRECTORY}/momentsLD_dict_inference.pkl",
         f'{EXPERIMENT_DIRECTORY}/color_shades.pkl',
         f'{EXPERIMENT_DIRECTORY}/main_colors.pkl',
 
@@ -121,10 +118,6 @@ rule obtain_features:
         linear_model = f"{EXPERIMENT_DIRECTORY}/linear_regression_model.pkl",
     params:
         experiment_name = EXPERIMENT_NAME,
-        num_sims_pretrain = config['num_sims_pretrain'],
-        num_sims_inference = config['num_sims_inference'],
-        normalization = config['normalization'],
-        remove_outliers = config['remove_outliers']
 
     # conda: 
     #     "myenv"
@@ -133,12 +126,8 @@ rule obtain_features:
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtaining_features.py \
         --experiment_config {input.config_file} \
         --experiment_directory {EXPERIMENT_DIRECTORY} \
-        --num_sims_pretrain {params.num_sims_pretrain} \
-        --num_sims_inference {params.num_sims_inference} \
         --color_shades_file {input.colors_shades_file} \
         --main_colors_file {input.main_colors_file} \
-        --normalization {params.normalization} \
-        --remove_outliers {params.remove_outliers}
         """
 
 rule get_features:
@@ -183,36 +172,19 @@ rule train_and_predict:
 rule get_inferred_params:
     input:
         config = rules.create_experiment.output.config_file,
-    
+        trained_weights = rules.train_and_predict.output.trained_model,
     params:
-        experiment_directory = EXPERIMENT_DIRECTORY
+        experiment_directory = EXPERIMENT_DIRECTORY,
+        inference_obj_path = f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl"
+
     output:
         f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl",
-        f"{EXPERIMENT_DIRECTORY}/dadi_dict_inference.pkl",
-        f"{EXPERIMENT_DIRECTORY}/moments_dict_inference.pkl",
-        f"{EXPERIMENT_DIRECTORY}/momentsLD_dict_inference.pkl"
-    shell:
-        """
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/inference.py \
-        --config {input.config} \
-        --experiment_directory {params.experiment_directory}
-        """
-
-rule evaluate_model_GHIST:
-    input:
-        config = rules.create_experiment.output.config_file,
-        trained_weights = rules.train_and_predict.output.trained_model,
-        inference_obj = rules.get_inferred_params.output[0]  # Because output is a tuple
-    params:
-        experiment_directory = EXPERIMENT_DIRECTORY
-
-    output:
         f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
     shell:
         """
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/evaluate_model_on_ghist.py \
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/inference_snakemake.py \
         --config {input.config} \
         --trained_weights {input.trained_weights} \
-        --inference_obj {input.inference_obj} \
+        --inference_obj_path {params.inference_obj_path} \
         --experiment_directory {params.experiment_directory}
         """

@@ -4,27 +4,14 @@ from tqdm import tqdm
 import numpy as np
 import msprime
 import dadi
-import moments.Demes as demes_obj
 import glob
-import demes
-from utils import (
-    visualizing_results,
-    root_mean_squared_error,
-    find_outlier_indices,
-)
 import time
-
 import demographic_models
-
-from sklearn.utils import resample
-
 from parameter_inference import (
     run_inference_dadi,
     run_inference_moments,
     run_inference_momentsLD,
 )
-
-import allel
 import pandas as pd
 
 
@@ -53,198 +40,6 @@ def delete_vcf_files(directory):
     [os.remove(file) for file in files]
 
     print(f"Deleted {len(files)} files from {directory}")
-
-class FeatureExtractor:
-    def __init__(
-        self,
-        experiment_directory,
-        dadi_analysis=True,
-        moments_analysis=True,
-        momentsLD_analysis=True,
-    ):
-        self.experiment_directory = experiment_directory
-        self.dadi_analysis = dadi_analysis
-        self.moments_analysis = moments_analysis
-        self.momentsLD_analysis = momentsLD_analysis
-
-
-    def finalize_processing(
-        self, features_dict, targets_dict, feature_names, remove_outliers=True
-    ):
-        # TODO: I really need to rewrite this whole function. So many errors.
-        # TODO: Maybe I can just eliminate this entire function altogether.
-        """
-        This function will create the numpy array of features and targets across all analysis types and stages. If the user specifies to remove outliers, it will remove them from the data and then resample the rows for concatenation
-        """
-
-        for stage in features_dict:
-            for analysis_type in features_dict[stage]:
-                features = np.array(features_dict[stage][analysis_type])
-
-                if targets_dict:  # i.e. if we are not in inference mode
-                    targets = np.array(targets_dict[stage][analysis_type])
-
-                    outlier_indices = find_outlier_indices(features)
-                    np.savetxt(
-                        os.path.join(
-                            self.experiment_directory,
-                            f"outlier_indices_{analysis_type}_{stage}.csv",
-                        ),
-                        outlier_indices,
-                        delimiter=",",
-                    )
-
-                    # Remove outliers
-                    if remove_outliers:
-                        features = np.delete(features, outlier_indices, axis=0)
-                        targets = np.delete(targets, outlier_indices, axis=0)
-                        # self.resample_features_and_targets(stage)
-
-                    targets_dict[stage][analysis_type] = targets
-
-                features_dict[stage][analysis_type] = features
-
-                # error_value = root_mean_squared_error(targets, features)
-                # print(f"Final error value for {analysis_type} {stage}: {error_value}")
-
-        if targets_dict:
-            concatenated_features, concatenated_targets = (
-                self.concatenate_features_and_targets(
-                    stage=stage,
-                    feature_names=feature_names,
-                    features_dict=features_dict,
-                    targets_dict=targets_dict,
-                )
-            )  # type:ignore
-        else:
-            concatenated_features = self.concatenate_features_and_targets(
-                stage=stage,
-                feature_names=feature_names,
-                features_dict=features_dict,
-                targets_dict=None,
-            )  # type:ignore
-
-        if targets_dict:
-            return concatenated_features, concatenated_targets, feature_names
-        else:
-            return concatenated_features, feature_names
-
-    # TODO: Need to modify this s.t. I am not relying on the class instances for any of this.
-    @staticmethod
-    def concatenate_features_and_targets(
-        feature_names, features_dict, targets_dict, stage
-    ):
-        concatenated_features = {}
-        concatenated_targets = {}
-        concatenated_feature_names = []
-
-        # Concatenate feature names only once
-        for analysis_type in sorted(feature_names.keys()):  # type: ignore
-            concatenated_feature_names.extend(feature_names[analysis_type])
-
-        for stage_key in features_dict:
-            all_features = []
-            all_targets = [] if stage != "inference" else None
-
-            for analysis_type in sorted(
-                features_dict[stage_key].keys()
-            ):  # Sort to ensure consistent order
-                all_features.append(features_dict[stage_key][analysis_type])
-                if stage != "inference":
-                    all_targets.append( # type:ignore
-                        targets_dict[stage_key][analysis_type]
-                    )  # type:ignore
-
-            # Find the minimum number of samples across all analysis types
-            min_samples = min(len(features) for features in all_features)
-
-            # Resample features (and targets, if not in inference mode) to have the same number of samples
-            resampled_features = []
-            resampled_targets = [] if stage != "inference" else None
-
-            for features, targets in zip(all_features, all_targets or []):
-                if len(features) > min_samples:
-                    resampled_features.append(
-                        resample(features, n_samples=min_samples, random_state=42)
-                    )
-                    if stage != "inference":
-                        resampled_targets.append(  # type:ignore
-                            resample(targets, n_samples=min_samples, random_state=42)
-                        )
-                else:
-                    resampled_features.append(features)
-                    if stage != "inference":
-                        resampled_targets.append(targets)  # type:ignore
-
-            # Concatenate the resampled features (and targets, if not in inference mode)
-            if targets_dict == {}:
-                resampled_features = all_features.copy()
-
-            concatenated_features[stage_key] = np.hstack(resampled_features)
-
-            if stage != "inference":
-                concatenated_targets[stage_key] = resampled_targets[ # type:ignore
-                    0
-                ]  # Assuming targets are the same for all analysis types #type:ignore
-
-            # Return concatenated_features if stage is 'inference'
-            if stage == "inference":
-                return concatenated_features
-
-            # Otherwise, return both concatenated_features and concatenated_targets
-            return concatenated_features, concatenated_targets
-
-    # TODO: Again, need to modify this s.t. I am not relying on the class instances for any of this.
-    def resample_features_and_targets(self, features_dict, targets_dict, stage):
-
-        analysis_types = list(features_dict[stage].keys())
-        if len(analysis_types) < 2:
-            return  # No need to resample if there's only one or no analysis type
-
-        # Find the minimum number of samples across all analysis types
-        min_samples = min(len(features_dict[stage][at]) for at in analysis_types)
-
-        for analysis_type in analysis_types:
-            features = np.array(features_dict[stage][analysis_type])
-            targets = np.array(targets_dict[stage][analysis_type])
-
-            if len(features) > min_samples:
-                # Randomly sample without replacement
-                indices = np.random.choice(len(features), min_samples, replace=False)
-                features_dict[stage][analysis_type] = features[indices]
-                targets_dict[stage][analysis_type] = targets[indices]
-
-def get_dicts(list_of_mega_result_dicts):
-    """
-    Concatenate the values for each subdict and each main key across list elements
-    """
-
-    merged_dict = {}
-
-    for dictionary in list_of_mega_result_dicts:
-        for key, value in dictionary.items():
-            if key in merged_dict:
-                if isinstance(merged_dict[key], dict) and isinstance(value, dict):
-                    # Merge nested dictionaries by combining each subkey
-                    for subkey, subvalue in value.items():
-                        if subkey in merged_dict[key]:
-                            # Append conflicting values to a list
-                            if not isinstance(merged_dict[key][subkey], list):
-                                merged_dict[key][subkey] = [merged_dict[key][subkey]]
-                            merged_dict[key][subkey].append(subvalue)
-                        else:
-                            merged_dict[key][subkey] = subvalue
-                else:
-                    # If the key exists but is not a dictionary, overwrite the value
-                    if not isinstance(merged_dict[key], list):
-                        merged_dict[key] = [merged_dict[key]]
-                    merged_dict[key].append(value)
-            else:
-                # If the key does not exist in the merged dictionary, add it
-                merged_dict[key] = value
-
-    return merged_dict
-
 
 class Processor:
     def __init__(
@@ -520,21 +315,23 @@ class Processor:
         df = pd.DataFrame([result['simulated_params'] for result in list_of_mega_result_dicts])
         targets = df.values
 
-        # Step 1: Dynamically extract parameter names from the first simulation
-        params = list(list_of_mega_result_dicts[0]['opt_params_dadi'].keys())
-        num_params = len(params)
+        # Step 1: Initialize an empty list to collect analysis data arrays
+        analysis_data = []
 
-        # Step 2: Use list comprehension to extract data for dadi and moments
-        dadi_data = [list(result['opt_params_dadi'].values()) for result in list_of_mega_result_dicts]
-        moments_data = [list(result['opt_params_moments'].values()) for result in list_of_mega_result_dicts]
+        # Step 2: Dynamically extract and append data based on configuration
+        for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
+            if self.experiment_config.get(analysis_type):
+                # Extract the appropriate data dynamically based on the analysis type
+                analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # This maps to 'opt_params_dadi', 'opt_params_moments', etc.
+                analysis_data.append([list(result[analysis_key].values()) for result in list_of_mega_result_dicts])
 
-        # Step 3: Stack the data into a NumPy array
-        # dadi_data and moments_data are now lists of lists, one for each simulation
-        dadi_array = np.array(dadi_data)       # Shape: (num_sims, num_params)
-        moments_array = np.array(moments_data) # Shape: (num_sims, num_params)
+        # Step 3: Convert the collected data into NumPy arrays
+        analysis_arrays = [np.array(data) for data in analysis_data]  # List of arrays, one for each analysis type
 
-        # Step 4: Stack dadi and moments arrays along a new axis to create (num_sims, num_analyses, num_params)
-        features = np.stack([dadi_array, moments_array], axis=1)
-        
-        
+        # Step 4: Stack the arrays along a new axis if there are multiple analyses
+        if len(analysis_arrays) > 1:
+            features = np.stack(analysis_arrays, axis=1)  # Stack along a new axis (num_sims, num_analyses, num_params)
+        else:
+            features = analysis_arrays[0]  # If there's only one analysis, just use that array
+
         return features, targets

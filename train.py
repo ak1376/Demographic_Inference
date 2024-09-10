@@ -111,6 +111,8 @@ class Trainer:
             f"Results have been saved to {self.experiment_directory}/MLP_model_error.txt"
         )
 
+        return snn_mdl_obj
+
         # Save the results object
         # with open(f"{self.experiment_directory}/snn_results.pkl", 'wb') as f:
         #     pickle.dump(snn_mdl_obj, f)

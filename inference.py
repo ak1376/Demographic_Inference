@@ -6,8 +6,7 @@ from parameter_inference import (
     run_inference_moments,
     run_inference_momentsLD,
 )
-from preprocess import Processor, FeatureExtractor, get_dicts
-from utils import save_dict_to_pickle
+from preprocess import Processor
 import pickle
 import torch
 
@@ -22,16 +21,6 @@ class Inference(Processor):
         self.experiment_directory = experiment_directory
 
         self.config = config
-        self.extractor = FeatureExtractor(
-            self.experiment_directory,
-            dadi_analysis=self.config["dadi_analysis"],  # Not applicable for inference
-            moments_analysis=self.config[
-                "moments_analysis"
-            ],  # Not applicable for inference
-            momentsLD_analysis=self.config[
-                "momentsLD_analysis"
-            ],  # Not applicable for inference
-        )
 
     def read_data(self):
         vcf_data = allel.read_vcf(self.vcf_filepath)
@@ -175,113 +164,28 @@ class Inference(Processor):
 
         list_of_mega_result_dicts = [mega_result_dict]
 
-        merged_dict = get_dicts(list_of_mega_result_dicts)
 
-        # TODO: Rewrite everything below:
-        if self.config["dadi_analysis"]:
-            dadi_dict = {
-                "actual_sfs": sfs,
-                "model_sfs": merged_dict["model_sfs_dadi"],
-                "opt_theta": merged_dict["opt_theta_dadi"],
-                "opt_params": merged_dict["opt_params_dadi"],
-            }
+        # Step 1: Initialize an empty list to collect analysis data arrays
+        analysis_data = []
+
+        # Step 2: Dynamically extract and append data based on configuration
+        for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
+            if self.config.get(analysis_type):
+                # Extract the appropriate data dynamically based on the analysis type
+                analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # This maps to 'opt_params_dadi', 'opt_params_moments', etc.
+                analysis_data.append([list(result[analysis_key].values()) for result in list_of_mega_result_dicts])
+
+        # Step 3: Convert the collected data into NumPy arrays
+        analysis_arrays = [np.array(data) for data in analysis_data]  # List of arrays, one for each analysis type
+
+        # Step 4: Stack the arrays along a new axis if there are multiple analyses
+        if len(analysis_arrays) > 1:
+            features = np.stack(analysis_arrays, axis=1)  # Stack along a new axis (num_sims, num_analyses, num_params)
         else:
-            dadi_dict = {}
-
-        if self.config["moments_analysis"]:
-            moments_dict = {
-                "actual_sfs": sfs,
-                "model_sfs": merged_dict["model_sfs_moments"],
-                "opt_theta": merged_dict["opt_theta_moments"],
-                "opt_params": merged_dict["opt_params_moments"],
-            }
-        else:
-            moments_dict = {}
-
-        if self.config["momentsLD_analysis"]:
-            momentsLD_dict = {"opt_params": merged_dict["opt_params_momentsLD"]}
-        else:
-            momentsLD_dict = {}
-
-        for name, data in [
-            ("dadi", dadi_dict),
-            ("moments", moments_dict),
-            ("momentsLD", momentsLD_dict),
-        ]:
-            filename = f"{name}_dict_inference.pkl"
-            save_dict_to_pickle(data, filename, self.experiment_directory)
-
-        features_dict = {stage: {} for stage in ["inference"]}
-        targets_dict = {stage: {} for stage in ["inference"]}
-        feature_names = {}
-        concatenated_features = {}
-        concatenated_targets = {}
-        stage = "inference"
-
-        # Process each dictionary
-        if self.config["dadi_analysis"]:
-            concatenated_array = np.column_stack(
-                [dadi_dict["opt_params"][key] for key in dadi_dict["opt_params"]]
-            )
-            features_dict[stage]["dadi"] = concatenated_array
-
-            if "simulated_params" in dadi_dict:
-                concatenated_array = np.column_stack(
-                    [
-                        dadi_dict["simulated_params"][key]
-                        for key in dadi_dict["simulated_params"]
-                    ]
-                )
-                targets_dict[stage]["dadi"] = concatenated_array
-
-        if self.config["moments_analysis"]:
-            concatenated_array = np.column_stack(
-                [moments_dict["opt_params"][key] for key in moments_dict["opt_params"]]
-            )
-            features_dict[stage]["moments"] = concatenated_array
-
-            if "simulated_params" in moments_dict:
-                concatenated_array = np.column_stack(
-                    [
-                        moments_dict["simulated_params"][key]
-                        for key in moments_dict["simulated_params"]
-                    ]
-                )
-                targets_dict[stage]["moments"] = concatenated_array
-
-        if self.config["momentsLD_analysis"]:
-            concatenated_array = np.column_stack(
-                [
-                    momentsLD_dict["opt_params"][key]
-                    for key in momentsLD_dict["opt_params"]
-                ]
-            )
-            features_dict[stage]["momentsLD"] = concatenated_array
-
-            if "simulated_params" in momentsLD_dict:
-                concatenated_array = np.column_stack(
-                    [
-                        momentsLD_dict["simulated_params"][key]
-                        for key in momentsLD_dict["simulated_params"]
-                    ]
-                )
-                targets_dict[stage]["momentsLD"] = concatenated_array
-
-        # Now columnwise the dadi, moments, and momentsLD inferences to get a concatenated features and targets array
-        concat_feats = np.column_stack(
-            [features_dict[stage][subkey] for subkey in features_dict[stage]]
-        )
-
-        if targets_dict[stage]:
-            concat_targets = np.column_stack(
-                [targets_dict[stage]["dadi"]]
-            )  # dadi because dadi and moments values for the targets are the same.
-            concatenated_targets[stage] = concat_targets
-
-        concatenated_features[stage] = concat_feats
+            features = analysis_arrays[0]  # If there's only one analysis, just use that array
 
         inference_obj = {}
-        inference_obj["features"] = concatenated_features["inference"]
+        inference_obj["features"] = features
 
         # Open a file to save the object
         with open(
@@ -291,6 +195,7 @@ class Inference(Processor):
 
         print("Inference complete!")
 
+
     def evaluate_model(self, snn_model, inference_results):
         """
         This should run the GHIST data through the trained model and return the inferred parameters
@@ -298,6 +203,9 @@ class Inference(Processor):
 
         inference_features = torch.tensor(
             inference_results["features"], dtype=torch.float32
+        ).cuda()
+        inference_features = inference_features.reshape(
+            inference_features.shape[0], -1
         )
         inferred_params = snn_model.predict(inference_features)
 

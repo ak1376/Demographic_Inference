@@ -13,7 +13,7 @@ import time
 import json
 import colorsys
 
-from preprocess import Processor, FeatureExtractor
+from preprocess import Processor
 from utils import (
     visualizing_results,
     calculate_and_save_rrmse,
@@ -140,12 +140,6 @@ class Experiment_Manager:
 
         # First step: define the processor
         processor = Processor(self.experiment_config, self.experiment_directory)
-        extractor = FeatureExtractor(
-            self.experiment_directory,
-            dadi_analysis=self.experiment_config["dadi_analysis"],
-            moments_analysis=self.experiment_config["moments_analysis"],
-            momentsLD_analysis=self.experiment_config["momentsLD_analysis"],
-        )
 
         # Now I want to define training, validation, and testing indices:
 

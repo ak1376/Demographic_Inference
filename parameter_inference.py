@@ -120,7 +120,7 @@ def run_inference_moments(
     demographic_model,
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
-    maxiter=20,
+    maxiter=100,
     use_FIM=False,
     mutation_rate=1.26e-8,
     length=1e7,
@@ -137,7 +137,7 @@ def run_inference_moments(
 
     start = time.time()
 
-    opt_params = moments.Inference.optimize_log_fmin(
+    opt_params = moments.Inference.optimize(
         p_guess,
         sfs,
         model_func,
