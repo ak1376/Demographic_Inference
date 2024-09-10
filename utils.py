@@ -24,24 +24,31 @@ def visualizing_results(
 
     plt.figure(figsize=(5 * cols, 5 * rows))
 
+    # Loop through each parameter (dimension of the parameters)
     for i, param in enumerate(params):
         plt.subplot(rows, cols, i + 1)
 
         all_predictions = []
         all_targets = []
 
+        # Loop through each analysis (dimension 1)
         for j, stage in enumerate(stages):
-            predictions = linear_mdl_obj[stage]["reshaped_features"][:, i]
-            targets = linear_mdl_obj[stage]["reshaped_targets"][:, i]
+            num_analyses = linear_mdl_obj[stage]["predictions"].shape[1]
+            predictions = linear_mdl_obj[stage]["predictions"][:, :, i]  # shape (num_sims, num_analyses)
+            targets = np.tile(linear_mdl_obj[stage]["targets"][:,i][:, np.newaxis], (1, num_analyses))
+            
+            # Flatten along the rows to plot results across analyses for each parameter
+            predictions_flat = predictions.reshape(-1)
+            targets_flat = targets.reshape(-1)
 
             # Append all predictions and targets to determine the global min/max for each plot
-            all_predictions.extend(predictions)
-            all_targets.extend(targets)
+            all_predictions.extend(predictions_flat)
+            all_targets.extend(targets_flat)
 
             # Scatter plot for each stage
             plt.scatter(
-                targets,
-                predictions,
+                targets_flat,
+                predictions_flat,
                 alpha=0.5,
                 color=color_shades[main_colors[i % len(main_colors)]][j],  # type: ignore
                 label=f"{stage.capitalize()}",
@@ -85,7 +92,6 @@ def visualizing_results(
     print(f"Saved figure to: {filename}")
     plt.show()
 
-
 def calculate_model_errors(model_obj, model_name, datasets):
     """
     PLACEHOLDER FOR NOW
@@ -112,80 +118,30 @@ def calculate_model_errors(model_obj, model_name, datasets):
 
 
 def calculate_and_save_rrmse(
-    features_dict,
-    targets_dict,
+    analysis_obj,
     save_path,
     dadi_analysis=False,
     moments_analysis=False,
     momentsLD_analysis=False,
 ):
+
+    num_analyses =  dadi_analysis + moments_analysis + momentsLD_analysis
     rrmse_dict = {}
 
-    if dadi_analysis:
-        rrmse_training_dadi = root_mean_squared_error(
-            features_dict["training"]["dadi"], targets_dict["training"]["dadi"]
-        )
-        rrmse_validation_dadi = root_mean_squared_error(
-            features_dict["validation"]["dadi"], targets_dict["validation"]["dadi"]
-        )
-        rrmse_testing_dadi = root_mean_squared_error(
-            features_dict["testing"]["dadi"], targets_dict["testing"]["dadi"]
-        )
+    rrmse_training = root_mean_squared_error(
+        analysis_obj['training']['predictions'], np.tile(analysis_obj['training']['targets'][:, np.newaxis, :], (1, num_analyses, 1))
+    )
+    rrmse_validation = root_mean_squared_error(
+        analysis_obj['validation']['predictions'], np.tile(analysis_obj['validation']['targets'][:, np.newaxis, :], (1, num_analyses, 1))
+    )
 
-        rrmse_dict["dadi"] = {
-            "training": rrmse_training_dadi,
-            "validation": rrmse_validation_dadi,
-            "testing": rrmse_testing_dadi,
-        }
+    rrmse_testing = root_mean_squared_error(
+        analysis_obj['testing']['predictions'], np.tile(analysis_obj['testing']['targets'][:, np.newaxis, :], (1, num_analyses, 1))
+    )
 
-    if moments_analysis:
-
-        rrmse_training_moments = root_mean_squared_error(
-            features_dict["training"]["moments"], targets_dict["training"]["moments"]
-        )
-        rrmse_validation_moments = root_mean_squared_error(
-            features_dict["validation"]["moments"],
-            targets_dict["validation"]["moments"],
-        )
-        rrmse_testing_moments = root_mean_squared_error(
-            features_dict["testing"]["moments"], targets_dict["testing"]["moments"]
-        )
-
-        rrmse_dict["moments"] = {
-            "training": rrmse_training_moments,
-            "validation": rrmse_validation_moments,
-            "testing": rrmse_testing_moments,
-        }
-
-    if momentsLD_analysis:
-        rrmse_training_momentsLD = root_mean_squared_error(
-            features_dict["training"]["momentsLD"],
-            targets_dict["training"]["momentsLD"],
-        )
-        rrmse_validation_momentsLD = root_mean_squared_error(
-            features_dict["validation"]["momentsLD"],
-            targets_dict["validation"]["momentsLD"],
-        )
-        rrmse_testing_momentsLD = root_mean_squared_error(
-            features_dict["testing"]["momentsLD"], targets_dict["testing"]["momentsLD"]
-        )
-
-        rrmse_dict["momentsLD"] = {
-            "training": rrmse_training_momentsLD,
-            "validation": rrmse_validation_momentsLD,
-            "testing": rrmse_testing_momentsLD,
-        }
-
-    # Overall training, validation, and testing RMSE
-    rrmse_training = np.mean([rrmse_dict[key]["training"] for key in rrmse_dict])
-    rrmse_validation = np.mean([rrmse_dict[key]["validation"] for key in rrmse_dict])
-    rrmse_testing = np.mean([rrmse_dict[key]["testing"] for key in rrmse_dict])
-
-    rrmse_dict["overall"] = {
-        "training": rrmse_training,
-        "validation": rrmse_validation,
-        "testing": rrmse_testing,
-    }
+    rrmse_dict["training"] = rrmse_training
+    rrmse_dict["validation"] = rrmse_validation
+    rrmse_dict["testing"] = rrmse_testing
 
     # Save rrmse_dict to a JSON file
     with open(save_path, "w") as json_file:
@@ -194,21 +150,6 @@ def calculate_and_save_rrmse(
     return rrmse_dict
 
 def root_mean_squared_error(y_true, y_pred):
-    """
-    Calculate the root mean squared error, with special handling for 8-column predictions.
-    If y_pred has 8 columns, it concatenates the values in the second group of 4 columns
-    with the values in the first group of 4 columns.
-
-    :param y_true: True values (numpy array)
-    :param y_pred: Predicted values (numpy array)
-    :return: Root mean squared error value
-    """
-    # Check if y_pred has 8 columns
-    if y_pred.shape[1] == 8:
-        # Concatenate the second group of 4 columns with the first group
-        y_pred = np.concatenate([y_pred[:, :4], y_pred[:, 4:]], axis=0)
-        # Repeat y_true to match the new y_pred shape
-        y_true = np.tile(y_true, (2, 1))
 
     # Ensure y_true and y_pred have the same shape
     assert (
@@ -257,34 +198,6 @@ def find_outlier_indices(data, threshold=3):
     return outliers_indices
 
 
-def resample_to_match_row_count(arr, target_rows, return_indices=False):
-    # If the array already has the target number of rows, return it as is
-    if arr.shape[0] == target_rows:
-        if return_indices:
-            return arr, np.arange(arr.shape[0])
-        else:
-            return arr
-
-    # Calculate the number of repetitions needed
-    num_repeats = target_rows // arr.shape[0]
-    remainder = target_rows % arr.shape[0]
-
-    # Generate indices for repetition
-    indices = np.tile(np.arange(arr.shape[0]), num_repeats)
-
-    # If there is a remainder, add additional indices
-    if remainder > 0:
-        indices = np.concatenate([indices, np.arange(remainder)])
-
-    # Resample the array using the calculated indices
-    resampled_array = arr[indices, :]
-
-    if return_indices:
-        return resampled_array, indices
-    else:
-        return resampled_array
-
-
 def save_dict_to_pickle(data_dict, filename, directory):
     """Save a dictionary to a pickle file."""
     filepath = os.path.join(directory, filename)
@@ -292,186 +205,6 @@ def save_dict_to_pickle(data_dict, filename, directory):
         pickle.dump(data_dict, f)
     print(f"Saved: {filepath}")
 
-
-def process_and_save_data(
-    merged_dict,
-    data_type,
-    experiment_directory,
-    dadi_analysis,
-    moments_analysis,
-    momentsLD_analysis,
-):
-    # TODO: I need to rewrite this so that I can call this for both pretraining mode and inference mode.
-    """Process data and save results to pickle files."""
-    # merged_dict = processor.pretrain_processing(indices)
-
-    if dadi_analysis:
-        dadi_dict = {
-            "simulated_params": merged_dict["simulated_params"],
-            "sfs": merged_dict["sfs"],
-            "model_sfs": merged_dict["model_sfs_dadi"],
-            "opt_theta": merged_dict["opt_theta_dadi"],
-            "opt_params": merged_dict["opt_params_dadi"],
-        }
-    else:
-        dadi_dict = {}
-
-    if moments_analysis:
-        moments_dict = {
-            "simulated_params": merged_dict["simulated_params"],
-            "sfs": merged_dict["sfs"],
-            "model_sfs": merged_dict["model_sfs_moments"],
-            "opt_theta": merged_dict["opt_theta_moments"],
-            "opt_params": merged_dict["opt_params_moments"],
-        }
-    else:
-        moments_dict = {}
-
-    if momentsLD_analysis:
-        momentsLD_dict = {
-            "simulated_params": merged_dict["simulated_params"],
-            "sfs": merged_dict["sfs"],
-            "opt_params": merged_dict["opt_params_momentsLD"],
-        }
-    else:
-        momentsLD_dict = {}
-
-    for name, data in [
-        ("dadi", dadi_dict),
-        ("moments", moments_dict),
-        ("momentsLD", momentsLD_dict),
-    ]:
-        filename = f"{name}_dict_{data_type}.pkl"
-        save_dict_to_pickle(data, filename, experiment_directory)
-
-    # Save ground truth (generative parameters)
-    ground_truth = (
-        dadi_dict.get("simulated_params")
-        or moments_dict.get("simulated_params")
-        or momentsLD_dict.get("simulated_params")
-    )
-    if ground_truth is not None:
-        filename = f"ground_truth_{data_type}.pkl"
-        save_dict_to_pickle(ground_truth, filename, experiment_directory)
-    else:
-        print(f"Warning: No ground truth found for {data_type}")
-
-    return dadi_dict, moments_dict, momentsLD_dict
-
-
-def creating_features_dict(stage, dadi_dict, moments_dict, momentsLD_dict, features_dict, targets_dict, dadi_analysis, moments_analysis, momentsLD_analysis, use_FIM = False): 
-    #TODO: This code could be paired down even more. 
-    # This function assumed that the parameters of interest are the first num_params keys in the dictionary. This is only applicable to use_FIM = True in moments. 
-    
-    feature_names = []
-    
-    if dadi_analysis:
-        concatenated_array = np.column_stack(
-            [dadi_dict["opt_params"][key] for key in dadi_dict["opt_params"]]
-            )
-
-        features_dict[stage]["dadi"] = concatenated_array
-
-        if dadi_dict["simulated_params"]:
-            concatenated_array = np.column_stack(
-                [
-                    dadi_dict["simulated_params"][key]
-                    for key in dadi_dict["simulated_params"]
-                ]
-            )
-            targets_dict[stage]["dadi"] = concatenated_array
-        
-        key_names = [key + "_dadi" for key in list(dadi_dict['opt_params'].keys())]
-
-        feature_names.extend(key_names)
-
-
-    if moments_analysis:
-        if use_FIM == False:
-            concatenated_array = np.column_stack(
-                [
-                    moments_dict["opt_params"][key]
-                    for key in moments_dict["opt_params"]
-                ]
-            )
-        else:
-            # Concatenate all features except for "upper_triangular_FIM"
-            concatenated_array = np.column_stack(
-                [
-                    np.array(moments_dict["opt_params"][key]).flatten()
-                    if isinstance(moments_dict["opt_params"][key], (np.ndarray, list))
-                    else np.array([moments_dict["opt_params"][key]])
-                    for key in moments_dict["opt_params"]
-                    if key != "upper_triangular_FIM"
-                ]
-            )
-
-            # Concatenate the "upper_triangular_FIM" separately (if it exists)
-            if "upper_triangular_FIM" in moments_dict["opt_params"]:
-                if isinstance(moments_dict['opt_params']['N0'], np.floating):
-                    upper_triangular_FIM_array = np.expand_dims(np.array(moments_dict["opt_params"]["upper_triangular_FIM"]), axis = 0)
-                else:
-                    upper_triangular_FIM_array = np.array(moments_dict["opt_params"]["upper_triangular_FIM"])
-                # Optionally concatenate with the rest of the array or process separately
-                concatenated_array = np.column_stack([concatenated_array, upper_triangular_FIM_array])
-
-        features_dict[stage]["moments"] = concatenated_array
-
-        if moments_dict["simulated_params"]:
-            concatenated_array = np.column_stack(
-                [
-                    moments_dict["simulated_params"][key]
-                    for key in moments_dict["simulated_params"]
-                ]
-            )
-            targets_dict[stage]["moments"] = concatenated_array
-
-        
-        key_names = [key + "_moments" for key in list(moments_dict['opt_params'].keys())]
-        feature_names.extend(key_names)
-
-    if momentsLD_analysis:
-        concatenated_array = np.column_stack(
-            [
-                momentsLD_dict["opt_params"][key]
-                for key in momentsLD_dict["opt_params"]
-            ]
-        )
-        features_dict[stage]["momentsLD"] = concatenated_array
-
-        if momentsLD_dict["simulated_params"]:
-            concatenated_array = np.column_stack(
-                [
-                    momentsLD_dict["simulated_params"][key]
-                    for key in momentsLD_dict["simulated_params"]
-                ]
-            )
-            targets_dict[stage]["momentsLD"] = concatenated_array
-
-        key_names = [key + "_momentsLD" for key in list(momentsLD_dict['opt_params'].keys())]
-
-        feature_names.extend(key_names)
-
-    return features_dict, targets_dict
-
-
-def concatenating_features(stage, concatenated_features, concatenated_targets, features_dict, targets_dict):
-
-    # Now columnwise the dadi, moments, and momentsLD inferences to get a concatenated features and targets array
-    concat_feats = np.column_stack(
-        [features_dict[stage][subkey] for subkey in features_dict[stage]]
-    )
-
-    if targets_dict[stage]:
-        concat_targets = np.column_stack(
-        [targets_dict[stage]['dadi'] for subkey in features_dict[stage]] # dadi because dadi, moments, and momentsLD values for the targets are the same.
-    )
-
-    concatenated_features = concat_feats
-    concatenated_targets = concat_targets
-
-
-    return concatenated_features, concatenated_targets
 
 
 def create_color_scheme(num_params):

@@ -16,12 +16,9 @@ import colorsys
 from preprocess import Processor, FeatureExtractor
 from utils import (
     visualizing_results,
-    process_and_save_data,
     calculate_and_save_rrmse,
     root_mean_squared_error,
-    find_outlier_indices,
-    creating_features_dict,
-    concatenating_features,
+    find_outlier_indices
 )
 from models import LinearReg
 
@@ -163,16 +160,6 @@ class Experiment_Manager:
         validation_indices = all_indices[n_train:]
         testing_indices = np.arange(self.num_sims_inference)
 
-        features_dict = {stage: {} for stage in ["training", "validation", "testing"]}
-        targets_dict = {stage: {} for stage in ["training", "validation", "testing"]}
-
-        concatenated_features = {
-            stage: {} for stage in ["training", "validation", "testing"]
-        }
-        concatenated_targets = {
-            stage: {} for stage in ["training", "validation", "testing"]
-        }
-
         preprocessing_results_obj = {
             stage: {} for stage in ["training", "validation", "testing"]
         }
@@ -186,92 +173,16 @@ class Experiment_Manager:
             # Your existing process_and_save_data function
 
             # Call the remote function and get the ObjectRef
-            merged_dict = processor.pretrain_processing(indices)
+            features, targets = processor.pretrain_processing(indices)
 
-            dadi_dict, moments_dict, momentsLD_dict = process_and_save_data(
-                merged_dict,
-                stage,
-                self.experiment_directory,
-                self.dadi_analysis,
-                self.moments_analysis,
-                self.momentsLD_analysis,
-            )
+            preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model
+            preprocessing_results_obj[stage]["targets"] = targets
 
-            # Maybe create the feature names here ? 
+        preprocessing_results_obj["param_names"] = self.parameter_names
 
-            feature_names = []
-
-            if self.dadi_analysis: 
-                feature_names.extend(f"{element}_dadi" for element in list(dadi_dict['opt_params'].keys()))
-
-            if self.moments_analysis:
-                if self.experiment_config['use_FIM']:
-                    feature_names.extend(f"{element}_moments" for element in list(moments_dict['opt_params'].keys())[0:-1]) # excluding upper_triangular_FIM
-                    feature_names.extend(f"upper_triangular_FIM_{i}" for i in np.arange(moments_dict['opt_params']['upper_triangular_FIM'].shape[0]))
-                
-                else:
-                    feature_names.extend(f"{element}_moments" for element in list(moments_dict['opt_params'].keys()))
-
-            if self.momentsLD_analysis:
-                feature_names.extend(f"{element}_momentsLD" for element in list(momentsLD_dict['opt_params'].keys()))
-
-            
-            features_dict, targets_dict = creating_features_dict(
-                stage,
-                dadi_dict,
-                moments_dict,
-                momentsLD_dict,
-                features_dict,
-                targets_dict,
-                self.dadi_analysis,
-                self.moments_analysis,
-                self.momentsLD_analysis,
-                use_FIM = self.experiment_config["use_FIM"]
-            )
-
-            concatenated_features, concatenated_targets= concatenating_features( stage, concatenated_features, concatenated_targets, features_dict, targets_dict)
-
-        
-            outlier_indices = find_outlier_indices(concatenated_features)
-            print(outlier_indices)
-
-            if self.remove_outliers:
-                concatenated_features = np.delete(concatenated_features, outlier_indices, axis=0)
-                concatenated_targets = np.delete(concatenated_targets, outlier_indices, axis=0)
-
-            preprocessing_results_obj[stage]["predictions"] = concatenated_features # This is for input to the ML model
-            preprocessing_results_obj[stage]["targets"] = concatenated_targets
-
-            preprocessing_results_obj["param_names"] = self.parameter_names
-
-            # Add some more fields to the preprocessing_results_obj for plotting easier
-
-            num_analyses = self.dadi_analysis + self.moments_analysis + self.momentsLD_analysis
-
-            # Now reshape the features and targets so that there are num_params columns 
-
-            # Step 1: Reshape to (num_sim, num_analyses, num_param)
-            num_sim = concatenated_features.shape[0]
-            num_param = len(self.parameter_names)
-            
-            reshaped_features = concatenated_features.reshape(num_sim, num_analyses, num_param)
-
-            # Step 2: Swap axes and flatten to increase the number of rows
-            # This increases the number of rows by a factor of num_analyses
-            final_array = reshaped_features.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
-
-            preprocessing_results_obj[stage]["reshaped_features"] = final_array
-
-            reshaped_targets = concatenated_targets.reshape(num_sim, num_analyses, num_param)
-            final_targets = reshaped_targets.swapaxes(1, 2).reshape(num_sim * num_analyses, num_param)
-
-            preprocessing_results_obj[stage]["reshaped_targets"] = final_targets
-        
-        
         #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
         rrmse_dict = calculate_and_save_rrmse(
-            features_dict,
-            targets_dict,
+            preprocessing_results_obj,
             save_path=f"{self.experiment_directory}/rrmse_dict.json",
             dadi_analysis=self.dadi_analysis,
             moments_analysis=self.moments_analysis,
@@ -323,13 +234,13 @@ class Experiment_Manager:
 
         rrmse_dict = {}
         rrmse_dict["training"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["training"]["reshaped_targets"], y_pred=training_predictions
+            y_true=linear_mdl_obj["training"]["targets"], y_pred=np.squeeze(training_predictions, axis = 1)
         )
         rrmse_dict["validation"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["validation"]["reshaped_targets"], y_pred=validation_predictions
+            y_true=linear_mdl_obj["validation"]["targets"], y_pred=np.squeeze(validation_predictions, axis = 1)
         )
         rrmse_dict["testing"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["testing"]["reshaped_targets"], y_pred=testing_predictions
+            y_true=linear_mdl_obj["testing"]["targets"], y_pred=np.squeeze(testing_predictions, axis = 1)
         )
 
         # Open a file to save the object

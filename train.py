@@ -2,7 +2,8 @@ from models import ShallowNN
 import os
 from utils import visualizing_results, calculate_model_errors
 import pickle
-
+import torch
+import numpy as np
 
 class Trainer:
     def __init__(self, experiment_directory, model_config, color_shades, main_colors, param_names, use_FIM=True):
@@ -66,8 +67,11 @@ class Trainer:
         #     training_predictions = snn_model.predict(training_data)
         #     validation_predictions = snn_model.predict(validation_data)
 
-        training_predictions = snn_model.predict(training_data)
-        validation_predictions = snn_model.predict(validation_data)
+        training_data = torch.tensor(training_data.reshape(training_data.shape[0], -1), dtype=torch.float32).cuda()
+        validation_data = torch.tensor(validation_data.reshape(validation_data.shape[0], -1), dtype=torch.float32).cuda()
+
+        training_predictions = np.expand_dims(snn_model.predict(training_data), axis = 1)
+        validation_predictions = np.expand_dims(snn_model.predict(validation_data), axis = 1)
 
         snn_mdl_obj = {}
         snn_mdl_obj["training"] = {}
@@ -92,6 +96,7 @@ class Trainer:
                 main_colors=self.main_colors
             )
 
+        #TODO: Fix this for 3 dimensional
         model_error = calculate_model_errors(
             snn_mdl_obj, "snn", datasets=["training", "validation"]
         )

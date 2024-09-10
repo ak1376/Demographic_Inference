@@ -84,13 +84,13 @@ preprocessing_results_obj = linear_experiment.load_features(
     f"{os.getcwd()}/experiments/dadi_moments_analysis_new/preprocessing_results_obj.pkl"
 )
 # preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/Demographic_Inference/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
-training_features = preprocessing_results_obj["training"]["reshaped_features"]
-training_targets = preprocessing_results_obj["training"]["reshaped_targets"]
-validation_features = preprocessing_results_obj["validation"]["reshaped_features"]
-validation_targets = preprocessing_results_obj["validation"]["reshaped_targets"]
+training_features = preprocessing_results_obj["training"]["predictions"]
+training_targets = preprocessing_results_obj["training"]["targets"]
+validation_features = preprocessing_results_obj["validation"]["predictions"]
+validation_targets = preprocessing_results_obj["validation"]["targets"]
 
-testing_features = preprocessing_results_obj["testing"]["reshape_features"]
-testing_targets = preprocessing_results_obj["testing"]["reshaped_targets"]
+testing_features = preprocessing_results_obj["testing"]["predictions"]
+testing_targets = preprocessing_results_obj["testing"]["targets"]
 
 
 trainer = Trainer(

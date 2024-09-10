@@ -28,12 +28,24 @@ class LinearReg:
         Train the model
         """
         # Train the model on the training data
-        self.model.fit(self.training_features, self.training_targets)
+        # Reshape dynamically: flatten the second and third dimensions
+        
+        new_shape = (self.training_features.shape[0], -1) 
+        training_features = self.training_features.reshape(new_shape)
 
-        training_predictions = self.model.predict(self.training_features)  
-        validation_predictions = self.model.predict(self.validation_features) 
-        testing_predictions = self.model.predict(self.testing_features)
 
+        new_shape = (self.validation_features.shape[0], -1) 
+        validation_features = self.validation_features.reshape(new_shape)
+
+        new_shape = (self.testing_features.shape[0], -1)
+        testing_features = self.testing_features.reshape(new_shape)
+
+
+        self.model.fit(training_features, self.training_targets)
+
+        training_predictions = np.expand_dims(self.model.predict(training_features) , axis = 1) 
+        validation_predictions = np.expand_dims(self.model.predict(validation_features), axis = 1)
+        testing_predictions = np.expand_dims(self.model.predict(testing_features), axis = 1)
 
         return training_predictions, validation_predictions, testing_predictions
     
@@ -47,14 +59,14 @@ class LinearReg:
         linear_mdl_obj["validation"] = {}
         linear_mdl_obj["testing"] = {}
 
-        linear_mdl_obj["training"]["reshaped_features"] = training_predictions
-        linear_mdl_obj["training"]["reshaped_targets"] = preprocessing_results_obj["training"]["targets"].copy()
+        linear_mdl_obj["training"]["predictions"] = training_predictions
+        linear_mdl_obj["training"]["targets"] = preprocessing_results_obj["training"]["targets"].copy()
 
-        linear_mdl_obj["validation"]["reshaped_features"] = validation_predictions
-        linear_mdl_obj["validation"]["reshaped_targets"] = preprocessing_results_obj["validation"]["targets"].copy()
+        linear_mdl_obj["validation"]["predictions"] = validation_predictions
+        linear_mdl_obj["validation"]["targets"] = preprocessing_results_obj["validation"]["targets"].copy()
 
-        linear_mdl_obj["testing"]["reshaped_features"] = testing_predictions
-        linear_mdl_obj["testing"]["reshaped_targets"] = preprocessing_results_obj["testing"]["targets"].copy()
+        linear_mdl_obj["testing"]["predictions"] = testing_predictions
+        linear_mdl_obj["testing"]["targets"] = preprocessing_results_obj["testing"]["targets"].copy()
 
         return linear_mdl_obj
 
@@ -240,10 +252,18 @@ class ShallowNN(nn.Module):
             model.parameters(), lr=learning_rate, weight_decay=weight_decay
         )
 
+        new_shape = (X_train.shape[0], -1) 
+        training_features = X_train.reshape(new_shape)
+
+
+        new_shape = (X_val.shape[0], -1) 
+        validation_features = X_val.reshape(new_shape)
+
+
         # Convert training and validation data into PyTorch tensors
-        X_train_tensor = torch.tensor(X_train, dtype=torch.float32).cuda()
+        X_train_tensor = torch.tensor(training_features, dtype=torch.float32).cuda()
         y_train_tensor = torch.tensor(y_train, dtype=torch.float32).cuda()
-        X_val_tensor = torch.tensor(X_val, dtype=torch.float32).cuda()
+        X_val_tensor = torch.tensor(validation_features, dtype=torch.float32).cuda()
         y_val_tensor = torch.tensor(y_val, dtype=torch.float32).cuda()
 
         # if use_FIM == False:
@@ -265,8 +285,6 @@ class ShallowNN(nn.Module):
             for inputs, targets in train_loader:
                 optimizer.zero_grad()
                 outputs = model(inputs)
-                print(f'Output shape: {outputs}')
-                print(f'Targets shape: {targets}')
                 train_loss = criterion(outputs, targets)
                 train_loss.backward()
                 optimizer.step()

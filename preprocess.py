@@ -8,7 +8,6 @@ import moments.Demes as demes_obj
 import glob
 import demes
 from utils import (
-    extract_features,
     visualizing_results,
     root_mean_squared_error,
     find_outlier_indices,
@@ -26,6 +25,7 @@ from parameter_inference import (
 )
 
 import allel
+import pandas as pd
 
 
 def generate_window(ts, window_length, n_samples):
@@ -67,73 +67,6 @@ class FeatureExtractor:
         self.moments_analysis = moments_analysis
         self.momentsLD_analysis = momentsLD_analysis
 
-    def process_batch(
-        self,
-        batch_data,
-        analysis_type,
-        stage,
-        features_dict={},
-        targets_dict={},
-        feature_names=[],
-        normalization=False,
-    ):
-
-        if stage != "inference":
-            # Original condition that applies when stage is not 'inference'
-            if (
-                not batch_data
-                or "simulated_params" not in batch_data
-                or f"opt_params_{analysis_type}" not in batch_data
-            ):
-                print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
-                return
-        else:
-            # Special condition that applies when stage is 'inference'
-            if "opt_params" not in batch_data:
-                print(f"Skipping {analysis_type} {stage} due to empty or invalid data")
-                return
-
-        if stage != "inference":
-            features, targets = extract_features(
-                simulated_params=batch_data["simulated_params"],
-                opt_params=batch_data[f"opt_params_{analysis_type}"],
-                normalization=normalization,
-            )
-        else:
-            features = extract_features(
-                simulated_params=None,
-                opt_params=batch_data[f"opt_params"],
-                normalization=normalization,
-            )
-
-        if analysis_type not in features_dict[stage]:
-            features_dict[stage][analysis_type] = []
-            if stage != "inference":
-                targets_dict[stage][analysis_type] = []
-
-        features_dict[stage][analysis_type].extend(features)
-
-        if stage != "inference":
-            targets_dict[stage][analysis_type].extend(targets)
-
-        if analysis_type not in feature_names:
-            feature_names[analysis_type] = [
-                f"Nb_opt_{analysis_type}",
-                f"N_recover_opt_{analysis_type}",
-                f"t_bottleneck_start_opt_{analysis_type}",
-                f"t_bottleneck_end_opt_{analysis_type}",
-            ]
-
-        if stage != "inference":
-
-            return features_dict, targets_dict, feature_names
-        else:
-            return features_dict, feature_names
-
-        # error_value = root_mean_squared_error(targets, features)
-        # print(f"Batch error value for {analysis_type} {stage}: {error_value}")
-
-        # visualizing_results(batch_data, save_loc = self.experiment_directory, analysis=f"{analysis_type}_{stage}")
 
     def finalize_processing(
         self, features_dict, targets_dict, feature_names, remove_outliers=True
@@ -583,4 +516,25 @@ class Processor:
 
             list_of_mega_result_dicts.append(mega_result_dict)
 
-        return get_dicts(list_of_mega_result_dicts)
+        # Ground truth params (each row is a simulation)
+        df = pd.DataFrame([result['simulated_params'] for result in list_of_mega_result_dicts])
+        targets = df.values
+
+        # Step 1: Dynamically extract parameter names from the first simulation
+        params = list(list_of_mega_result_dicts[0]['opt_params_dadi'].keys())
+        num_params = len(params)
+
+        # Step 2: Use list comprehension to extract data for dadi and moments
+        dadi_data = [list(result['opt_params_dadi'].values()) for result in list_of_mega_result_dicts]
+        moments_data = [list(result['opt_params_moments'].values()) for result in list_of_mega_result_dicts]
+
+        # Step 3: Stack the data into a NumPy array
+        # dadi_data and moments_data are now lists of lists, one for each simulation
+        dadi_array = np.array(dadi_data)       # Shape: (num_sims, num_params)
+        moments_array = np.array(moments_data) # Shape: (num_sims, num_params)
+
+        # Step 4: Stack dadi and moments arrays along a new axis to create (num_sims, num_analyses, num_params)
+        features = np.stack([dadi_array, moments_array], axis=1)
+        
+        
+        return features, targets
