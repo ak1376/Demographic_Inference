@@ -317,13 +317,33 @@ class Processor:
 
         # Step 1: Initialize an empty list to collect analysis data arrays
         analysis_data = []
+        upper_triangular_data = []
 
         # Step 2: Dynamically extract and append data based on configuration
         for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
             if self.experiment_config.get(analysis_type):
                 # Extract the appropriate data dynamically based on the analysis type
                 analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # This maps to 'opt_params_dadi', 'opt_params_moments', etc.
-                analysis_data.append([list(result[analysis_key].values()) for result in list_of_mega_result_dicts])
+
+                analysis_type_data = []
+                for result in list_of_mega_result_dicts:
+                    param_values = list(result[analysis_key].values())
+                    
+                    if analysis_type == 'moments_analysis' and self.experiment_config.get('use_FIM', True):
+                        # Extract and store the upper triangular FIM separately
+                        upper_triangular = result['opt_params_moments'].get('upper_triangular_FIM', None)
+                        if upper_triangular is not None:
+                            upper_triangular_data.append(upper_triangular)  # Store upper triangular FIM separately
+                            
+                            # Remove 'upper_triangular_FIM' from param_values if it was included
+                            # Assuming 'upper_triangular_FIM' is the last key in the dictionary
+                            param_values = [v for k, v in result[analysis_key].items() if k != 'upper_triangular_FIM']
+
+                    # Append the processed param values to analysis_type_data
+                    analysis_type_data.append(param_values)
+                
+                # Add the collected parameter data (excluding FIM if stored separately) to analysis_data
+                analysis_data.append(analysis_type_data)
 
         # Step 3: Convert the collected data into NumPy arrays
         analysis_arrays = [np.array(data) for data in analysis_data]  # List of arrays, one for each analysis type
@@ -334,4 +354,11 @@ class Processor:
         else:
             features = analysis_arrays[0]  # If there's only one analysis, just use that array
 
-        return features, targets
+        # If upper triangular data exists, convert it to a NumPy array for further analysis
+        if upper_triangular_data:
+            upper_triangular_array = np.array(upper_triangular_data)  # Array of upper triangular matrices
+        else:
+            upper_triangular_array = None  # Handle case where FIM data does not exist
+
+        # Return features, targets, and upper triangular array (if exists)
+        return features, targets, upper_triangular_array

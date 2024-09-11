@@ -167,10 +167,11 @@ class Experiment_Manager:
             # Your existing process_and_save_data function
 
             # Call the remote function and get the ObjectRef
-            features, targets = processor.pretrain_processing(indices)
+            features, targets, upper_triangle_features = processor.pretrain_processing(indices)
 
-            preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model
+            preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model, minus the upper triangular features 
             preprocessing_results_obj[stage]["targets"] = targets
+            preprocessing_results_obj[stage]["upper_triangular_FIM"] = upper_triangle_features
 
         preprocessing_results_obj["param_names"] = self.parameter_names
 
@@ -212,12 +213,21 @@ class Experiment_Manager:
         ## LINEAR REGRESSION
 
         linear_mdl = LinearReg(training_features = preprocessing_results_obj["training"]["predictions"] ,
-                                training_targets = preprocessing_results_obj["training"]["targets"],
-                                  validation_features = preprocessing_results_obj["validation"]["predictions"], 
-                                  validation_targets = preprocessing_results_obj["validation"]["targets"],
-                                    testing_features = preprocessing_results_obj["testing"]["predictions"],
-                                      testing_targets = preprocessing_results_obj["testing"]["targets"] )
-                               
+                        training_targets = preprocessing_results_obj["training"]["targets"],
+                            validation_features = preprocessing_results_obj["validation"]["predictions"], 
+                            validation_targets = preprocessing_results_obj["validation"]["targets"],
+                            testing_features = preprocessing_results_obj["testing"]["predictions"],
+                                testing_targets = preprocessing_results_obj["testing"]["targets"] )
+
+        if self.experiment_config['use_FIM']:
+
+            upper_triangular_features = {}
+            upper_triangular_features['training'] = preprocessing_results_obj['training']['upper_triangular_FIM']
+            upper_triangular_features['validation'] = preprocessing_results_obj['validation']['upper_triangular_FIM']
+            upper_triangular_features['testing'] = preprocessing_results_obj['testing']['upper_triangular_FIM']
+                
+            training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate(upper_triangular_features)
+        
         training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate()
 
         linear_mdl_obj = linear_mdl.organizing_results(preprocessing_results_obj, training_predictions, validation_predictions, testing_predictions)

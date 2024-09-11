@@ -18,7 +18,7 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
-def main(experiment_directory, model_config_file, features_file, color_shades, main_colors, use_FIM=True):
+def main(experiment_directory, model_config_file, features_file, color_shades, main_colors, additional_features_file, use_FIM=True):
     # Load model config
     with open(model_config_file, "r") as f:
         model_config = json.load(f)
@@ -34,9 +34,11 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
     with open(main_colors, 'rb') as f:
         main_colors = pickle.load(f)
 
-    trainer = Trainer(experiment_directory, model_config, color_shades, main_colors, param_names=model_config['parameter_names'], use_FIM=use_FIM)
+    with open(additional_features_file, 'rb') as f:
+        additional_features = pickle.load(f)
 
-    print(features['training'].keys())
+
+    trainer = Trainer(experiment_directory, model_config, color_shades, main_colors, param_names=model_config['parameter_names'], use_FIM=use_FIM)
 
     # Train the model
     snn_model, train_losses, val_losses = trainer.train(
@@ -44,6 +46,8 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
         features["training"]["targets"],
         features["validation"]["features"],
         features["validation"]["targets"],
+        additional_features=additional_features,
+        visualize=True
     )
 
     # Make predictions
@@ -53,6 +57,8 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
         features["validation"]["features"],
         features["training"]["targets"],
         features["validation"]["targets"],
+        additional_features=additional_features,
+        visualize=True
     )
 
     # Save the trained model
@@ -72,6 +78,7 @@ if __name__ == "__main__":
     parser.add_argument("--features_file", type=str, required=True)
     parser.add_argument("--color_shades", type=str, required=True)
     parser.add_argument("--main_colors", type=str, required=True)
+    parser.add_argument("--additional_features_file", type=str, required=True)
     parser.add_argument("--use_FIM", type=str2bool, default=True)
     args = parser.parse_args()
 
@@ -81,5 +88,6 @@ if __name__ == "__main__":
         args.features_file,
         args.color_shades,
         args.main_colors,
+        args.additional_features_file,
         args.use_FIM
     )

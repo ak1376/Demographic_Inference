@@ -1,11 +1,15 @@
 import pickle
+import json
 
-
-def getting_the_features(preprocessing_results_filepath, experiment_directory):
+def getting_the_features(preprocessing_results_filepath, config_filepath, experiment_directory):
     # print(f"preprocessing_results_filepath: {preprocessing_results_filepath}")
     # print(f"experiment_directory: {experiment_directory}")
     with open(preprocessing_results_filepath, "rb") as file:
         preprocessing_results_obj = pickle.load(file)
+
+    # Load the experiment config
+    with open(config_filepath, "r") as f:
+        config = json.load(f)
 
     # print(f"TRAINING FEATURES SHAPE: {preprocessing_results_obj['training']['predictions'].shape}")
     # print(f"TRAINING TARGETS SHAPE: {preprocessing_results_obj['training']['targets'].shape}")
@@ -19,6 +23,14 @@ def getting_the_features(preprocessing_results_filepath, experiment_directory):
 
     testing_features = preprocessing_results_obj["testing"]["predictions"]
     testing_targets = preprocessing_results_obj["testing"]["targets"]
+
+    # Needs to be some flag checking if this is true or not. 
+    additional_features = None
+    if config["use_FIM"]:
+        additional_features = {}
+        additional_features['training'] = preprocessing_results_obj['training']['upper_triangular_FIM']
+        additional_features['validation'] = preprocessing_results_obj['validation']['upper_triangular_FIM']
+        additional_features['testing'] = preprocessing_results_obj['testing']['upper_triangular_FIM']
 
     # I want to save a dictionary of training, validation, and testing features and targets.
     features = {
@@ -34,13 +46,17 @@ def getting_the_features(preprocessing_results_filepath, experiment_directory):
     with open(f"{experiment_directory}/features_and_targets.pkl", "wb") as file:
         pickle.dump(features, file)
 
+    # Save the additional features as a pickle too 
+    with open(f"{experiment_directory}/additional_features.pkl", "wb") as file:
+        pickle.dump(additional_features, file)
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--preprocessing_results_filepath", type=str, required=True)
+    parser.add_argument("--config_filepath", type=str, required=True)
     parser.add_argument("--experiment_directory", type=str, required=True)
     args = parser.parse_args()
 
-    getting_the_features(args.preprocessing_results_filepath, args.experiment_directory)
+    getting_the_features(args.preprocessing_results_filepath, args.config_filepath, args.experiment_directory)

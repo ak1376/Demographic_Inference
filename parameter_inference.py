@@ -105,8 +105,8 @@ def run_inference_dadi(
             "N0": N_ref,
             "Nb": opt_params[0] * N_ref,
             "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
-            "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
+            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
+            "t_bottleneck_end": opt_params[2] * 2 * N_ref,
         }
 
     model = model * opt_theta
@@ -187,8 +187,8 @@ def run_inference_moments(
             "N0": N_ref,
             "Nb": opt_params[0] * N_ref,
             "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_end": opt_params[3] * 2 * N_ref,  # type: ignore
-            "t_bottleneck_start": opt_params[2] * 2 * N_ref,  # type: ignore
+            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref, # type: ignore
+            "t_bottleneck_end": opt_params[2] * 2 * N_ref, # type: ignore
             "upper_triangular_FIM": upper_triangular,
         }
 
@@ -240,8 +240,8 @@ def run_inference_momentsLD(
             "N0": opt_params[4],
             "Nb": opt_params[0] * opt_params[4],
             "N_recover": opt_params[1] * opt_params[4],
-            "t_bottleneck_end": opt_params[3] * 2 * opt_params[4],
-            "t_bottleneck_start": opt_params[2] * 2 * opt_params[4],
+            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * opt_params[4],
+            "t_bottleneck_end": opt_params[3] * 2 * opt_params[4]
         }
 
     return opt_params_dict

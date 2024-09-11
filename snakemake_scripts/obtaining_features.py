@@ -38,8 +38,6 @@ def obtain_features(
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
 
-    print(experiment_config.keys())
-
     # Load the experiment object to get the experiment directory
     with open(f"{experiment_directory}/experiment_obj.pkl", "rb") as f:
         experiment_obj = pickle.load(f)
@@ -86,10 +84,11 @@ def obtain_features(
         # Your existing process_and_save_data function
 
         # Call the remote function and get the ObjectRef
-        features, targets = processor.pretrain_processing(indices)
+        features, targets, upper_triangle_features = processor.pretrain_processing(indices)
 
         preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model
         preprocessing_results_obj[stage]["targets"] = targets
+        preprocessing_results_obj[stage]["upper_triangular_FIM"] = upper_triangle_features
 
     preprocessing_results_obj["param_names"] = experiment_config['parameter_names']
 
@@ -201,10 +200,6 @@ if __name__ == "__main__":
     parser.add_argument("--main_colors_file", type=str, required=True)
     args = parser.parse_args()
 
-    print("========================================")
-    print(args.color_shades_file)
-    print(args.main_colors_file)
-    print("========================================")
 
     obtain_features(
 

@@ -61,6 +61,12 @@ if __name__ == "__main__":
     # Load in the inference object 
     inference_obj_results = load_inference_obj(args.inference_obj_path)
 
+    additional_features = None
+
+    if config["use_FIM"]:
+        additional_features = {}
+        additional_features['upper_triangular_FIM'] = inference_obj_results['upper_triangular_FIM']
+
     # Evaluate the model
-    inference_obj.evaluate_model(mdl, inference_obj_results)
+    inference_obj.evaluate_model(mdl, inference_obj_results, additional_features = additional_features)
 

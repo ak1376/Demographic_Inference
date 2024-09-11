@@ -71,10 +71,10 @@ config = {
     "seed": 42,
     "normalization": False,
     "remove_outliers": True,
-    "use_FIM": True,
+    "use_FIM": False,
     "neural_net_hyperparameters": model_config,
     "demographic_model": "bottleneck_model",
-    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"], # these should be a list of parameters that we want to optimize 
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
     "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05]
 }
 
@@ -92,6 +92,14 @@ validation_targets = preprocessing_results_obj["validation"]["targets"]
 testing_features = preprocessing_results_obj["testing"]["predictions"]
 testing_targets = preprocessing_results_obj["testing"]["targets"]
 
+# Needs to be some flag checking if this is true or not. 
+additional_features = None
+if config["use_FIM"]:
+    additional_features = {}
+    additional_features['training'] = preprocessing_results_obj['training']['upper_triangular_FIM']
+    additional_features['validation'] = preprocessing_results_obj['validation']['upper_triangular_FIM']
+    additional_features['testing'] = preprocessing_results_obj['testing']['upper_triangular_FIM']
+
 
 trainer = Trainer(
     experiment_directory=linear_experiment.experiment_directory,
@@ -107,6 +115,7 @@ snn_model, train_losses, val_losses = trainer.train(
     validation_features,
     validation_targets,
     visualize=True,
+    additional_features = additional_features
 )
 snn_results = trainer.predict(
     snn_model,
@@ -115,6 +124,7 @@ snn_results = trainer.predict(
     training_targets,
     validation_targets,
     visualize=True,
+    additional_features = additional_features
 )
 inference_obj = Inference(
     vcf_filepath="GHIST-bottleneck.vcf.gz",
@@ -131,4 +141,10 @@ with open(
 ) as file:
     inference_results = pickle.load(file)
 
-inference_obj.evaluate_model(snn_model, inference_results)
+additional_features = None
+
+if config["use_FIM"]:
+    additional_features = {}
+    additional_features['upper_triangular_FIM'] = inference_results['upper_triangular_FIM']
+
+inference_obj.evaluate_model(snn_model, inference_results, additional_features)

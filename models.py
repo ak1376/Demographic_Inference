@@ -23,9 +23,11 @@ class LinearReg:
 
         self.model = LinearRegression()
 
-    def train_and_validate(self):
+    def train_and_validate(self, additional_features = None):
         """
         Train the model
+
+        I think the additional features should be a dictionary with keys 'training', 'validation', and 'testing'
         """
         # Train the model on the training data
         # Reshape dynamically: flatten the second and third dimensions
@@ -33,13 +35,22 @@ class LinearReg:
         new_shape = (self.training_features.shape[0], -1) 
         training_features = self.training_features.reshape(new_shape)
 
+        if additional_features is not None:
+            training_features = np.concatenate((training_features, additional_features['training']), axis = 1) 
+
 
         new_shape = (self.validation_features.shape[0], -1) 
         validation_features = self.validation_features.reshape(new_shape)
 
+        if additional_features is not None:
+            validation_features = np.concatenate((validation_features, additional_features['validation']), axis = 1) 
+
+
         new_shape = (self.testing_features.shape[0], -1)
         testing_features = self.testing_features.reshape(new_shape)
 
+        if additional_features is not None:
+            testing_features = np.concatenate((testing_features, additional_features['testing']), axis = 1) 
 
         self.model.fit(training_features, self.training_targets)
 
@@ -231,6 +242,7 @@ class ShallowNN(nn.Module):
         input_size,
         hidden_size,
         output_size,
+        additional_features = None,
         num_layers=3,
         num_epochs=1000,
         learning_rate=3e-4,
@@ -255,9 +267,17 @@ class ShallowNN(nn.Module):
         new_shape = (X_train.shape[0], -1) 
         training_features = X_train.reshape(new_shape)
 
+        if additional_features is not None:
+            print(additional_features['training'])
+            training_features = np.concatenate((training_features, additional_features['training']), axis = 1)
+
+
 
         new_shape = (X_val.shape[0], -1) 
         validation_features = X_val.reshape(new_shape)
+
+        if additional_features is not None:
+            validation_features = np.concatenate((validation_features, additional_features['validation']), axis = 1)
 
 
         # Convert training and validation data into PyTorch tensors
