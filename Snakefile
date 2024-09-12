@@ -87,6 +87,7 @@ rule all:
         f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt",
         f'{EXPERIMENT_DIRECTORY}/color_shades.pkl',
         f'{EXPERIMENT_DIRECTORY}/main_colors.pkl',
+        f'{EXPERIMENT_DIRECTORY}/additional_features.pkl',
 
 rule create_experiment:
     output:
@@ -132,9 +133,14 @@ rule obtain_features:
 
 rule get_features:
     input:
-        preprocessing_results = rules.obtain_features.output.preprocessing_results
+        preprocessing_results = rules.obtain_features.output.preprocessing_results,
+        config_file = rules.create_experiment.output.config_file
     output:
-        features_output = f"{EXPERIMENT_DIRECTORY}/features_and_targets.pkl"
+        features_output = f"{EXPERIMENT_DIRECTORY}/features_and_targets.pkl",
+        additional_features_output = f"{EXPERIMENT_DIRECTORY}/additional_features.pkl"
+
+    params:
+        experiment_directory = EXPERIMENT_DIRECTORY
 
     # conda: 
     #     "myenv"
@@ -142,7 +148,8 @@ rule get_features:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/extracting_features.py \
         --preprocessing_results_filepath {input.preprocessing_results} \
-        --experiment_directory {EXPERIMENT_DIRECTORY} \
+        --config_filepath {input.config_file} \
+        --experiment_directory {params.experiment_directory} \
         """
 
 rule train_and_predict:
@@ -150,7 +157,8 @@ rule train_and_predict:
         model_config_file = rules.create_experiment.output.model_config_file,
         features_file = rules.get_features.output.features_output,
         colors_shades_file = rules.create_experiment.output.colors_shades_file,
-        main_colors_file = rules.create_experiment.output.main_colors_file
+        main_colors_file = rules.create_experiment.output.main_colors_file,
+        additional_features_file = rules.get_features.output.additional_features_output
     params:
         use_FIM = False,
         experiment_directory = EXPERIMENT_DIRECTORY
@@ -166,6 +174,7 @@ rule train_and_predict:
         --features_file {input.features_file} \
         --color_shades {input.colors_shades_file} \
         --main_colors {input.main_colors_file} \
+        --additional_features_file {input.additional_features_file} \
         --use_FIM {params.use_FIM}
         """
 
