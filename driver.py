@@ -29,19 +29,18 @@ warnings.filterwarnings(
 
 upper_bound_params = {
     "N0": 10000,
-    "N1": 5000,
-    "N2": 5000,
     "Nb": 5000,
-    "t_split": 7000
+    "N_recover": 7000,
+    "t_bottleneck_end": 1000,
+    "t_bottleneck_start": 2000,
 }
-
 lower_bound_params = {
     "N0": 8000,
-    "N1": 100,
-    "N2": 100,
-    "t_split": 6000
+    "Nb": 4000,
+    "N_recover": 6000,
+    "t_bottleneck_end": 800,
+    "t_bottleneck_start": 1500,
 }
-
 model_config = {
     "input_size": 10,
     "hidden_size": 1000,
@@ -58,8 +57,8 @@ config = {
     "lower_bound_params": lower_bound_params,
     "num_sims_pretrain": 5,
     "num_sims_inference": 5,
-    "num_samples": {"A1": 22, "A2": 18}, # Dictionary with the number of samples for each population
-    "experiment_name": "split_isolation_model",
+    "num_samples": 20,
+    "experiment_name": "dadi_moments_analysis_new",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
@@ -74,9 +73,9 @@ config = {
     "remove_outliers": True,
     "use_FIM": False,
     "neural_net_hyperparameters": model_config,
-    "demographic_model": "split_isolation_model",
-    "parameter_names": ["N1", "N2", "t_split"], # these should be a list of parameters that we want to optimize 
-    "optimization_initial_guess": [0.75, 0.1, 0.05]
+    "demographic_model": "bottleneck_model",
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
+    "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05]
 }
 
 linear_experiment = Experiment_Manager(config)

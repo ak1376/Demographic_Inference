@@ -136,15 +136,7 @@ class Processor:
             sampled_value = np.random.uniform(
                 self.lower_bound_params[key], self.upper_bound_params[key]
             )
-
-            if self.demographic_model == "split_isolation_model":
-                if key == "m_pre_isolation" or key == "m_post_isolation":
-                    sampled_params[key] = sampled_value
-                else:
-                    sampled_params[key] = int(sampled_value)
-            else:
-                sampled_params[key] = int(sampled_value)
-
+            sampled_params[key] = int(sampled_value)
 
         return sampled_params
 
@@ -161,9 +153,8 @@ class Processor:
             g = demographic_model(sampled_params)
                 
             demog = msprime.Demography.from_demes(g)
-
             ts = msprime.sim_ancestry(
-                self.num_samples,
+                {"A": self.num_samples},
                 demography=demog,
                 sequence_length=self.L,
                 recombination_rate=self.recombination_rate,
@@ -206,9 +197,6 @@ class Processor:
         # Placeholder if statements 
         if self.experiment_config["demographic_model"] == "bottleneck_model":
             demographic_model_simulation = demographic_models.bottleneck_model
-        
-        elif self.experiment_config["demographic_model"] == "split_isolation_model":
-            demographic_model_simulation = demographic_models.split_isolation_model_simulation
 
         list_of_mega_result_dicts = []
 
@@ -247,10 +235,10 @@ class Processor:
                     run_inference_dadi(
                         sfs,
                         p0= self.experiment_config['optimization_initial_guess'],
-                        lower_bound=[1e-4]*len(self.experiment_config['parameter_names']),
-                        upper_bound=[None] * len(self.experiment_config['parameter_names']),
+                        lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+                        upper_bound=[None, None, None, None],
                         sampled_params=sampled_params,
-                        num_samples=100, #TODO: Need to change this to not rely on a hardcoded value
+                        num_samples=self.num_samples,
                         demographic_model=self.experiment_config['demographic_model'],
                         maxiter=self.maxiter,
                         mutation_rate=self.mutation_rate,
@@ -272,8 +260,8 @@ class Processor:
                     run_inference_moments(
                         sfs,
                         p0=self.experiment_config['optimization_initial_guess'],
-                        lower_bound=[1e-4]*len(self.experiment_config['parameter_names']),
-                        upper_bound=[None] * len(self.experiment_config['parameter_names']),
+                        lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+                        upper_bound=[None, None, None, None],
                         sampled_params=sampled_params,
                         demographic_model=self.experiment_config['demographic_model'],
                         maxiter=self.maxiter,

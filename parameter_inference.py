@@ -8,7 +8,6 @@ import time
 from dadi.Godambe import get_godambe
 from moments.Godambe import _get_godambe
 import nlopt
-import demographic_models
 
 
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
@@ -67,9 +66,6 @@ def run_inference_dadi(
     if demographic_model == "bottleneck_model":
         model_func = dadi.Demographics1D.three_epoch
 
-    elif demographic_model == "split_isolation_model":
-        model_func = demographic_models.split_isolation_model
-
     func_ex = dadi.Numerics.make_extrap_log_func(model_func)
     pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
 
@@ -112,20 +108,8 @@ def run_inference_dadi(
             "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
             "t_bottleneck_end": opt_params[2] * 2 * N_ref,
         }
-    
-    elif demographic_model == "split_isolation_model":
-        N_ref = opt_theta / (4 * mutation_rate * length)
-        opt_params_dict = {
-            "N0": N_ref,
-            "N1": opt_params[0] * N_ref,
-            "N2": opt_params[1] * N_ref,
-            "t_split": opt_params[2] * 2 * N_ref,
-            "t_isolation_start": opt_params[3] * 2 * N_ref,
-            "t_isolation_end": opt_params[4] * 2 * N_ref
-        }
 
     model = model * opt_theta
-    
     return model, opt_theta, opt_params_dict
 
 
