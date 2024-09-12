@@ -22,6 +22,7 @@ class Trainer:
         training_targets,
         validation_data,
         validation_targets,
+        additional_features = None,
         visualize=True,
     ):
         snn_model, train_losses, val_losses = ShallowNN.train_and_validate(
@@ -37,7 +38,9 @@ class Trainer:
             learning_rate=self.model_config["learning_rate"],
             weight_decay=self.model_config["weight_decay"],
             dropout_rate=self.model_config["dropout_rate"],
-            use_FIM=self.use_FIM,
+            additional_features = additional_features,
+            use_FIM=self.use_FIM
+
         )
 
         if visualize:
@@ -56,6 +59,7 @@ class Trainer:
         validation_data,
         training_targets,
         validation_targets,
+        additional_features,
         visualize=True,
     ):
 
@@ -67,8 +71,16 @@ class Trainer:
         #     training_predictions = snn_model.predict(training_data)
         #     validation_predictions = snn_model.predict(validation_data)
 
-        training_data = torch.tensor(training_data.reshape(training_data.shape[0], -1), dtype=torch.float32).cuda()
-        validation_data = torch.tensor(validation_data.reshape(validation_data.shape[0], -1), dtype=torch.float32).cuda()
+        if additional_features is not None:
+            training_data = np.concatenate((training_data.reshape(training_data.shape[0], -1), additional_features['training']), axis = 1)
+            validation_data = np.concatenate((validation_data.reshape(validation_data.shape[0], -1), additional_features['validation']), axis = 1)
+
+        else:
+            training_data = training_data.reshape(training_data.shape[0], -1)
+            validation_data = validation_data.reshape(validation_data.shape[0], -1)
+
+        training_data = torch.tensor(training_data, dtype = torch.float32).cuda()
+        validation_data = torch.tensor(validation_data, dtype = torch.float32).cuda()
 
         training_predictions = np.expand_dims(snn_model.predict(training_data), axis = 1)
         validation_predictions = np.expand_dims(snn_model.predict(validation_data), axis = 1)
