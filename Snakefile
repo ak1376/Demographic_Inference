@@ -21,27 +21,27 @@ model_config = {
     "output_size": 5,
     "num_epochs": 1000,
     "learning_rate": 3e-4,
-    "num_layers": 1,
+    "num_layers": 3,
     "dropout_rate": 0.1,
     "weight_decay": 1e-4,
-    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"], # these should be a list of parameters that we want to optimize 
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
 
 }
 
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 10,
-    "num_sims_inference": 1,
+    "num_sims_pretrain": 20,
+    "num_sims_inference": 5,
     "num_samples": 20,
-    "experiment_name": "dadi_moments_analysis_new_analysis_optimize_big_length_check",
+    "experiment_name": "without_FIM_3layers",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e4,
     "maxiter": 100,
-    "genome_length": 1e8,
+    "genome_length": 1e6,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
     "seed": 42,
@@ -50,7 +50,7 @@ config = {
     "use_FIM": False,
     "neural_net_hyperparameters": model_config,
     "demographic_model": "bottleneck_model",
-    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_end", "t_bottleneck_start"], # these should be a list of parameters that we want to optimize 
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
     "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05],
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",

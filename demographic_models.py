@@ -1,4 +1,6 @@
 import demes
+from dadi import Numerics, PhiManip, Integration
+from dadi.Spectrum_mod import Spectrum
 
 def bottleneck_model(sampled_params):
 
