@@ -9,6 +9,7 @@ from dadi.Godambe import get_godambe
 from moments.Godambe import _get_godambe
 import nlopt
 import demographic_models
+from optimize import opt
 
 
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
@@ -153,14 +154,15 @@ def run_inference_moments(
 
     start = time.time()
 
-    opt_params = moments.Inference.optimize(
+    opt_params =opt(
         p_guess,
         sfs,
         model_func,
         lower_bound=lower_bound,
         upper_bound=upper_bound,
-        maxiter=maxiter,
-    )
+        log_opt=True, 
+        algorithm=nlopt.LN_BOBYQA
+    )[0] # I don't want the log likelihood. 
 
     print(f"OPT MOMENTS PARAMETER: {opt_params}")
 
