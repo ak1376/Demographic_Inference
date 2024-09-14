@@ -5,15 +5,15 @@ upper_bound_params = {
     "N0": 10000,
     "Nb": 5000,
     "N_recover": 7000,
-    "t_bottleneck_end": 1000,
     "t_bottleneck_start": 2000,
+    "t_bottleneck_end": 1000,
 }
 lower_bound_params = {
     "N0": 8000,
     "Nb": 4000,
     "N_recover": 6000,
-    "t_bottleneck_end": 800,
     "t_bottleneck_start": 1500,
+    "t_bottleneck_end": 800,
 }
 model_config = {
     "input_size": 10,
@@ -31,17 +31,17 @@ model_config = {
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 20,
+    "num_sims_pretrain": 100,
     "num_sims_inference": 5,
     "num_samples": 20,
-    "experiment_name": "without_FIM_3layers",
+    "experiment_name": "bigger_analysis",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e4,
     "maxiter": 100,
-    "genome_length": 1e6,
+    "genome_length": 1e8,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
     "seed": 42,

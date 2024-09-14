@@ -247,8 +247,8 @@ class Processor:
                     run_inference_dadi(
                         sfs,
                         p0= self.experiment_config['optimization_initial_guess'],
-                        lower_bound=[1e-4]*len(self.experiment_config['parameter_names']),
-                        upper_bound=[None] * len(self.experiment_config['parameter_names']),
+                        lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) - 1),
+                        upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
                         sampled_params=sampled_params,
                         num_samples=100, #TODO: Need to change this to not rely on a hardcoded value
                         demographic_model=self.experiment_config['demographic_model'],
@@ -272,8 +272,8 @@ class Processor:
                     run_inference_moments(
                         sfs,
                         p0=self.experiment_config['optimization_initial_guess'],
-                        lower_bound=[1e-4]*len(self.experiment_config['parameter_names']),
-                        upper_bound=[None] * len(self.experiment_config['parameter_names']),
+                        lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) -1),
+                        upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
                         sampled_params=sampled_params,
                         demographic_model=self.experiment_config['demographic_model'],
                         maxiter=self.maxiter,
