@@ -40,6 +40,14 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
 
     trainer = Trainer(experiment_directory, model_config, color_shades, main_colors, param_names=model_config['parameter_names'], use_FIM=use_FIM)
 
+    print("====================================")
+    print(f"Max Value for Dadi t_bottleneck_start: {max(features['training']['features'][:,0,3])}")
+    print(f"Max Value for Dadi t_bottleneck_end: {max(features['training']['features'][:,0,4])}")
+
+    print(f"Max Value for Moments t_bottleneck_start: {max(features['training']['features'][:,1,3])}")
+    print(f"Max Value for Moments t_bottleneck_end: {max(features['training']['features'][:,1,4])}")
+    print("====================================")
+
     # Train the model
     snn_model, train_losses, val_losses = trainer.train(
         features["training"]["features"],

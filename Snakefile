@@ -5,15 +5,15 @@ upper_bound_params = {
     "N0": 10000,
     "Nb": 5000,
     "N_recover": 7000,
-    "t_bottleneck_end": 1000,
     "t_bottleneck_start": 2000,
+    "t_bottleneck_end": 1000,
 }
 lower_bound_params = {
     "N0": 8000,
     "Nb": 4000,
     "N_recover": 6000,
-    "t_bottleneck_end": 800,
     "t_bottleneck_start": 1500,
+    "t_bottleneck_end": 800,
 }
 model_config = {
     "input_size": 10,
@@ -34,14 +34,14 @@ config = {
     "num_sims_pretrain": 100,
     "num_sims_inference": 5,
     "num_samples": 20,
-    "experiment_name": "one_more_time",
+    "experiment_name": "bigger_analysis",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
     "window_length": 1e4,
     "maxiter": 100,
-    "genome_length": 1e7,
+    "genome_length": 1e8,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
     "seed": 42,
@@ -49,7 +49,7 @@ config = {
     "remove_outliers": True,
     "use_FIM": False,
     "neural_net_hyperparameters": model_config,
-    "demographic_model": "one_more_time",
+    "demographic_model": "bottleneck_model",
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
     "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05],
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz",
