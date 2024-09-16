@@ -13,12 +13,13 @@ import torch
 
 class Inference(Processor):
     def __init__(
-        self, vcf_filepath, txt_filepath, popname, config, experiment_directory
+        self, vcf_filepath, txt_filepath, popname, config, experiment_directory, polarized = True
     ):
         self.vcf_filepath = vcf_filepath
         self.txt_filepath = txt_filepath
         self.popname = popname
         self.experiment_directory = experiment_directory
+        self.polarized = polarized
 
         self.config = config
 
@@ -33,7 +34,7 @@ class Inference(Processor):
             data_dict,
             [self.popname],
             projections=[2 * self.num_samples],
-            polarized=False,
+            polarized=self.polarized,
         )
         return fs
 
@@ -111,8 +112,8 @@ class Inference(Processor):
                 p0 = self.config['optimization_initial_guess'],
                 demographic_model = self.config["demographic_model"],
                 sampled_params=None,
-                lower_bound=[0.001, 0.001, 0.001, 0.001],
-                upper_bound=[1, 1, 1, 1],
+                lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+                upper_bound=[None, None, None, None],
                 maxiter=self.config["maxiter"],
                 mutation_rate=self.config["mutation_rate"],
                 genome_length=self.config["genome_length"],
@@ -131,8 +132,8 @@ class Inference(Processor):
             model_sfs_moments, opt_theta_moments, opt_params_dict_moments =run_inference_moments(sfs,
                     p0 = self.config['optimization_initial_guess'],
                     demographic_model=self.config["demographic_model"],
-                    lower_bound=[0.001, 0.001, 0.001, 0.001],
-                    upper_bound=[1, 1, 1, 1],
+                    lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
+                    upper_bound=[None, None, None, None],
                     sampled_params=None,
                     maxiter=self.config["maxiter"],
                     use_FIM=self.config["use_FIM"],
@@ -167,13 +168,33 @@ class Inference(Processor):
 
         # Step 1: Initialize an empty list to collect analysis data arrays
         analysis_data = []
+        upper_triangular_data = []
 
         # Step 2: Dynamically extract and append data based on configuration
         for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
             if self.config.get(analysis_type):
                 # Extract the appropriate data dynamically based on the analysis type
                 analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # This maps to 'opt_params_dadi', 'opt_params_moments', etc.
-                analysis_data.append([list(result[analysis_key].values()) for result in list_of_mega_result_dicts])
+
+                analysis_type_data = []
+                for result in list_of_mega_result_dicts:
+                    param_values = list(result[analysis_key].values())
+                    
+                    if analysis_type == 'moments_analysis' and self.config.get('use_FIM', True):
+                        # Extract and store the upper triangular FIM separately
+                        upper_triangular = result['opt_params_moments'].get('upper_triangular_FIM', None)
+                        if upper_triangular is not None:
+                            upper_triangular_data.append(upper_triangular)  # Store upper triangular FIM separately
+                            
+                            # Remove 'upper_triangular_FIM' from param_values if it was included
+                            # Assuming 'upper_triangular_FIM' is the last key in the dictionary
+                            param_values = [v for k, v in result[analysis_key].items() if k != 'upper_triangular_FIM']
+
+                    # Append the processed param values to analysis_type_data
+                    analysis_type_data.append(param_values)
+                
+                # Add the collected parameter data (excluding FIM if stored separately) to analysis_data
+                analysis_data.append(analysis_type_data)
 
         # Step 3: Convert the collected data into NumPy arrays
         analysis_arrays = [np.array(data) for data in analysis_data]  # List of arrays, one for each analysis type
@@ -184,8 +205,17 @@ class Inference(Processor):
         else:
             features = analysis_arrays[0]  # If there's only one analysis, just use that array
 
+        # If upper triangular data exists, convert it to a NumPy array for further analysis
+        if upper_triangular_data:
+            upper_triangular_array = np.array(upper_triangular_data)  # Array of upper triangular matrices
+        else:
+            upper_triangular_array = None  # Handle case where FIM data does not exist
+
         inference_obj = {}
         inference_obj["features"] = features
+
+        if upper_triangular_array is not None:
+            inference_obj["upper_triangular_FIM"] = upper_triangular_array
 
         # Open a file to save the object
         with open(
@@ -196,17 +226,17 @@ class Inference(Processor):
         print("Inference complete!")
 
 
-    def evaluate_model(self, snn_model, inference_results):
+    def evaluate_model(self, snn_model, inference_results, additional_features):
         """
         This should run the GHIST data through the trained model and return the inferred parameters
         """
+        if additional_features is not None:
+            inference_features = np.concatenate((inference_results["features"].reshape(inference_results['features'].shape[0],-1), additional_features['upper_triangular_FIM']), axis=1)
+        else:
+            inference_features = inference_results["features"].reshape(inference_results['features'].shape[0],-1)
 
-        inference_features = torch.tensor(
-            inference_results["features"], dtype=torch.float32
-        ).cuda()
-        inference_features = inference_features.reshape(
-            inference_features.shape[0], -1
-        )
+        inference_features = torch.tensor(inference_features, dtype = torch.float32).cuda() 
+        
         inferred_params = snn_model.predict(inference_features)
 
         # Save the array as a text file
