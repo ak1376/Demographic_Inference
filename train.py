@@ -63,27 +63,30 @@ class Trainer:
         visualize=True,
     ):
 
-        # if self.use_FIM == False:
-        #     training_predictions = snn_model.predict(training_data[:,:8])
-        #     validation_predictions = snn_model.predict(validation_data[:,:8])
+        num_sims, num_reps, num_analyses, num_params = training_data.shape[0], training_data.shape[1], training_data.shape[2], training_data.shape[3]
 
-        # else:
-        #     training_predictions = snn_model.predict(training_data)
-        #     validation_predictions = snn_model.predict(validation_data)
+        training_features = training_data.reshape(num_sims * num_reps, num_analyses*num_params)
+        training_targets = np.expand_dims(training_targets[:,:,0,:], axis = 2)
 
         if additional_features is not None:
-            training_data = np.concatenate((training_data.reshape(training_data.shape[0], -1), additional_features['training']), axis = 1)
-            validation_data = np.concatenate((validation_data.reshape(validation_data.shape[0], -1), additional_features['validation']), axis = 1)
+            additional_features_training = additional_features['training'].reshape(-1, additional_features['training'].shape[3])
+            training_features = np.concatenate((training_features, additional_features_training), axis = 1) 
 
-        else:
-            training_data = training_data.reshape(training_data.shape[0], -1)
-            validation_data = validation_data.reshape(validation_data.shape[0], -1)
+        training_features = torch.tensor(training_features, dtype = torch.float32).cuda()
 
-        training_data = torch.tensor(training_data, dtype = torch.float32).cuda()
-        validation_data = torch.tensor(validation_data, dtype = torch.float32).cuda()
+        num_sims, num_reps, num_analyses, num_params = validation_data.shape[0], validation_data.shape[1], validation_data.shape[2], validation_data.shape[3]
 
-        training_predictions = np.expand_dims(snn_model.predict(training_data), axis = 1)
-        validation_predictions = np.expand_dims(snn_model.predict(validation_data), axis = 1)
+        validation_features = validation_data.reshape(num_sims * num_reps, num_analyses*num_params)
+        validation_targets = np.expand_dims(validation_targets[:,:,0,:], axis = 2)      
+
+        if additional_features is not None:
+            additional_features_validation = additional_features['validation'].reshape(-1, additional_features['validation'].shape[3])
+            validation_features = np.concatenate((validation_features, additional_features_validation), axis = 1) 
+
+        validation_features = torch.tensor(validation_features, dtype = torch.float32).cuda()
+
+        training_predictions = snn_model.predict(training_features).reshape(training_data.shape[0], num_reps, 1, num_params)
+        validation_predictions = snn_model.predict(validation_features).reshape(validation_data.shape[0], num_reps, 1, num_params)
 
         snn_mdl_obj = {}
         snn_mdl_obj["training"] = {}

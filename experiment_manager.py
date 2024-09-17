@@ -178,10 +178,7 @@ class Experiment_Manager:
         #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
         rrmse_dict = calculate_and_save_rrmse(
             preprocessing_results_obj,
-            save_path=f"{self.experiment_directory}/rrmse_dict.json",
-            dadi_analysis=self.dadi_analysis,
-            moments_analysis=self.moments_analysis,
-            momentsLD_analysis=self.momentsLD_analysis,
+            save_path=f"{self.experiment_directory}/rrmse_dict.json"
         )
 
         # Open a file to save the object
@@ -228,7 +225,8 @@ class Experiment_Manager:
                 
             training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate(upper_triangular_features)
         
-        training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate()
+        else:
+            training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate()
 
         linear_mdl_obj = linear_mdl.organizing_results(preprocessing_results_obj, training_predictions, validation_predictions, testing_predictions)
         
@@ -238,13 +236,13 @@ class Experiment_Manager:
 
         rrmse_dict = {}
         rrmse_dict["training"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["training"]["targets"], y_pred=np.squeeze(training_predictions, axis = 1)
+            y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
         )
         rrmse_dict["validation"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["validation"]["targets"], y_pred=np.squeeze(validation_predictions, axis = 1)
+            y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
         )
         rrmse_dict["testing"] = root_mean_squared_error(
-            y_true=linear_mdl_obj["testing"]["targets"], y_pred=np.squeeze(testing_predictions, axis = 1)
+            y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
         )
 
         # Open a file to save the object

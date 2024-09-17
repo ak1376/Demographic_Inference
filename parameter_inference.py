@@ -53,12 +53,11 @@ def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
 def run_inference_dadi(
     sfs,
     p0,
-    sampled_params,
     num_samples,
     demographic_model,
+    k,
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
-    maxiter=100,
     mutation_rate=1.26e-8,
     length=1e8,
 ):
@@ -74,70 +73,78 @@ def run_inference_dadi(
     func_ex = dadi.Numerics.make_extrap_log_func(model_func)
     pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
 
-    p_guess = moments.Misc.perturb_params(
-        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
-    )
-    start = time.time()
+    opt_params_dict_list = []
+    model_list = []
+    opt_theta_list = []
 
-    # print(f'GUESS PARAMETER: {p_guess}')
+    for i in np.arange(k):
 
-    opt_params = dadi.Inference.opt(
-        p_guess,
-        sfs,
-        func_ex,
-        pts=pts_ext,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        algorithm=nlopt.LN_BOBYQA,
-        maxeval=10,
-    )
+        p_guess = moments.Misc.perturb_params(
+            p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
+        )
 
-    opt_params = opt_params[0]
+        start = time.time()
 
-    print(f"OPT DADI PARAMETER: {opt_params}")
+        # print(f'GUESS PARAMETER: {p_guess}')
 
-    end = time.time()
-    # print(f"Dadi optimization took {end - start} seconds")
+        opt_params = dadi.Inference.opt(
+            p_guess,
+            sfs,
+            func_ex,
+            pts=pts_ext,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            algorithm=nlopt.LN_BOBYQA,
+            maxeval=10,
+        )
 
-    model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
-    opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
+        opt_params = opt_params[0]
 
-    opt_params_dict = {}
+        print(f"OPT DADI PARAMETER: {opt_params}")
 
-    if demographic_model == "bottleneck_model":
-        N_ref = opt_theta / (4 * mutation_rate * length)
-        opt_params_dict = {
-            "N0": N_ref,
-            "Nb": opt_params[0] * N_ref,
-            "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
-            "t_bottleneck_end": opt_params[2] * 2 * N_ref,
-        }
+        end = time.time()
+        # print(f"Dadi optimization took {end - start} seconds")
+
+        model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
+        opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
+
+        if demographic_model == "bottleneck_model":
+            N_ref = opt_theta / (4 * mutation_rate * length)
+            opt_params_dict = {
+                "N0": N_ref,
+                "Nb": opt_params[0] * N_ref,
+                "N_recover": opt_params[1] * N_ref,
+                "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
+                "t_bottleneck_end": opt_params[2] * 2 * N_ref,
+            }
+        
+        elif demographic_model == "split_isolation_model":
+            N_ref = opt_theta / (4 * mutation_rate * length)
+            opt_params_dict = {
+                "N0": N_ref,
+                "N1": opt_params[0] * N_ref,
+                "N2": opt_params[1] * N_ref,
+                "t_split": opt_params[2] * 2 * N_ref,
+                "t_isolation_start": opt_params[3] * 2 * N_ref,
+                "t_isolation_end": opt_params[4] * 2 * N_ref
+            }
+
+        model = model * opt_theta
+
+        model_list.append(model)
+        opt_theta_list.append(opt_theta)
+        opt_params_dict_list.append(opt_params_dict)
     
-    elif demographic_model == "split_isolation_model":
-        N_ref = opt_theta / (4 * mutation_rate * length)
-        opt_params_dict = {
-            "N0": N_ref,
-            "N1": opt_params[0] * N_ref,
-            "N2": opt_params[1] * N_ref,
-            "t_split": opt_params[2] * 2 * N_ref,
-            "t_isolation_start": opt_params[3] * 2 * N_ref,
-            "t_isolation_end": opt_params[4] * 2 * N_ref
-        }
-
-    model = model * opt_theta
-    
-    return model, opt_theta, opt_params_dict
+    return model_list, opt_theta_list, opt_params_dict_list
 
 
 def run_inference_moments(
     sfs,
     p0,
-    sampled_params,
     demographic_model,
+    k,
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
-    maxiter=100,
     use_FIM=False,
     mutation_rate=1.26e-8,
     length=1e7,
@@ -145,77 +152,88 @@ def run_inference_moments(
     """
     This should do the parameter inference for moments
     """
-    p_guess = moments.Misc.perturb_params(
-        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
-    )
 
-    if demographic_model == "bottleneck_model":
-        model_func = moments.Demographics1D.three_epoch
+    model_list = []
+    opt_theta_list = []
+    opt_params_dict_list = []
 
-    start = time.time()
+    for i in range(k):
 
-    opt_params =opt(
-        p_guess,
-        sfs,
-        model_func,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        log_opt=True, 
-        algorithm=nlopt.LN_BOBYQA
-    )[0] # I don't want the log likelihood. 
-
-    print(f"OPT MOMENTS PARAMETER: {opt_params}")
-
-    model = model_func(opt_params, sfs.sample_sizes)
-    opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
-
-    N_ref = opt_theta / (4 * mutation_rate * length)
-
-    end = time.time()
-
-    if use_FIM:
-
-        # Let's extract the hessian
-        # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
-        H = _get_godambe(
-            model_func,
-            all_boot=[],
-            p0=opt_params,
-            data=sfs,
-            eps=1e-6,
-            log=False,
-            just_hess=True,
+        p_guess = moments.Misc.perturb_params(
+            p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
         )
-        FIM = -1 * H
 
-        # Get the indices of the upper triangular part (including the diagonal)
-        upper_tri_indices = np.triu_indices(FIM.shape[0])  # type: ignore
+        if demographic_model == "bottleneck_model":
+            model_func = moments.Demographics1D.three_epoch
 
-        # Extract the upper triangular elements
-        upper_triangular = FIM[upper_tri_indices]  # type: ignore
+        start = time.time()
 
-    else:
-        upper_triangular = None
+        opt_params =opt(
+            p_guess,
+            sfs,
+            model_func,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            log_opt=True, 
+            algorithm=nlopt.LN_BOBYQA
+        )[0] # I don't want the log likelihood. 
 
-    opt_params_dict = {}
+        print(f"OPT MOMENTS PARAMETER: {opt_params}")
 
-    if demographic_model == "bottleneck_model":
+        model = model_func(opt_params, sfs.sample_sizes)
+        opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
 
-        opt_params_dict = {
-            "N0": N_ref,
-            "Nb": opt_params[0] * N_ref,
-            "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref, # type: ignore
-            "t_bottleneck_end": opt_params[2] * 2 * N_ref, # type: ignore
-            "upper_triangular_FIM": upper_triangular,
-        }
+        N_ref = opt_theta / (4 * mutation_rate * length)
 
-        if opt_params_dict["upper_triangular_FIM"] is None:
-            del opt_params_dict["upper_triangular_FIM"]
+        end = time.time()
 
-    model = model * opt_theta
+        if use_FIM:
 
-    return model, opt_theta, opt_params_dict
+            # Let's extract the hessian
+            # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
+            H = _get_godambe(
+                model_func,
+                all_boot=[],
+                p0=opt_params,
+                data=sfs,
+                eps=1e-6,
+                log=False,
+                just_hess=True,
+            )
+            FIM = -1 * H
+
+            # Get the indices of the upper triangular part (including the diagonal)
+            upper_tri_indices = np.triu_indices(FIM.shape[0])  # type: ignore
+
+            # Extract the upper triangular elements
+            upper_triangular = FIM[upper_tri_indices]  # type: ignore
+
+        else:
+            upper_triangular = None
+
+        opt_params_dict = {}
+
+        if demographic_model == "bottleneck_model":
+
+            opt_params_dict = {
+                "N0": N_ref,
+                "Nb": opt_params[0] * N_ref,
+                "N_recover": opt_params[1] * N_ref,
+                "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref, # type: ignore
+                "t_bottleneck_end": opt_params[2] * 2 * N_ref, # type: ignore
+                "upper_triangular_FIM": upper_triangular,
+            }
+
+            if opt_params_dict["upper_triangular_FIM"] is None:
+                del opt_params_dict["upper_triangular_FIM"]
+
+        model = model * opt_theta
+
+        model_list.append(model)
+        opt_theta_list.append(opt_theta)
+        opt_params_dict_list.append(opt_params_dict)
+
+    return model_list, opt_theta_list, opt_params_dict_list
 
 
 def run_inference_momentsLD(

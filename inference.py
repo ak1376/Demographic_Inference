@@ -49,19 +49,19 @@ class Inference(Processor):
         maxiter,
         mutation_rate,
         genome_length,
-        num_samples
+        num_samples,
+        k
     ):
         model, opt_theta, opt_params_dict = run_inference_dadi(
         sfs = fs,
         p0 = p0,
-        sampled_params = sampled_params,
         num_samples = num_samples,
         demographic_model = demographic_model,
         lower_bound=[0.001, 0.001, 0.001, 0.001],
         upper_bound=[1, 1, 1, 1],
-        maxiter=100,
         mutation_rate=1.26e-8,
-        length=1e8
+        length=1e8,
+        k = 1
         )
 
         return model, opt_theta, opt_params_dict
@@ -85,7 +85,6 @@ class Inference(Processor):
             sampled_params,
             lower_bound=lower_bound,
             upper_bound=upper_bound,
-            maxiter=maxiter,
             use_FIM=False,
             mutation_rate=mutation_rate,
             length=genome_length,
@@ -117,7 +116,8 @@ class Inference(Processor):
                 maxiter=self.config["maxiter"],
                 mutation_rate=self.config["mutation_rate"],
                 genome_length=self.config["genome_length"],
-                num_samples=self.config['num_samples']
+                num_samples=self.config['num_samples'],
+                k = 1
             )
 
             dadi_results = {
@@ -134,11 +134,10 @@ class Inference(Processor):
                     demographic_model=self.config["demographic_model"],
                     lower_bound=[1e-4, 1e-4, 1e-4, 1e-4],
                     upper_bound=[None, None, None, None],
-                    sampled_params=None,
-                    maxiter=self.config["maxiter"],
                     use_FIM=self.config["use_FIM"],
                     mutation_rate=self.config["mutation_rate"],
-                    length=self.config["genome_length"]
+                    length=self.config["genome_length"], 
+                    k = 1
                 )
 
             moments_results = {
@@ -178,36 +177,46 @@ class Inference(Processor):
 
                 analysis_type_data = []
                 for result in list_of_mega_result_dicts:
-                    param_values = list(result[analysis_key].values())
-                    
-                    if analysis_type == 'moments_analysis' and self.config.get('use_FIM', True):
-                        # Extract and store the upper triangular FIM separately
-                        upper_triangular = result['opt_params_moments'].get('upper_triangular_FIM', None)
-                        if upper_triangular is not None:
-                            upper_triangular_data.append(upper_triangular)  # Store upper triangular FIM separately
-                            
-                            # Remove 'upper_triangular_FIM' from param_values if it was included
-                            # Assuming 'upper_triangular_FIM' is the last key in the dictionary
-                            param_values = [v for k, v in result[analysis_key].items() if k != 'upper_triangular_FIM']
+                    for index in np.arange(len(result[analysis_key])):
+                        param_values = list(result[analysis_key][index].values())
 
-                    # Append the processed param values to analysis_type_data
-                    analysis_type_data.append(param_values)
-                
+                        if analysis_type == 'moments_analysis' and self.config.get('use_FIM', True):
+                            # Extract and store the upper triangular FIM separately
+                            upper_triangular = result['opt_params_moments'][index].get('upper_triangular_FIM', None)
+                            if upper_triangular is not None:
+                                upper_triangular_data.append(upper_triangular)  # Store upper triangular FIM separately
+                                
+                                # Remove 'upper_triangular_FIM' from param_values if it was included
+                                # Assuming 'upper_triangular_FIM' is the last key in the dictionary
+                                param_values = [value for value in param_values if not isinstance(value, np.ndarray)]
+
+
+                        # Append the processed param values to analysis_type_data
+                        analysis_type_data.append(param_values)
+
                 # Add the collected parameter data (excluding FIM if stored separately) to analysis_data
                 analysis_data.append(analysis_type_data)
 
         # Step 3: Convert the collected data into NumPy arrays
-        analysis_arrays = [np.array(data) for data in analysis_data]  # List of arrays, one for each analysis type
+        analysis_arrays = np.array(analysis_data)
 
-        # Step 4: Stack the arrays along a new axis if there are multiple analyses
-        if len(analysis_arrays) > 1:
-            features = np.stack(analysis_arrays, axis=1)  # Stack along a new axis (num_sims, num_analyses, num_params)
-        else:
-            features = analysis_arrays[0]  # If there's only one analysis, just use that array
+        # Now we need to transpose it to get the shape (num_sims*k, num_analyses, num_params)
+
+        num_analyses = self.config['dadi_analysis'] + self.config['moments_analysis'] + self.config['momentsLD_analysis']
+        num_sims = len(list_of_mega_result_dicts)
+        num_reps = len(analysis_data[0]) // num_sims
+        num_params = len(analysis_data[0][0])
+
+        # Reshape to desired format
+        analysis_arrays = analysis_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
+
+        # Transpose to match the desired output shape (num_sims, num_reps, num_analyses, num_params)
+        features = np.transpose(analysis_arrays, (1, 2, 0, 3))
 
         # If upper triangular data exists, convert it to a NumPy array for further analysis
         if upper_triangular_data:
-            upper_triangular_array = np.array(upper_triangular_data)  # Array of upper triangular matrices
+            upper_triangular_array = np.array(upper_triangular_data).reshape(((1, num_sims, num_reps, upper_triangular_data[0].shape[0])))  # Array of upper triangular matrices
+            upper_triangular_array = np.transpose(upper_triangular_array, (1, 2, 0, 3))
         else:
             upper_triangular_array = None  # Handle case where FIM data does not exist
 
@@ -230,12 +239,19 @@ class Inference(Processor):
         """
         This should run the GHIST data through the trained model and return the inferred parameters
         """
-        if additional_features is not None:
-            inference_features = np.concatenate((inference_results["features"].reshape(inference_results['features'].shape[0],-1), additional_features['upper_triangular_FIM']), axis=1)
-        else:
-            inference_features = inference_results["features"].reshape(inference_results['features'].shape[0],-1)
 
-        inference_features = torch.tensor(inference_features, dtype = torch.float32).cuda() 
+        training_features = inference_results['features']
+
+        num_sims, num_reps, num_analyses, num_params = training_features.shape[0], training_features.shape[1], training_features.shape[2], training_features.shape[3]
+
+        training_features = training_features.reshape(num_sims * num_reps, num_analyses*num_params)
+
+        if additional_features is not None:
+            additional_features_training = np.expand_dims(np.squeeze(additional_features['upper_triangular_FIM']), axis = 0)
+            training_features = np.concatenate((training_features, additional_features_training), axis = 1) 
+
+
+        inference_features = torch.tensor(training_features, dtype = torch.float32).cuda() 
         
         inferred_params = snn_model.predict(inference_features)
 

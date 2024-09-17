@@ -31,32 +31,42 @@ class LinearReg:
         """
         # Train the model on the training data
         # Reshape dynamically: flatten the second and third dimensions
-        
-        new_shape = (self.training_features.shape[0], -1) 
-        training_features = self.training_features.reshape(new_shape)
+
+
+        # Training reshaping
+
+        num_sims, num_reps, num_analyses, num_params = self.training_features.shape[0], self.training_features.shape[1], self.training_features.shape[2], self.training_features.shape[3]
+
+        training_features = self.training_features.reshape(num_sims * num_reps, num_analyses*num_params)
+        training_targets = self.training_targets[:,:,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
-            training_features = np.concatenate((training_features, additional_features['training']), axis = 1) 
+            additional_features_training = additional_features['training'].reshape(-1, additional_features['training'].shape[3])
+            training_features = np.concatenate((training_features, additional_features_training), axis = 1) 
 
-
-        new_shape = (self.validation_features.shape[0], -1) 
-        validation_features = self.validation_features.reshape(new_shape)
-
-        if additional_features is not None:
-            validation_features = np.concatenate((validation_features, additional_features['validation']), axis = 1) 
-
-
-        new_shape = (self.testing_features.shape[0], -1)
-        testing_features = self.testing_features.reshape(new_shape)
+        # Validation reshaping
+        num_sims, num_reps, num_analyses, num_params = self.validation_features.shape[0], self.validation_features.shape[1], self.validation_features.shape[2], self.validation_features.shape[3]
+        validation_features = self.validation_features.reshape(num_sims * num_reps, num_analyses*num_params)
+        validation_targets = self.validation_targets[:,:,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
-            testing_features = np.concatenate((testing_features, additional_features['testing']), axis = 1) 
+            additional_features_validation = additional_features['validation'].reshape(-1, additional_features['validation'].shape[3])
+            validation_features = np.concatenate((validation_features, additional_features_validation), axis = 1) 
 
-        self.model.fit(training_features, self.training_targets)
+        # Testing reshaping
+        num_sims, num_reps, num_analyses, num_params = self.testing_features.shape[0], self.testing_features.shape[1], self.testing_features.shape[2], self.testing_features.shape[3]
+        testing_features = self.testing_features.reshape(num_sims * num_reps, num_analyses*num_params)
+        testing_targets = self.testing_targets[:,:,0,:].reshape(-1, num_params)
 
-        training_predictions = np.expand_dims(self.model.predict(training_features) , axis = 1) 
-        validation_predictions = np.expand_dims(self.model.predict(validation_features), axis = 1)
-        testing_predictions = np.expand_dims(self.model.predict(testing_features), axis = 1)
+        if additional_features is not None:
+            additional_features_testing = additional_features['testing'].reshape(-1, additional_features['testing'].shape[3])
+            testing_features = np.concatenate((testing_features, additional_features_testing), axis = 1) 
+
+        self.model.fit(training_features, training_targets)
+
+        training_predictions = self.model.predict(training_features).reshape(self.training_features.shape[0], num_reps, 1, num_params)
+        validation_predictions = self.model.predict(validation_features).reshape(self.validation_features.shape[0], num_reps, 1, num_params)
+        testing_predictions = self.model.predict(testing_features).reshape(self.testing_features.shape[0], num_reps, 1, num_params)
 
         return training_predictions, validation_predictions, testing_predictions
     
@@ -71,13 +81,17 @@ class LinearReg:
         linear_mdl_obj["testing"] = {}
 
         linear_mdl_obj["training"]["predictions"] = training_predictions
-        linear_mdl_obj["training"]["targets"] = preprocessing_results_obj["training"]["targets"].copy()
+        linear_mdl_obj["training"]["targets"] = np.expand_dims(preprocessing_results_obj["training"]["targets"][:,:,0,:], axis = 2)
+        
+        
+        
+        # Because the targets for each analysis are the same.
 
         linear_mdl_obj["validation"]["predictions"] = validation_predictions
-        linear_mdl_obj["validation"]["targets"] = preprocessing_results_obj["validation"]["targets"].copy()
+        linear_mdl_obj["validation"]["targets"] = np.expand_dims(preprocessing_results_obj["validation"]["targets"][:,:,0,:], axis = 2) # Because the targets for each analysis are the same.
 
         linear_mdl_obj["testing"]["predictions"] = testing_predictions
-        linear_mdl_obj["testing"]["targets"] = preprocessing_results_obj["testing"]["targets"].copy()
+        linear_mdl_obj["testing"]["targets"] = np.expand_dims(preprocessing_results_obj["testing"]["targets"][:,:,0,:], axis = 2) # Because the targets for each analysis are the same.
 
         return linear_mdl_obj
 
@@ -264,31 +278,31 @@ class ShallowNN(nn.Module):
             model.parameters(), lr=learning_rate, weight_decay=weight_decay
         )
 
-        new_shape = (X_train.shape[0], -1) 
-        training_features = X_train.reshape(new_shape)
+        num_sims, num_reps, num_analyses, num_params = X_train.shape[0], X_train.shape[1], X_train.shape[2], X_train.shape[3]
+        
+        training_features = X_train.reshape(num_sims * num_reps, num_analyses*num_params)
+        training_targets = y_train[:,:,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
-            print(additional_features['training'])
-            training_features = np.concatenate((training_features, additional_features['training']), axis = 1)
+            additional_features_training = additional_features['training'].reshape(-1, additional_features['training'].shape[3])
+            training_features = np.concatenate((training_features, additional_features_training), axis = 1) 
 
-
-
-        new_shape = (X_val.shape[0], -1) 
-        validation_features = X_val.reshape(new_shape)
+        
+        # Validation reshaping
+        num_sims, num_reps, num_analyses, num_params = X_val.shape[0], X_val.shape[1], X_val.shape[2], X_val.shape[3]
+        validation_features = X_val.reshape(num_sims * num_reps, num_analyses*num_params)
+        validation_targets = X_val[:,:,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
-            validation_features = np.concatenate((validation_features, additional_features['validation']), axis = 1)
+            additional_features_validation = additional_features['validation'].reshape(-1, additional_features['validation'].shape[3])
+            validation_features = np.concatenate((validation_features, additional_features_validation), axis = 1) 
 
 
         # Convert training and validation data into PyTorch tensors
         X_train_tensor = torch.tensor(training_features, dtype=torch.float32).cuda()
-        y_train_tensor = torch.tensor(y_train, dtype=torch.float32).cuda()
+        y_train_tensor = torch.tensor(training_targets, dtype=torch.float32).cuda()
         X_val_tensor = torch.tensor(validation_features, dtype=torch.float32).cuda()
-        y_val_tensor = torch.tensor(y_val, dtype=torch.float32).cuda()
-
-        # if use_FIM == False:
-        #     X_train_tensor = X_train_tensor[:,:8]
-        #     X_val_tensor = X_val_tensor[:,:8]
+        y_val_tensor = torch.tensor(validation_targets, dtype=torch.float32).cuda()
 
         # Create DataLoader for mini-batch training
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)

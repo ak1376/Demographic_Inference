@@ -49,6 +49,7 @@ config = {
     "remove_outliers": True,
     "use_FIM": False,
     "neural_net_hyperparameters": model_config,
+    "k": 3,
     "demographic_model": "bottleneck_model",
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
     "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05],

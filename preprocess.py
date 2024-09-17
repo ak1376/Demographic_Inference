@@ -249,12 +249,11 @@ class Processor:
                         p0= self.experiment_config['optimization_initial_guess'],
                         lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) - 1),
                         upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
-                        sampled_params=sampled_params,
                         num_samples=100, #TODO: Need to change this to not rely on a hardcoded value
                         demographic_model=self.experiment_config['demographic_model'],
-                        maxiter=self.maxiter,
                         mutation_rate=self.mutation_rate,
                         length=self.L,
+                        k  = self.experiment_config['k']
                     )
                 )
 
@@ -274,12 +273,11 @@ class Processor:
                         p0=self.experiment_config['optimization_initial_guess'],
                         lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) -1),
                         upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
-                        sampled_params=sampled_params,
                         demographic_model=self.experiment_config['demographic_model'],
-                        maxiter=self.maxiter,
                         use_FIM=self.experiment_config["use_FIM"],
                         mutation_rate=self.mutation_rate,
                         length=self.L,
+                        k = self.experiment_config['k']
                     )
                 )
 
@@ -323,13 +321,10 @@ class Processor:
 
             list_of_mega_result_dicts.append(mega_result_dict)
 
-        # Ground truth params (each row is a simulation)
-        df = pd.DataFrame([result['simulated_params'] for result in list_of_mega_result_dicts])
-        targets = df.values
-
         # Step 1: Initialize an empty list to collect analysis data arrays
         analysis_data = []
         upper_triangular_data = []
+        targets_data = []
 
         # Step 2: Dynamically extract and append data based on configuration
         for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
@@ -338,37 +333,54 @@ class Processor:
                 analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # This maps to 'opt_params_dadi', 'opt_params_moments', etc.
 
                 analysis_type_data = []
+                targets_type_data = []
                 for result in list_of_mega_result_dicts:
-                    param_values = list(result[analysis_key].values())
-                    
-                    if analysis_type == 'moments_analysis' and self.experiment_config.get('use_FIM', True):
-                        # Extract and store the upper triangular FIM separately
-                        upper_triangular = result['opt_params_moments'].get('upper_triangular_FIM', None)
-                        if upper_triangular is not None:
-                            upper_triangular_data.append(upper_triangular)  # Store upper triangular FIM separately
-                            
-                            # Remove 'upper_triangular_FIM' from param_values if it was included
-                            # Assuming 'upper_triangular_FIM' is the last key in the dictionary
-                            param_values = [v for k, v in result[analysis_key].items() if k != 'upper_triangular_FIM']
+                    for index in np.arange(len(result[analysis_key])):
+                        param_values = list(result[analysis_key][index].values())
+                        target_values = list(result['simulated_params'].values())
 
-                    # Append the processed param values to analysis_type_data
-                    analysis_type_data.append(param_values)
-                
+                        if analysis_type == 'moments_analysis' and self.experiment_config.get('use_FIM', True):
+                            # Extract and store the upper triangular FIM separately
+                            upper_triangular = result['opt_params_moments'][index].get('upper_triangular_FIM', None)
+                            if upper_triangular is not None:
+                                upper_triangular_data.append(upper_triangular)  # Store upper triangular FIM separately
+                                
+                                # Remove 'upper_triangular_FIM' from param_values if it was included
+                                # Assuming 'upper_triangular_FIM' is the last key in the dictionary
+                                param_values = [value for value in param_values if not isinstance(value, np.ndarray)]
+
+
+                        # Append the processed param values to analysis_type_data
+                        analysis_type_data.append(param_values)
+                        targets_type_data.append(target_values)
+
                 # Add the collected parameter data (excluding FIM if stored separately) to analysis_data
                 analysis_data.append(analysis_type_data)
+                targets_data.append(targets_type_data)
 
         # Step 3: Convert the collected data into NumPy arrays
-        analysis_arrays = [np.array(data) for data in analysis_data]  # List of arrays, one for each analysis type
+        analysis_arrays = np.array(analysis_data)
+        targets_arrays = np.array(targets_data)
 
-        # Step 4: Stack the arrays along a new axis if there are multiple analyses
-        if len(analysis_arrays) > 1:
-            features = np.stack(analysis_arrays, axis=1)  # Stack along a new axis (num_sims, num_analyses, num_params)
-        else:
-            features = analysis_arrays[0]  # If there's only one analysis, just use that array
+        # Now we need to transpose it to get the shape (num_sims*k, num_analyses, num_params)
+
+        num_analyses = self.experiment_config['dadi_analysis'] + self.experiment_config['moments_analysis'] + self.experiment_config['momentsLD_analysis']
+        num_sims = len(list_of_mega_result_dicts)
+        num_reps = len(analysis_data[0]) // num_sims
+        num_params = len(analysis_data[0][0])
+
+        # Reshape to desired format
+        analysis_arrays = analysis_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
+        targets_arrays = targets_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
+
+        # Transpose to match the desired output shape (num_sims, num_reps, num_analyses, num_params)
+        features = np.transpose(analysis_arrays, (1, 2, 0, 3))
+        targets = np.transpose(targets_arrays, (1, 2, 0, 3))
 
         # If upper triangular data exists, convert it to a NumPy array for further analysis
         if upper_triangular_data:
-            upper_triangular_array = np.array(upper_triangular_data)  # Array of upper triangular matrices
+            upper_triangular_array = np.array(upper_triangular_data).reshape(((1, num_sims, num_reps, upper_triangular_data[0].shape[0])))  # Array of upper triangular matrices
+            upper_triangular_array = np.transpose(upper_triangular_array, (1, 2, 0, 3))
         else:
             upper_triangular_array = None  # Handle case where FIM data does not exist
 

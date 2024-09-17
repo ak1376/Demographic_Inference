@@ -33,9 +33,8 @@ def visualizing_results(
 
         # Loop through each analysis (dimension 1)
         for j, stage in enumerate(stages):
-            num_analyses = linear_mdl_obj[stage]["predictions"].shape[1]
-            predictions = linear_mdl_obj[stage]["predictions"][:, :, i]  # shape (num_sims, num_analyses)
-            targets = np.tile(linear_mdl_obj[stage]["targets"][:,i][:, np.newaxis], (1, num_analyses))
+            predictions = linear_mdl_obj[stage]["predictions"][:, :, :, i]  # original shape: (num_sims, num_replicates, num_analyses, num_params)
+            targets = linear_mdl_obj[stage]["targets"][:,:,:,i] # Because the targets for each analysis are the same. 
             
             # Flatten along the rows to plot results across analyses for each parameter
             predictions_flat = predictions.reshape(-1)
@@ -109,9 +108,8 @@ def calculate_model_errors(model_obj, model_name, datasets):
     for dataset in datasets:
         errors[dataset] = root_mean_squared_error(
             model_obj[dataset]["targets"],
-            np.squeeze(model_obj[dataset][
-                "predictions"
-            ], axis = 1),  # The :4 is to only consider the first 4 columns which are the parameters of interest. For moments I also get the upper triangle of the FIM, and those aren't parameters we are inferring.
+            model_obj[dataset][
+                "predictions"]
         )
 
     return {model_name: errors}
@@ -119,25 +117,22 @@ def calculate_model_errors(model_obj, model_name, datasets):
 
 def calculate_and_save_rrmse(
     analysis_obj,
-    save_path,
-    dadi_analysis=False,
-    moments_analysis=False,
-    momentsLD_analysis=False,
+    save_path
 ):
 
-    num_analyses =  dadi_analysis + moments_analysis + momentsLD_analysis
     rrmse_dict = {}
 
     rrmse_training = root_mean_squared_error(
-        analysis_obj['training']['predictions'], np.tile(analysis_obj['training']['targets'][:, np.newaxis, :], (1, num_analyses, 1))
+        y_true =  analysis_obj['training']['targets'], y_pred = analysis_obj['training']['predictions']
     )
     rrmse_validation = root_mean_squared_error(
-        analysis_obj['validation']['predictions'], np.tile(analysis_obj['validation']['targets'][:, np.newaxis, :], (1, num_analyses, 1))
+        y_true = analysis_obj['validation']['targets'], y_pred = analysis_obj['validation']['predictions']
     )
 
     rrmse_testing = root_mean_squared_error(
-        analysis_obj['testing']['predictions'], np.tile(analysis_obj['testing']['targets'][:, np.newaxis, :], (1, num_analyses, 1))
+        y_true = analysis_obj['testing']['targets'], y_pred = analysis_obj['testing']['predictions']
     )
+    
 
     rrmse_dict["training"] = rrmse_training
     rrmse_dict["validation"] = rrmse_validation

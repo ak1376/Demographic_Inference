@@ -42,7 +42,7 @@ lower_bound_params = {
     "t_bottleneck_end": 800,
 }
 model_config = {
-    "input_size": 10,
+    "input_size": 20,
     "hidden_size": 1000,
     "output_size": 5,
     "num_epochs": 1000,
@@ -71,7 +71,8 @@ config = {
     "seed": 42,
     "normalization": False,
     "remove_outliers": True,
-    "use_FIM": False,
+    "use_FIM": True,
+    "k": 3,
     "neural_net_hyperparameters": model_config,
     "demographic_model": "bottleneck_model",
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
