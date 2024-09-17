@@ -32,7 +32,7 @@ def opt(p0, data, model_func, multinom=True,
         maxeval=int(1e9), maxtime=np.inf,
         stopval=0, log_opt = False,
         local_optimizer=nlopt.LN_BOBYQA,
-        verbose=10, func_args=[], func_kwargs={},
+        verbose=0, func_args=[], func_kwargs={},
         ):
     """
     p0: Initial parameters.

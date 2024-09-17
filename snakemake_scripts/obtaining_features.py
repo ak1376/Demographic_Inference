@@ -95,10 +95,7 @@ def obtain_features(
     #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
     rrmse_dict = calculate_and_save_rrmse(
         preprocessing_results_obj,
-        save_path=f"{experiment_directory}/rrmse_dict.json",
-        dadi_analysis=experiment_config['dadi_analysis'],
-        moments_analysis=experiment_config['moments_analysis'],
-        momentsLD_analysis=experiment_config['momentsLD_analysis'],
+        save_path=f"{experiment_directory}/rrmse_dict.json"
     )
 
     # Open a file to save the object
@@ -146,13 +143,13 @@ def obtain_features(
 
     rrmse_dict = {}
     rrmse_dict["training"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["training"]["targets"], y_pred=np.squeeze(training_predictions, axis = 1)
+        y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
     )
     rrmse_dict["validation"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["validation"]["targets"], y_pred=np.squeeze(validation_predictions, axis = 1)
+        y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
     )
     rrmse_dict["testing"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["testing"]["targets"], y_pred=np.squeeze(testing_predictions, axis = 1)
+        y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
     )
 
     # Open a file to save the object
