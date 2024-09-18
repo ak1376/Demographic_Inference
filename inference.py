@@ -61,7 +61,7 @@ class Inference(Processor):
         upper_bound=[1, 1, 1, 1],
         mutation_rate=1.26e-8,
         length=1e8,
-        k = 1
+        k = k
         )
 
         return model, opt_theta, opt_params_dict
@@ -117,7 +117,7 @@ class Inference(Processor):
                 mutation_rate=self.config["mutation_rate"],
                 genome_length=self.config["genome_length"],
                 num_samples=self.config['num_samples'],
-                k = 1
+                k = self.config['k']
             )
 
             dadi_results = {
@@ -137,7 +137,7 @@ class Inference(Processor):
                     use_FIM=self.config["use_FIM"],
                     mutation_rate=self.config["mutation_rate"],
                     length=self.config["genome_length"], 
-                    k = 1
+                    k = self.config['k']
                 )
 
             moments_results = {
@@ -244,16 +244,16 @@ class Inference(Processor):
 
         num_sims, num_reps, num_analyses, num_params = training_features.shape[0], training_features.shape[1], training_features.shape[2], training_features.shape[3]
 
-        training_features = training_features.reshape(num_sims * num_reps, num_analyses*num_params)
+        training_features = training_features.reshape(num_sims, -1)
 
         if additional_features is not None:
-            additional_features_training = np.expand_dims(np.squeeze(additional_features['upper_triangular_FIM']), axis = 0)
+            additional_features_training = additional_features['upper_triangular_FIM'].reshape(additional_features['upper_triangular_FIM'].shape[0], -1)
             training_features = np.concatenate((training_features, additional_features_training), axis = 1) 
 
-
+        print(f'Inference features shape: {training_features.shape}')
         inference_features = torch.tensor(training_features, dtype = torch.float32).cuda() 
         
-        inferred_params = snn_model.predict(inference_features)
+        inferred_params = snn_model.predict(inference_features, eval_mode = True)
 
         # Save the array as a text file
         np.savetxt(

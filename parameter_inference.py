@@ -175,7 +175,8 @@ def run_inference_moments(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
             log_opt=True, 
-            algorithm=nlopt.LN_BOBYQA
+            algorithm=nlopt.LN_BOBYQA,
+            maxeval=10
         )[0] # I don't want the log likelihood. 
 
         print(f"OPT MOMENTS PARAMETER: {opt_params}")

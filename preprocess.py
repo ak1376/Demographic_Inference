@@ -13,7 +13,7 @@ from parameter_inference import (
     run_inference_momentsLD,
 )
 import pandas as pd
-
+from scipy.stats import zscore
 
 def generate_window(ts, window_length, n_samples):
     start = np.random.randint(0, n_samples - window_length)
@@ -384,5 +384,53 @@ class Processor:
         else:
             upper_triangular_array = None  # Handle case where FIM data does not exist
 
+
+        if self.experiment_config['remove_outliers'] == True:
+            print("===> Removing outliers and imputing with median values.")
+
+            # NOW LET'S DO OUTLIER REMOVAL AND MEDIAN IMPUTATION. 
+            
+            
+            # Step 1: Reshape to (num_sims*num_reps, num_analyses*num_params)
+            reshaped = features.reshape(num_sims*num_reps, num_analyses*num_params)
+
+            # Step 2: Calculate Z-scores for the entire array
+            z_scores = np.abs(zscore(reshaped, axis=0))
+
+            # Define the threshold for outliers (Grubbs test Z-score = 3)
+            threshold = 3
+            outliers = z_scores > threshold
+
+            # Step 3: Replace outliers with the median of the non-outlier values
+            # Compute the median of the values that are not outliers
+            median_value = np.median(reshaped[~outliers])
+
+            # Replace outliers with the median
+            reshaped[outliers] = median_value
+
+            # Step 4: Reshape the data back to the original format
+            features = reshaped.reshape((num_sims, num_reps, num_analyses, num_params))
+                
+
+        if self.experiment_config['normalization'] == True:
+            print("===> Normalizing the data.")
+            
+            # Convert dict values to NumPy arrays for element-wise operations
+            upper_bound_values = np.array(list(self.experiment_config['upper_bound_params'].values()))
+            lower_bound_values = np.array(list(self.experiment_config['lower_bound_params'].values()))
+
+            # Calculate mean and standard deviation vectors
+            mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
+            std_vector = (upper_bound_values - lower_bound_values) / np.sqrt(12)  # Correct std deviation for uniform distribution
+
+            # Normalize the targets
+            targets = (targets - mean_vector) / std_vector
+
+            # Check for NaN values in the targets
+            if np.isnan(targets).any():
+                print("Warning: NaN values found in the normalized targets!")
+            else:
+                print("No NaN values found in the normalized targets.")
+                        
         # Return features, targets, and upper triangular array (if exists)
         return features, targets, upper_triangular_array

@@ -33,8 +33,8 @@ def visualizing_results(
 
         # Loop through each analysis (dimension 1)
         for j, stage in enumerate(stages):
-            predictions = linear_mdl_obj[stage]["predictions"][:, :, :, i]  # original shape: (num_sims, num_replicates, num_analyses, num_params)
-            targets = linear_mdl_obj[stage]["targets"][:,:,:,i] # Because the targets for each analysis are the same. 
+            predictions = linear_mdl_obj[stage]["predictions"]
+            targets = linear_mdl_obj[stage]["targets"]
             
             # Flatten along the rows to plot results across analyses for each parameter
             predictions_flat = predictions.reshape(-1)
@@ -151,10 +151,27 @@ def root_mean_squared_error(y_true, y_pred):
         y_true.shape == y_pred.shape
     ), "Shapes of y_true and y_pred must match after processing"
 
-    relative_error = (y_pred - y_true) / y_true
-    squared_relative_error = np.square(relative_error)
-    rrmse_value = np.sqrt(np.mean(np.sum(squared_relative_error, axis=1)))
+    try:
+        # Check if there are any zero values in y_true to prevent division by zero
+        if np.any(y_true == 0):
+            # Find the indices where y_true is zero
+            zero_indices = np.where(y_true == 0)
+            print(f"Offending values in y_true causing division by zero: {y_true[zero_indices]}")
+            print(f"Corresponding y_pred values: {y_pred[zero_indices]}")
+            raise ValueError("Division by zero encountered in y_true.")
+        
+        relative_error = (y_pred - y_true) / y_true
+        squared_relative_error = np.square(relative_error)
+        rrmse_value = np.sqrt(np.mean(np.sum(squared_relative_error, axis=1)))
 
+    except Exception as e:
+        print(f"Error encountered: {e}")
+        # Optional: Save error details to a log file
+        with open('error_log.txt', 'a') as log_file:
+            log_file.write(f"Error encountered: {e}\n")
+            log_file.write(f"Offending values in y_true: {y_true[zero_indices]}\n")
+            log_file.write(f"Corresponding values in y_pred: {y_pred[zero_indices]}\n")
+    
     return rrmse_value
 
 

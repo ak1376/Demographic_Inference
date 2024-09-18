@@ -84,8 +84,10 @@ def obtain_features(
         # Your existing process_and_save_data function
 
         # Call the remote function and get the ObjectRef
+        print(f"Processing {stage} data")
         features, targets, upper_triangle_features = processor.pretrain_processing(indices)
-
+        print(f'Maximum target value for {stage} data: {np.max(targets)}')
+        
         preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model
         preprocessing_results_obj[stage]["targets"] = targets
         preprocessing_results_obj[stage]["upper_triangular_FIM"] = upper_triangle_features

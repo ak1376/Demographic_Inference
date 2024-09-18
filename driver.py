@@ -42,47 +42,53 @@ lower_bound_params = {
     "t_bottleneck_end": 800,
 }
 model_config = {
-    "input_size": 20,
+    "input_size": 200,
     "hidden_size": 1000,
     "output_size": 5,
-    "num_epochs": 1000,
+    "num_epochs": 100,
     "learning_rate": 3e-4,
-    "num_layers": 3,
+    "num_layers": 2,
     "dropout_rate": 0,
     "weight_decay": 0,
+    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
+
 }
 
 config = {
     "upper_bound_params": upper_bound_params,
     "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 5,
+    "num_sims_pretrain": 10,
     "num_sims_inference": 5,
     "num_samples": 20,
-    "experiment_name": "dadi_moments_analysis_new",
+    "experiment_name": "two_layers_only",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
     "num_windows": 50,
-    "window_length": 1e6,
+    "window_length": 1e4,
     "maxiter": 100,
     "genome_length": 1e6,
     "mutation_rate": 1.26e-8,
     "recombination_rate": 1.007e-8,
     "seed": 42,
-    "normalization": False,
+    "normalization": True,
     "remove_outliers": True,
     "use_FIM": True,
-    "k": 3,
     "neural_net_hyperparameters": model_config,
+    "k": 10,
     "demographic_model": "bottleneck_model",
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
-    "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05]
+    "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05],
+    "vcf_filepath": "/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz",
+    "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
+    "popname": "wisent"
+    
 }
 
 linear_experiment = Experiment_Manager(config)
 linear_experiment.obtaining_features()
 preprocessing_results_obj = linear_experiment.load_features(
-    f"{os.getcwd()}/experiments/dadi_moments_analysis_new/preprocessing_results_obj.pkl"
+    f"{os.getcwd()}/experiments/two_layers_only/preprocessing_results_obj.pkl"
 )
 # preprocessing_results_obj = linear_experiment.load_features("/sietch_colab/akapoor/Demographic_Inference/experiments/dadi_moments_analysis/preprocessing_results_obj.pkl")
 training_features = preprocessing_results_obj["training"]["predictions"]

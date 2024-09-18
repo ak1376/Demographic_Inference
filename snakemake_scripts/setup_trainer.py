@@ -51,6 +51,12 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
     )
 
     # Make predictions
+
+    print(f'Maximum training target value: {features["training"]["targets"].max()}')
+    print(f'Minimum training target value: {features["training"]["targets"].min()}')
+    print(f'Maximum validation target value: {features["validation"]["targets"].max()}')
+    print(f'Minimum validation target value: {features["validation"]["targets"].min()}')
+    
     snn_results = trainer.predict(
         snn_model,
         features["training"]["features"],
