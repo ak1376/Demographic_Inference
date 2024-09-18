@@ -41,6 +41,9 @@ if __name__ == "__main__":
     with open(args.config, "r") as f:
         config = json.load(f)
 
+    # with open(args.model_config, "r") as f:
+    #     model_config = json.load(f)
+
     inference_obj = Inference(
         vcf_filepath=config["vcf_filepath"],
         txt_filepath=config["txt_filepath"],

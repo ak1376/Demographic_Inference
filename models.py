@@ -41,7 +41,7 @@ class LinearReg:
         training_targets = self.training_targets[:,0,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
-            additional_features_training = additional_features['training'].reshape(-1, additional_features['training'].shape[3])
+            additional_features_training = additional_features['training'].reshape(additional_features['training'].shape[0], -1)
             training_features = np.concatenate((training_features, additional_features_training), axis = 1) 
 
         # Validation reshaping
@@ -50,7 +50,7 @@ class LinearReg:
         validation_targets = self.validation_targets[:,0,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
-            additional_features_validation = additional_features['validation'].reshape(-1, additional_features['validation'].shape[3])
+            additional_features_validation = additional_features['validation'].reshape(additional_features['validation'].shape[0], -1)
             validation_features = np.concatenate((validation_features, additional_features_validation), axis = 1) 
 
         # Testing reshaping
@@ -59,7 +59,7 @@ class LinearReg:
         testing_targets = self.testing_targets[:,0,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
-            additional_features_testing = additional_features['testing'].reshape(-1, additional_features['testing'].shape[3])
+            additional_features_testing = additional_features['testing'].reshape(additional_features['testing'].shape[0], -1)
             testing_features = np.concatenate((testing_features, additional_features_testing), axis = 1) 
 
         self.model.fit(training_features, training_targets)
@@ -240,12 +240,17 @@ class ShallowNN(nn.Module):
 
         if eval_mode:
             self.eval()  # Set the model to evaluation mode
+
+        else:
+            self.train()
+
         with torch.no_grad():
             if isinstance(X, np.ndarray):
                 X = torch.tensor(X, dtype=torch.float32)
             if X.device != next(self.parameters()).device:
                 X = X.to(next(self.parameters()).device)
             predictions = self(X)
+            # print(predictions)
 
         return predictions.cpu().numpy()
 
@@ -291,9 +296,12 @@ class ShallowNN(nn.Module):
 
         
         # Validation reshaping
+
         num_sims, num_reps, num_analyses, num_params = X_val.shape[0], X_val.shape[1], X_val.shape[2], X_val.shape[3]
         validation_features = X_val.reshape(num_sims , -1)
-        validation_targets = X_val[:,0,0,:].reshape(-1, num_params)
+
+        print(f'y_val shape: {y_val.shape}')
+        validation_targets = y_val[:,0,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
             additional_features_validation = additional_features['validation'].reshape(additional_features["validation"].shape[0], -1)
@@ -310,6 +318,9 @@ class ShallowNN(nn.Module):
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
+        validation_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
+
         train_losses = []
         val_losses = []
 
@@ -317,36 +328,99 @@ class ShallowNN(nn.Module):
         # running_var_mean = []
 
         for epoch in range(num_epochs):
-            model.train()
-            for inputs, targets in train_loader:
-                optimizer.zero_grad()
-                outputs = model(inputs)
-                train_loss = criterion(outputs, targets)
-                train_loss.backward()
-                optimizer.step()
+            model.train()  # Set model to training mode
+
+            # Zip the training and validation loaders together to loop through both in sync
+            for (train_inputs, train_targets), (val_inputs, val_targets) in zip(train_loader, validation_loader):
+                # Training step
+                optimizer.zero_grad()  # Clear gradients
+                train_outputs = model(train_inputs)  # Forward pass for training
+                train_loss = criterion(train_outputs, train_targets)  # Calculate training loss
+                train_loss.backward()  # Backward pass
+                optimizer.step()  # Update model weights
 
                 # Store training loss for the batch
                 train_losses.append(train_loss.item())
 
-                # **Monitoring BatchNorm Statistics**
-                # Register the hook to all BatchNorm layers in the model
-                # for layer in model.modules():
-                #     if isinstance(layer, nn.BatchNorm1d) or isinstance(layer, nn.BatchNorm2d):
-                #         layer.register_forward_hook(inspect_batchnorm_output)
-
-                # Validate on the full validation set
-                model.eval()
-                with torch.no_grad():
-                    val_outputs = model(X_val_tensor)
-                    val_loss = criterion(val_outputs, y_val_tensor).item()
+                # Validation step
+                model.eval()  # Set model to evaluation mode
+                with torch.no_grad():  # Disable gradient calculation for validation
+                    val_outputs = model(val_inputs)  # Forward pass for validation
+                    val_loss = criterion(val_outputs, val_targets).item()  # Calculate validation loss
 
                 # Store validation loss for the batch
                 val_losses.append(val_loss)
 
-            if (epoch) % 10 == 0:
-                print(
-                    f"Epoch {epoch+1}/{num_epochs}, Last Batch Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}"
-                )
+                # Print train and validation loss for this batch
+                # print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}")
+
+            # Optional: print epoch summary every 10 epochs
+            if (epoch + 1) % 10 == 0:
+                avg_train_loss = sum(train_losses) / len(train_losses)
+                avg_val_loss = sum(val_losses) / len(val_losses)
+                print(f"Epoch {epoch+1}/{num_epochs}, Avg Train Loss: {avg_train_loss:.4f}, Avg Validation Loss: {avg_val_loss:.4f}")
+
+        # for epoch in range(num_epochs):
+        #     model.train()
+        #     for inputs, targets in train_loader:
+        #         optimizer.zero_grad()
+        #         outputs = model(inputs)
+        #         train_loss = criterion(outputs, targets)
+        #         train_loss.backward()
+        #         optimizer.step()
+
+        #         # Store training loss for the batch
+        #         train_losses.append(train_loss.item())
+
+        #         # **Monitoring BatchNorm Statistics**
+        #         # Register the hook to all BatchNorm layers in the model
+        #         # for layer in model.modules():
+        #         #     if isinstance(layer, nn.BatchNorm1d) or isinstance(layer, nn.BatchNorm2d):
+        #         #         layer.register_forward_hook(inspect_batchnorm_output)
+
+        #         # Set model to evaluation mode for validation
+        #         model.eval()
+                
+        #         # Disable gradient calculations for validation
+        #         val_loss = 0.0
+        #         with torch.no_grad():
+        #             for val_inputs, val_targets in val_loader:  # Loop through validation data
+        #                 val_outputs = model(val_inputs)  # Forward pass on validation data
+        #                 val_loss += criterion(val_outputs, val_targets).item()  # Accumulate validation loss
+
+        #         # Average validation loss over all batches in the validation set
+        #         val_loss /= len(val_loader)
+                
+        #         # Store validation loss for the epoch
+        #         val_losses.append(val_loss)
+
+        #         # Print progress every 10 epochs
+        #         if (epoch) % 10 == 0:
+        #             print(
+        #                 f"Epoch {epoch+1}/{num_epochs}, Last Batch Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}"
+        #             )
+
+
+
+
+
+        #         # Validate on the full validation set
+        #         model.eval()
+        #         with torch.no_grad():
+        #             print("====================================")
+        #             print(f'y val tensor maximum: {y_val_tensor.max()}')
+        #             print(f'y val tensor minimum: {y_val_tensor.min()}')
+        #             print("====================================")
+        #             val_outputs = model(X_val_tensor)
+        #             val_loss = criterion(val_outputs, y_val_tensor).item()
+
+        #         # Store validation loss for the batch
+        #         val_losses.append(val_loss)
+
+        #     if (epoch) % 10 == 0:
+        #         print(
+        #             f"Epoch {epoch+1}/{num_epochs}, Last Batch Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}"
+        #         )
 
         return model, train_losses, val_losses
 

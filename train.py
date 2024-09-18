@@ -25,6 +25,13 @@ class Trainer:
         additional_features = None,
         visualize=True,
     ):
+        
+        # print("We are now in training territory")
+        # print(f'Training target Max value: {training_targets.max()}')
+        # print(f'Training target Min value: {training_targets.min()}')
+        # print(f'Validation target Max value: {validation_targets.max()}')
+        # print(f'Validation target Min value: {validation_targets.min()}')
+        
         snn_model, train_losses, val_losses = ShallowNN.train_and_validate(
             X_train=training_data,
             y_train=training_targets,
@@ -76,7 +83,7 @@ class Trainer:
         # Validation reshaping
         num_sims, num_reps, num_analyses, num_params = validation_data.shape[0], validation_data.shape[1], validation_data.shape[2], validation_data.shape[3]
         validation_features = validation_data.reshape(num_sims , -1)
-        validation_targets = validation_data[:,0,0,:].reshape(-1, num_params)
+        validation_targets = validation_targets[:,0,0,:].reshape(-1, num_params)
 
         if additional_features is not None:
             additional_features_validation = additional_features['validation'].reshape(additional_features["validation"].shape[0], -1)
@@ -101,6 +108,16 @@ class Trainer:
         snn_mdl_obj["validation"]["targets"] = validation_targets
 
         snn_mdl_obj["param_names"] = self.param_names
+
+        print(f'Training Predictions maximum value: {training_predictions.max()}')
+        print(f'Training Predictions minimum value: {training_predictions.min()}')
+        print(f'Training Targets maximum value: {training_targets.max()}')
+        print(f'Training Targets minimum value: {training_targets.min()}')
+
+        print(f'Validation Predictions maximum value: {validation_predictions.max()}')
+        print(f'Validation Predictions minimum value: {validation_predictions.min()}')
+        print(f'Validation Targets maximum value: {validation_targets.max()}')
+        print(f'Validation Targets minimum value: {validation_targets.min()}')
 
         if visualize:
             visualizing_results(

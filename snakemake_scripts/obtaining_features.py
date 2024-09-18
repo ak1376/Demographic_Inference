@@ -65,7 +65,7 @@ def obtain_features(
     np.random.shuffle(all_indices)
 
     # Split into training and validation indices
-    n_train = int(0.8 * experiment_config['num_sims_pretrain'])
+    n_train = int(experiment_config['training_percentage'] * experiment_config['num_sims_pretrain'])
 
     training_indices = all_indices[:n_train]
     validation_indices = all_indices[n_train:]
@@ -135,7 +135,18 @@ def obtain_features(
                                 testing_features = preprocessing_results_obj["testing"]["predictions"],
                                     testing_targets = preprocessing_results_obj["testing"]["targets"] )
                             
-    training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate()
+    
+    if experiment_config['use_FIM']:
+
+        upper_triangular_features = {}
+        upper_triangular_features['training'] = preprocessing_results_obj['training']['upper_triangular_FIM']
+        upper_triangular_features['validation'] = preprocessing_results_obj['validation']['upper_triangular_FIM']
+        upper_triangular_features['testing'] = preprocessing_results_obj['testing']['upper_triangular_FIM']
+            
+        training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate(upper_triangular_features)
+    
+    else:
+        training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate()
 
     linear_mdl_obj = linear_mdl.organizing_results(preprocessing_results_obj, training_predictions, validation_predictions, testing_predictions)
     

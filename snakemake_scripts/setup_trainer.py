@@ -42,27 +42,20 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
 
     # Train the model
     snn_model, train_losses, val_losses = trainer.train(
-        features["training"]["features"],
-        features["training"]["targets"],
-        features["validation"]["features"],
-        features["validation"]["targets"],
+        training_data = features["training"]["features"],
+        training_targets = features["training"]["targets"],
+        validation_data = features["validation"]["features"],
+        validation_targets = features["validation"]["targets"],
         additional_features=additional_features,
         visualize=True
     )
-
-    # Make predictions
-
-    print(f'Maximum training target value: {features["training"]["targets"].max()}')
-    print(f'Minimum training target value: {features["training"]["targets"].min()}')
-    print(f'Maximum validation target value: {features["validation"]["targets"].max()}')
-    print(f'Minimum validation target value: {features["validation"]["targets"].min()}')
     
     snn_results = trainer.predict(
-        snn_model,
-        features["training"]["features"],
-        features["validation"]["features"],
-        features["training"]["targets"],
-        features["validation"]["targets"],
+        snn_model = snn_model,
+        training_data = features["training"]["features"],
+        validation_data = features["validation"]["features"],
+        training_targets = features["training"]["targets"],
+        validation_targets = features["validation"]["targets"],
         additional_features=additional_features,
         visualize=True
     )

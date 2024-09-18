@@ -16,12 +16,12 @@ lower_bound_params = {
     "t_bottleneck_end": 800,
 }
 model_config = {
-    "input_size": 100,
-    "hidden_size": 1000,
+    "input_size": 60,
+    "hidden_size": 500,
     "output_size": 5,
     "num_epochs": 100,
     "learning_rate": 3e-4,
-    "num_layers": 2,
+    "num_layers": 5,
     "dropout_rate": 0,
     "weight_decay": 0,
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
@@ -34,7 +34,7 @@ config = {
     "num_sims_pretrain": 1000,
     "num_sims_inference": 5,
     "num_samples": 20,
-    "experiment_name": "two_layers_only",
+    "experiment_name": "large_simulation_5_layers",
     "dadi_analysis": True,
     "moments_analysis": True,
     "momentsLD_analysis": False,
@@ -49,7 +49,8 @@ config = {
     "remove_outliers": True,
     "use_FIM": True,
     "neural_net_hyperparameters": model_config,
-    "k": 10,
+    "k": 3,
+    "training_percentage": 0.8,
     "demographic_model": "bottleneck_model",
     "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
     "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05],

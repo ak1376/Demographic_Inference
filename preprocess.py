@@ -414,23 +414,31 @@ class Processor:
 
         if self.experiment_config['normalization'] == True:
             print("===> Normalizing the data.")
-            
-            # Convert dict values to NumPy arrays for element-wise operations
-            upper_bound_values = np.array(list(self.experiment_config['upper_bound_params'].values()))
-            lower_bound_values = np.array(list(self.experiment_config['lower_bound_params'].values()))
 
-            # Calculate mean and standard deviation vectors
-            mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
-            std_vector = (upper_bound_values - lower_bound_values) / np.sqrt(12)  # Correct std deviation for uniform distribution
+            mean_vector = np.mean(targets[:,0,0,:], axis = 0)
+            std_vector = np.std(targets[:,0,0,:], axis = 0)
+            
+            # # Convert dict values to NumPy arrays for element-wise operations
+            # upper_bound_values = np.array(list(self.experiment_config['upper_bound_params'].values()))
+            # lower_bound_values = np.array(list(self.experiment_config['lower_bound_params'].values()))
+
+            # # Calculate mean and standard deviation vectors
+            # mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
+            # std_vector = (upper_bound_values - lower_bound_values) / np.sqrt(12)  # Correct std deviation for uniform distribution
 
             # Normalize the targets
-            targets = (targets - mean_vector) / std_vector
+            targets = (targets - mean_vector) / (std_vector + 1e-7)
 
             # Check for NaN values in the targets
             if np.isnan(targets).any():
                 print("Warning: NaN values found in the normalized targets!")
             else:
                 print("No NaN values found in the normalized targets.")
+
+            print("====================================")
+            print(f'Maximum Value: {np.max(targets)}')
+            print(f'Minimum Value: {np.min(targets)}')
+            print('====================================')
                         
         # Return features, targets, and upper triangular array (if exists)
         return features, targets, upper_triangular_array
