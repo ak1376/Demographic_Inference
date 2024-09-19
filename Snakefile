@@ -1,114 +1,75 @@
 import os
 import json
 
-upper_bound_params = {
-    "N0": 10000,
-    "Nb": 5000,
-    "N_recover": 7000,
-    "t_bottleneck_start": 2000,
-    "t_bottleneck_end": 1000,
-}
-lower_bound_params = {
-    "N0": 8000,
-    "Nb": 4000,
-    "N_recover": 6000,
-    "t_bottleneck_start": 1500,
-    "t_bottleneck_end": 800,
-}
-model_config = {
-    "input_size": 60,
-    "hidden_size": 500,
-    "output_size": 5,
-    "num_epochs": 100,
-    "learning_rate": 3e-4,
-    "num_layers": 5,
-    "dropout_rate": 0,
-    "weight_decay": 0,
-    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
+# Load the configuration file
+CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
+with open(CONFIG_FILEPATH, 'r') as f:
+    experiment_config = json.load(f)
 
-}
-
-config = {
-    "upper_bound_params": upper_bound_params,
-    "lower_bound_params": lower_bound_params,
-    "num_sims_pretrain": 1000,
-    "num_sims_inference": 5,
-    "num_samples": 20,
-    "experiment_name": "large_simulation_5_layers",
-    "dadi_analysis": True,
-    "moments_analysis": True,
-    "momentsLD_analysis": False,
-    "num_windows": 50,
-    "window_length": 1e4,
-    "maxiter": 100,
-    "genome_length": 1e6,
-    "mutation_rate": 1.26e-8,
-    "recombination_rate": 1.007e-8,
-    "seed": 42,
-    "normalization": True,
-    "remove_outliers": True,
-    "use_FIM": True,
-    "neural_net_hyperparameters": model_config,
-    "k": 3,
-    "training_percentage": 0.8,
-    "demographic_model": "bottleneck_model",
-    "parameter_names": ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"], # these should be a list of parameters that we want to optimize 
-    "optimization_initial_guess": [0.25, 0.75, 0.1, 0.05],
-    "vcf_filepath": "/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz",
-    "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
-    "popname": "wisent"
-    
-}
-
-    # inference = Inference(
-    #     vcf_filepath=config['vcf_filepath'],
-    #     txt_filepath=config['txt_filepath'],
-    #     popname=config['popname'],
-    #     config=config,
-    #     experiment_directory=config['experiment_directory']
-    # )
-
-# Define the experiment name
-EXPERIMENT_NAME = config['experiment_name']
-EXPERIMENT_DIRECTORY = f"experiments/{EXPERIMENT_NAME}"
-# Get the current working directory
 CWD = os.getcwd()
+
+# Use double quotes for the dictionary keys inside the f-string
+EXPERIMENT_DIRECTORY = f'bottleneck_experiments'
+EXPERIMENT_NAME = f'sims_pretrain_{experiment_config["num_sims_pretrain"]}_sims_inference_{experiment_config["num_sims_inference"]}_seed_{experiment_config["seed"]}_num_replicates_{experiment_config["k"]}'
+SIM_DIRECTORY = f"{EXPERIMENT_DIRECTORY}/{EXPERIMENT_NAME}"
+MODEL_DIRECTORY = f"{EXPERIMENT_DIRECTORY}/{EXPERIMENT_NAME}/num_hidden_neurons_{experiment_config['neural_net_hyperparameters']['hidden_size']}_num_hidden_layers_{experiment_config['neural_net_hyperparameters']['num_layers']}_num_epochs_{experiment_config['neural_net_hyperparameters']['num_epochs']}_dropout_value_{experiment_config['neural_net_hyperparameters']['dropout_rate']}_weight_decay_{experiment_config['neural_net_hyperparameters']['weight_decay']}"
 
 rule all:
     input:
-        f"{EXPERIMENT_DIRECTORY}/config.json",
-        f"{EXPERIMENT_DIRECTORY}/model_config.json",
-        f"{EXPERIMENT_DIRECTORY}/experiment_obj.pkl",
-        f"{EXPERIMENT_DIRECTORY}/inference_config_file.json",
-        f"{EXPERIMENT_DIRECTORY}/preprocessing_results_obj.pkl",
-        f"{EXPERIMENT_DIRECTORY}/linear_regression_model.pkl",
-        f"{EXPERIMENT_DIRECTORY}/features_and_targets.pkl",
-        f"{EXPERIMENT_DIRECTORY}/snn_results.pkl",
-        f"{EXPERIMENT_DIRECTORY}/snn_model.pth",
-        f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl",
-        f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt",
-        f'{EXPERIMENT_DIRECTORY}/color_shades.pkl',
-        f'{EXPERIMENT_DIRECTORY}/main_colors.pkl',
-        f'{EXPERIMENT_DIRECTORY}/additional_features.pkl',
+        f"{MODEL_DIRECTORY}/experiment_obj.pkl",
+        f"{MODEL_DIRECTORY}/model_config.json",
+        f"{MODEL_DIRECTORY}/inference_config_file.json",
+        f"{SIM_DIRECTORY}/color_shades.pkl",
+        f"{SIM_DIRECTORY}/main_colors.pkl",
+        f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
+        f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
+        f"{SIM_DIRECTORY}/features_and_targets.pkl",
+        f"{SIM_DIRECTORY}/additional_features.pkl",
+        f"{MODEL_DIRECTORY}/snn_results.pkl",
+        f"{MODEL_DIRECTORY}/snn_model.pth",
+        f"{MODEL_DIRECTORY}/inference_results_obj.pkl",
+        f"{MODEL_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
+
+
+
+rule setup_folders:
+    shell:
+        """
+        mkdir -p {EXPERIMENT_DIRECTORY} 
+        mkdir -p {SIM_DIRECTORY} 
+        mkdir -p {MODEL_DIRECTORY} 
+        """
 
 rule create_experiment:
+    params:
+        CONFIG_FILEPATH = CONFIG_FILEPATH,
+        EXPERIMENT_NAME = EXPERIMENT_NAME,
+        EXPERIMENT_DIRECTORY = EXPERIMENT_DIRECTORY,
+        SIM_DIRECTORY = SIM_DIRECTORY,
+        MODEL_DIRECTORY = MODEL_DIRECTORY
     output:
-        config_file = f"{EXPERIMENT_DIRECTORY}/config.json",
-        experiment_obj_file = f"{EXPERIMENT_DIRECTORY}/experiment_obj.pkl",
-        model_config_file = f"{EXPERIMENT_DIRECTORY}/model_config.json",
-        inference_config_file = f"{EXPERIMENT_DIRECTORY}/inference_config_file.json",
-        colors_shades_file = f"{EXPERIMENT_DIRECTORY}/color_shades.pkl",
-        main_colors_file = f"{EXPERIMENT_DIRECTORY}/main_colors.pkl"
+        config_file = f"{SIM_DIRECTORY}/config.json",
+        experiment_obj_file = f"{MODEL_DIRECTORY}/experiment_obj.pkl",
+        model_config_file = f"{MODEL_DIRECTORY}/model_config.json",
+        inference_config_file = f"{MODEL_DIRECTORY}/inference_config_file.json",
+        colors_shades_file = f"{SIM_DIRECTORY}/color_shades.pkl",
+        main_colors_file = f"{SIM_DIRECTORY}/main_colors.pkl"
 
     # conda: 
     #     "myenv"
     run:
-        print(f'Experiment Directory: {EXPERIMENT_DIRECTORY}')
-        os.makedirs(EXPERIMENT_DIRECTORY, exist_ok=True)
         with open(output.config_file, 'w') as f:
-            json.dump(config, f, indent=4)
+            json.dump(experiment_config, f, indent=4)
         
-        shell(f"PYTHONPATH={{CWD}} python {{CWD}}/snakemake_scripts/setup_experiment.py --config_file {{output.config_file}} --experiment_obj_file {{output.experiment_obj_file}}")
+        # Call shell command inside the Python 'run' block
+        shell(f"""
+            PYTHONPATH={CWD} python {CWD}/snakemake_scripts/setup_experiment.py \
+            --config_file {params.CONFIG_FILEPATH} \
+            --experiment_name {params.EXPERIMENT_NAME} \
+            --experiment_directory {EXPERIMENT_DIRECTORY} \
+            --sim_directory {params.SIM_DIRECTORY} \
+            --model_directory {params.MODEL_DIRECTORY}
+        """)
 
 rule obtain_features:
     input:
@@ -117,10 +78,12 @@ rule obtain_features:
         colors_shades_file = rules.create_experiment.output.colors_shades_file,
         main_colors_file = rules.create_experiment.output.main_colors_file
     output:
-        preprocessing_results = f"{EXPERIMENT_DIRECTORY}/preprocessing_results_obj.pkl",
-        linear_model = f"{EXPERIMENT_DIRECTORY}/linear_regression_model.pkl",
+        preprocessing_results = f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
+        linear_model = f"{MODEL_DIRECTORY}/linear_regression_model.pkl"
+
     params:
-        experiment_name = EXPERIMENT_NAME,
+        model_directory = MODEL_DIRECTORY,
+        sim_directory = SIM_DIRECTORY
 
     # conda: 
     #     "myenv"
@@ -128,7 +91,8 @@ rule obtain_features:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtaining_features.py \
         --experiment_config {input.config_file} \
-        --experiment_directory {EXPERIMENT_DIRECTORY} \
+        --model_directory {params.model_directory} \
+        --sim_directory {params.sim_directory} \
         --color_shades_file {input.colors_shades_file} \
         --main_colors_file {input.main_colors_file} \
         """
@@ -138,11 +102,11 @@ rule get_features:
         preprocessing_results = rules.obtain_features.output.preprocessing_results,
         config_file = rules.create_experiment.output.config_file
     output:
-        features_output = f"{EXPERIMENT_DIRECTORY}/features_and_targets.pkl",
-        additional_features_output = f"{EXPERIMENT_DIRECTORY}/additional_features.pkl"
+        features_output = f"{SIM_DIRECTORY}/features_and_targets.pkl",
+        additional_features_output = f"{SIM_DIRECTORY}/additional_features.pkl"
 
     params:
-        experiment_directory = EXPERIMENT_DIRECTORY
+        sim_directory = SIM_DIRECTORY
 
     # conda: 
     #     "myenv"
@@ -151,23 +115,23 @@ rule get_features:
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/extracting_features.py \
         --preprocessing_results_filepath {input.preprocessing_results} \
         --config_filepath {input.config_file} \
-        --experiment_directory {params.experiment_directory} \
+        --sim_directory {params.sim_directory} \
         """
 
 rule train_and_predict:
     input:
-        model_config_file = rules.create_experiment.output.model_config_file,
+        model_config_file = rules.create_experiment.output.model_config_file, #TODO: Replace this with model config file saved to Demographic_Inference folder 
         features_file = rules.get_features.output.features_output,
         colors_shades_file = rules.create_experiment.output.colors_shades_file,
         main_colors_file = rules.create_experiment.output.main_colors_file,
         additional_features_file = rules.get_features.output.additional_features_output
     params:
         use_FIM = False,
-        experiment_directory = EXPERIMENT_DIRECTORY
+        experiment_directory = MODEL_DIRECTORY
 
     output:
-        model_results = f"{EXPERIMENT_DIRECTORY}/snn_results.pkl",
-        trained_model = f"{EXPERIMENT_DIRECTORY}/snn_model.pth"
+        model_results = f"{MODEL_DIRECTORY}/snn_results.pkl",
+        trained_model = f"{MODEL_DIRECTORY}/snn_model.pth"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/setup_trainer.py \
@@ -184,13 +148,15 @@ rule get_inferred_params:
     input:
         config = rules.create_experiment.output.config_file,
         trained_weights = rules.train_and_predict.output.trained_model,
+
     params:
-        experiment_directory = EXPERIMENT_DIRECTORY,
-        inference_obj_path = f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl"
+        experiment_directory = MODEL_DIRECTORY,
+        inference_obj_path = f"{MODEL_DIRECTORY}/inference_results_obj.pkl"
+
 
     output:
-        f"{EXPERIMENT_DIRECTORY}/inference_results_obj.pkl",
-        f"{EXPERIMENT_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
+        f"{MODEL_DIRECTORY}/inference_results_obj.pkl",
+        f"{MODEL_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/inference_snakemake.py \

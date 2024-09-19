@@ -109,16 +109,6 @@ class Trainer:
 
         snn_mdl_obj["param_names"] = self.param_names
 
-        print(f'Training Predictions maximum value: {training_predictions.max()}')
-        print(f'Training Predictions minimum value: {training_predictions.min()}')
-        print(f'Training Targets maximum value: {training_targets.max()}')
-        print(f'Training Targets minimum value: {training_targets.min()}')
-
-        print(f'Validation Predictions maximum value: {validation_predictions.max()}')
-        print(f'Validation Predictions minimum value: {validation_predictions.min()}')
-        print(f'Validation Targets maximum value: {validation_targets.max()}')
-        print(f'Validation Targets minimum value: {validation_targets.min()}')
-
         if visualize:
             visualizing_results(
                 snn_mdl_obj,

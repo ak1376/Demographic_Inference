@@ -414,31 +414,45 @@ class Processor:
 
         if self.experiment_config['normalization'] == True:
             print("===> Normalizing the data.")
-
-            mean_vector = np.mean(targets[:,0,0,:], axis = 0)
-            std_vector = np.std(targets[:,0,0,:], axis = 0)
             
-            # # Convert dict values to NumPy arrays for element-wise operations
-            # upper_bound_values = np.array(list(self.experiment_config['upper_bound_params'].values()))
-            # lower_bound_values = np.array(list(self.experiment_config['lower_bound_params'].values()))
+            # Convert dict values to NumPy arrays for element-wise operations
+            upper_bound_values = np.array(list(self.experiment_config['upper_bound_params'].values()))
+            lower_bound_values = np.array(list(self.experiment_config['lower_bound_params'].values()))
 
-            # # Calculate mean and standard deviation vectors
-            # mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
-            # std_vector = (upper_bound_values - lower_bound_values) / np.sqrt(12)  # Correct std deviation for uniform distribution
+            # Calculate mean and standard deviation vectors
+            mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
+            std_vector = (upper_bound_values - lower_bound_values) / np.sqrt(12)  # Correct std deviation for uniform distribution
 
             # Normalize the targets
-            targets = (targets - mean_vector) / (std_vector + 1e-7)
+            normalized_targets = (targets - mean_vector) / (std_vector)
 
-            # Check for NaN values in the targets
-            if np.isnan(targets).any():
-                print("Warning: NaN values found in the normalized targets!")
+            # NORMALIZE THE FEATURES TOO (FOR THE PREPROCESSING PLOTTING)
+            normalized_features = (features - mean_vector) / (std_vector)
+
+            # Check for zero values in the normalized targets
+            zero_target_indices = np.where(normalized_targets == 0)
+            if zero_target_indices[0].size > 0:  # If any zero values are found
+                print("Warning: Zero values found in the normalized targets!")
+                # Extract raw target values where normalized target values are 0
+                raw_target_values = targets[zero_target_indices]
+                print("Raw target values corresponding to zero normalized targets:", raw_target_values)
+
+                # Add 1 to the normalized targets that are zero
+                normalized_targets[zero_target_indices] += 1
+                print("Added 1 to zero normalized target values.")
             else:
-                print("No NaN values found in the normalized targets.")
+                print("No zero values found in the normalized targets.")
 
-            print("====================================")
-            print(f'Maximum Value: {np.max(targets)}')
-            print(f'Minimum Value: {np.min(targets)}')
-            print('====================================')
-                        
+            # Check for zero values in the normalized features
+            zero_feature_indices = np.where(normalized_features == 0)
+            if zero_feature_indices[0].size > 0:  # If any zero values are found
+                print("Warning: Zero values found in the normalized features!")
+                # Extract raw feature values where normalized feature values are 0
+                raw_feature_values = features[zero_feature_indices]
+                print("Raw feature values corresponding to zero normalized features:", raw_feature_values)
+            else:
+                print("No zero values found in the normalized features.")                        
+       
         # Return features, targets, and upper triangular array (if exists)
-        return features, targets, upper_triangular_array
+        #TODO: Fix code in the case where experiment_config['normalization'] == False
+        return features, normalized_features, normalized_targets, upper_triangular_array

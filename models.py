@@ -300,7 +300,6 @@ class ShallowNN(nn.Module):
         num_sims, num_reps, num_analyses, num_params = X_val.shape[0], X_val.shape[1], X_val.shape[2], X_val.shape[3]
         validation_features = X_val.reshape(num_sims , -1)
 
-        print(f'y_val shape: {y_val.shape}')
         validation_targets = y_val[:,0,0,:].reshape(-1, num_params)
 
         if additional_features is not None:

@@ -26,7 +26,7 @@ import joblib
 
 
 class Experiment_Manager:
-    def __init__(self, config_file):
+    def __init__(self, config_file, experiment_name, experiment_directory):
         # Later have a config file for model hyperparameters
         self.experiment_config = config_file
 
@@ -35,7 +35,7 @@ class Experiment_Manager:
         self.num_sims_pretrain = config_file["num_sims_pretrain"]
         self.num_sims_inference = config_file["num_sims_inference"]
         self.num_samples = config_file["num_samples"]
-        self.experiment_name = config_file["experiment_name"]
+        # self.experiment_name = config_file["experiment_name"]
         self.num_windows = config_file["num_windows"]
         self.window_length = config_file["window_length"]
         self.maxiter = config_file["maxiter"]
@@ -54,7 +54,11 @@ class Experiment_Manager:
         self.parameter_names = config_file["parameter_names"]
         self.optimization_initial_guess = config_file["optimization_initial_guess"]
 
-        self.create_directory(self.experiment_name)
+        self.experiment_name = experiment_name # for snakemake ? 
+        self.experiment_directory = experiment_directory
+
+        # self.create_directory(self.experiment_name)
+
         np.random.seed(self.seed)
 
         self.create_color_scheme()
@@ -167,7 +171,7 @@ class Experiment_Manager:
             # Your existing process_and_save_data function
 
             # Call the remote function and get the ObjectRef
-            features, targets, upper_triangle_features = processor.pretrain_processing(indices)
+            features, normalized_features, targets, upper_triangle_features = processor.pretrain_processing(indices)
 
             preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model, minus the upper triangular features 
             preprocessing_results_obj[stage]["targets"] = targets

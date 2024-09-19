@@ -8,8 +8,7 @@ from preprocess import Processor
 from utils import (
     visualizing_results,
     root_mean_squared_error,
-    calculate_and_save_rrmse,
-    find_outlier_indices,
+    calculate_and_save_rrmse
 )
 
 from models import LinearReg
@@ -29,30 +28,26 @@ def str2bool(v):
 
 def obtain_features(
     experiment_config,
-    experiment_directory,
+    model_directory,
+    sim_directory,
     color_shades_file,
     main_colors_file,
-):
+): 
 
     # Load the experiment config
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
 
-    # Load the experiment object to get the experiment directory
-    with open(f"{experiment_directory}/experiment_obj.pkl", "rb") as f:
-        experiment_obj = pickle.load(f)
-    experiment_directory = experiment_obj.experiment_directory
-
     # Load in the color schemes and main colors
     with open(color_shades_file, "rb") as f:
         color_shades = pickle.load(f)
-     
+
     with open(main_colors_file, "rb") as f:
         main_colors = pickle.load(f)
 
     processor = Processor(
         experiment_config,
-        experiment_directory,
+        model_directory,
         recombination_rate=experiment_config["recombination_rate"],
         mutation_rate=experiment_config["mutation_rate"],
         window_length=experiment_config["window_length"],
@@ -61,19 +56,27 @@ def obtain_features(
     # Now I want to define training, validation, and testing indices:
 
     # Generate all indices and shuffle them
-    all_indices = np.arange(experiment_config['num_sims_pretrain'])
+    all_indices = np.arange(experiment_config["num_sims_pretrain"])
     np.random.shuffle(all_indices)
 
     # Split into training and validation indices
-    n_train = int(experiment_config['training_percentage'] * experiment_config['num_sims_pretrain'])
+    n_train = int(
+        experiment_config["training_percentage"]
+        * experiment_config["num_sims_pretrain"]
+    )
 
     training_indices = all_indices[:n_train]
     validation_indices = all_indices[n_train:]
-    testing_indices = np.arange(experiment_config['num_sims_inference'])
+    testing_indices = np.arange(experiment_config["num_sims_inference"])
 
     preprocessing_results_obj = {
-            stage: {} for stage in ["training", "validation", "testing"]
-        }
+        stage: {} for stage in ["training", "validation", "testing"]
+    }
+
+    # Create a copy of the preprocessing results object to have the normalized features (only used for plotting)
+    preprocessing_results_obj_normalized = {
+        stage: {} for stage in ["training", "validation", "testing"]
+    }
 
     for stage, indices in [
         ("training", training_indices),
@@ -85,72 +88,101 @@ def obtain_features(
 
         # Call the remote function and get the ObjectRef
         print(f"Processing {stage} data")
-        features, targets, upper_triangle_features = processor.pretrain_processing(indices)
-        print(f'Maximum target value for {stage} data: {np.max(targets)}')
-        
-        preprocessing_results_obj[stage]["predictions"] = features # This is for input to the ML model
+        features, normalized_features, targets, upper_triangle_features = processor.pretrain_processing(
+            indices
+        )
+
+        preprocessing_results_obj[stage][
+            "predictions"
+        ] = features  # This is for input to the ML model
         preprocessing_results_obj[stage]["targets"] = targets
-        preprocessing_results_obj[stage]["upper_triangular_FIM"] = upper_triangle_features
+        preprocessing_results_obj[stage][
+            "upper_triangular_FIM"
+        ] = upper_triangle_features
 
-    preprocessing_results_obj["param_names"] = experiment_config['parameter_names']
+        preprocessing_results_obj_normalized[stage][
+            "predictions"
+        ] = normalized_features  # This is for plotting
+        preprocessing_results_obj_normalized[stage]["targets"] = targets
+        preprocessing_results_obj_normalized[stage][
+            "upper_triangular_FIM"
+        ] = upper_triangle_features
 
-    #TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
+    preprocessing_results_obj["param_names"] = experiment_config["parameter_names"]
+    preprocessing_results_obj_normalized["param_names"] = experiment_config["parameter_names"]
+
+    # TODO: Calculate and save the rrmse_dict but removing the outliers from analysis
     rrmse_dict = calculate_and_save_rrmse(
-        preprocessing_results_obj,
-        save_path=f"{experiment_directory}/rrmse_dict.json"
+        preprocessing_results_obj, save_path=f"{sim_directory}/rrmse_dict.json"
     )
 
     # Open a file to save the object
+    print("SIMDIRECTORY", sim_directory)
     with open(
-        f"{experiment_directory}/preprocessing_results_obj.pkl", "wb"
+        f"{sim_directory}/preprocessing_results_obj.pkl", "wb"
     ) as file:  # "wb" mode opens the file in binary write mode
         pickle.dump(preprocessing_results_obj, file)
 
-    # TODO: This function should pass in a list of the demographic parameters for which we want to produce plots.
-    
+
     visualizing_results(
-        preprocessing_results_obj,
-        save_loc=experiment_directory,
+        preprocessing_results_obj_normalized,
+        save_loc=sim_directory,
         analysis=f"preprocessing_results",
         stages=["training", "validation"],
         color_shades=color_shades,
-        main_colors=main_colors
+        main_colors=main_colors,
     )
 
     visualizing_results(
-        preprocessing_results_obj,
-        save_loc=experiment_directory,
+        preprocessing_results_obj_normalized,
+        save_loc=sim_directory,
         analysis=f"preprocessing_results_testing",
         stages=["testing"],
         color_shades=color_shades,
-        main_colors=main_colors
+        main_colors=main_colors,
     )
 
     ## LINEAR REGRESSION
 
-    linear_mdl = LinearReg(training_features = preprocessing_results_obj["training"]["predictions"] ,
-                            training_targets = preprocessing_results_obj["training"]["targets"],
-                                validation_features = preprocessing_results_obj["validation"]["predictions"], 
-                                validation_targets = preprocessing_results_obj["validation"]["targets"],
-                                testing_features = preprocessing_results_obj["testing"]["predictions"],
-                                    testing_targets = preprocessing_results_obj["testing"]["targets"] )
-                            
-    
-    if experiment_config['use_FIM']:
+    linear_mdl = LinearReg(
+        training_features=preprocessing_results_obj["training"]["predictions"],
+        training_targets=preprocessing_results_obj["training"]["targets"],
+        validation_features=preprocessing_results_obj["validation"]["predictions"],
+        validation_targets=preprocessing_results_obj["validation"]["targets"],
+        testing_features=preprocessing_results_obj["testing"]["predictions"],
+        testing_targets=preprocessing_results_obj["testing"]["targets"],
+    )
+
+    if experiment_config["use_FIM"]:
 
         upper_triangular_features = {}
-        upper_triangular_features['training'] = preprocessing_results_obj['training']['upper_triangular_FIM']
-        upper_triangular_features['validation'] = preprocessing_results_obj['validation']['upper_triangular_FIM']
-        upper_triangular_features['testing'] = preprocessing_results_obj['testing']['upper_triangular_FIM']
-            
-        training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate(upper_triangular_features)
-    
-    else:
-        training_predictions, validation_predictions, testing_predictions = linear_mdl.train_and_validate()
+        upper_triangular_features["training"] = preprocessing_results_obj["training"][
+            "upper_triangular_FIM"
+        ]
+        upper_triangular_features["validation"] = preprocessing_results_obj[
+            "validation"
+        ]["upper_triangular_FIM"]
+        upper_triangular_features["testing"] = preprocessing_results_obj["testing"][
+            "upper_triangular_FIM"
+        ]
 
-    linear_mdl_obj = linear_mdl.organizing_results(preprocessing_results_obj, training_predictions, validation_predictions, testing_predictions)
-    
-    linear_mdl_obj["param_names"] = experiment_config['parameter_names']
+        training_predictions, validation_predictions, testing_predictions = (
+            linear_mdl.train_and_validate(upper_triangular_features)
+        )
+
+    else:
+        training_predictions, validation_predictions, testing_predictions = (
+            linear_mdl.train_and_validate()
+        )
+
+    linear_mdl_obj = linear_mdl.organizing_results(
+        preprocessing_results_obj,
+        training_predictions,
+        validation_predictions,
+        testing_predictions,
+    )
+
+    linear_mdl_obj["param_names"] = experiment_config["parameter_names"]
 
     # Now calculate the linear model error
 
@@ -167,34 +199,30 @@ def obtain_features(
 
     # Open a file to save the object
     with open(
-        f"{experiment_directory}/linear_mdl_obj.pkl", "wb"
+        f"{model_directory}/linear_mdl_obj.pkl", "wb"
     ) as file:  # "wb" mode opens the file in binary write mode
         pickle.dump(linear_mdl_obj, file)
 
     # Save rrmse_dict to a JSON file
-    with open(
-        f"{experiment_directory}/linear_model_error.json", "w"
-    ) as json_file:
+    with open(f"{model_directory}/linear_model_error.json", "w") as json_file:
         json.dump(rrmse_dict, json_file, indent=4)
 
     # targets
     visualizing_results(
         linear_mdl_obj,
         "linear_results",
-        save_loc=experiment_directory,
+        save_loc=model_directory,
         stages=["training", "validation"],
         color_shades=color_shades,
-        main_colors=main_colors
+        main_colors=main_colors,
     )
 
-    joblib.dump(
-        linear_mdl, f"{experiment_directory}/linear_regression_model.pkl"
-    )
+    joblib.dump(linear_mdl, f"{model_directory}/linear_regression_model.pkl")
     # torch.save(
     #     snn_model.state_dict(),
-    #     f"{self.experiment_directory}/neural_network_model.pth",
+    #     f"{self.model_directory}/neural_network_model.pth",
     # )
-    
+
     # Save the color shades and main colors for usage with the neural network
 
     print("Training complete!")
@@ -205,16 +233,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_config", type=str, required=True)
-    parser.add_argument("--experiment_directory", type=str, required=True)
+    parser.add_argument("--sim_directory", type=str, required=True)
+    parser.add_argument("--model_directory", type=str, required=True)
     parser.add_argument("--color_shades_file", type=str, required=True)
     parser.add_argument("--main_colors_file", type=str, required=True)
     args = parser.parse_args()
 
-
     obtain_features(
-
         experiment_config=args.experiment_config,
-        experiment_directory=args.experiment_directory,
-        color_shades_file = args.color_shades_file,
-        main_colors_file = args.main_colors_file,
+        model_directory=args.model_directory,
+        sim_directory=args.sim_directory,
+        color_shades_file=args.color_shades_file,
+        main_colors_file=args.main_colors_file,
     )

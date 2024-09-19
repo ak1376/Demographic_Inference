@@ -1,7 +1,7 @@
 import pickle
 import json
 
-def getting_the_features(preprocessing_results_filepath, config_filepath, experiment_directory):
+def getting_the_features(preprocessing_results_filepath, config_filepath, sim_directory):
     # print(f"preprocessing_results_filepath: {preprocessing_results_filepath}")
     # print(f"experiment_directory: {experiment_directory}")
     with open(preprocessing_results_filepath, "rb") as file:
@@ -43,11 +43,11 @@ def getting_the_features(preprocessing_results_filepath, config_filepath, experi
     # print(f'Validation features shape: {features["validation"]["features"].shape}')
 
     # Now save the dictionary as a pickle
-    with open(f"{experiment_directory}/features_and_targets.pkl", "wb") as file:
+    with open(f"{sim_directory}/features_and_targets.pkl", "wb") as file:
         pickle.dump(features, file)
 
     # Save the additional features as a pickle too 
-    with open(f"{experiment_directory}/additional_features.pkl", "wb") as file:
+    with open(f"{sim_directory}/additional_features.pkl", "wb") as file:
         pickle.dump(additional_features, file)
 
 if __name__ == "__main__":
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--preprocessing_results_filepath", type=str, required=True)
     parser.add_argument("--config_filepath", type=str, required=True)
-    parser.add_argument("--experiment_directory", type=str, required=True)
+    parser.add_argument("--sim_directory", type=str, required=True)
     args = parser.parse_args()
 
-    getting_the_features(args.preprocessing_results_filepath, args.config_filepath, args.experiment_directory)
+    getting_the_features(args.preprocessing_results_filepath, args.config_filepath, args.sim_directory)
