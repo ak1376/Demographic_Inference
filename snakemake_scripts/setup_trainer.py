@@ -38,7 +38,8 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
         additional_features = pickle.load(f)
 
 
-    trainer = Trainer(experiment_directory, model_config, color_shades, main_colors, param_names=model_config['parameter_names'], use_FIM=use_FIM)
+
+    trainer = Trainer(experiment_directory, model_config, color_shades, main_colors, param_names=model_config['neural_net_hyperparameters']['parameter_names'], use_FIM=use_FIM)
 
     # Train the model
     snn_model, train_losses, val_losses = trainer.train(

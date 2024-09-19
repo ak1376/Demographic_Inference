@@ -6,25 +6,18 @@ import json
 from utils import create_color_scheme
 
 def save_config(experiment_directory, experiment_config):
-    print("=====================================================")
-    print("Saving config files...")
-    print(experiment_directory)
-    print("working directory: ", os.getcwd())
-    print("=====================================================")
+# def save_config(experiment_directory, experiment_config, model_config):
     # Save the full config
     with open(f"{experiment_directory}/config.json", "w") as json_file:
         json.dump(experiment_config, json_file, indent=4)
 
-    # Save the model config
-    with open(f"{experiment_directory}/model_config.json", "w") as json_file:
-        json.dump(experiment_config["neural_net_hyperparameters"], json_file, indent=4)
-
 
 def create_experiment(config, experiment_name, experiment_directory):
+# def create_experiment(config, model_config_file, experiment_name, experiment_directory):
     return Experiment_Manager(config, experiment_name, experiment_directory)
 
 
-def main(config_file, model_directory, sim_directory, experiment_name, experiment_directory):
+def main(config_file, model_config_file, model_directory, sim_directory, experiment_name, experiment_directory):
     '''
     This function will take in the model directory and the simulation directory. I want to save the following in the experiment directory:
     1. The config file
@@ -39,16 +32,19 @@ def main(config_file, model_directory, sim_directory, experiment_name, experimen
     print("=====================================================")
     print(f'Experiment name: {experiment_name}')
     print(f'Experiment directory: {experiment_directory}')
+    # print(f'Model config file: {model_config_file}')
     print("=====================================================")
 
     # Load the config file
     with open(config_file, "r") as f:
         config = json.load(f)
 
+
     # Create the Experiment_Manager object
     # experiment_directory will store the results for that particular experiment: 
     # 1. neural network specific results
     experiment = create_experiment(config, experiment_name = experiment_name, experiment_directory=experiment_directory)
+    # experiment = create_experiment(config, model_config_file=model_config, experiment_name = experiment_name, experiment_directory=experiment_directory)
 
     print(f'Model directory: {model_directory}')
 
@@ -67,7 +63,7 @@ def main(config_file, model_directory, sim_directory, experiment_name, experimen
     # Define file paths
     config_file = os.path.join(model_directory, "config.json")
     experiment_obj_file = os.path.join(model_directory, "experiment_obj.pkl")
-    model_config_file = os.path.join(model_directory, "model_config.json")
+    # model_config_file = os.path.join(model_directory, "model_config.json")
 
     # Save the inference config file
     inference_config = config.copy()
@@ -92,6 +88,7 @@ if __name__ == "__main__":
     # )
 
     parser.add_argument("--config_file", help="Path to the config file")
+    parser.add_argument("--model_config_file", help="Path to the model config file")
     parser.add_argument("--experiment_name", help="Name of the experiment")
     parser.add_argument("--experiment_directory", help="Directory to save the experiment object")
     parser.add_argument("--sim_directory", help="Directory containing the simulation data")
@@ -99,11 +96,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print(args.experiment_name)
+    print(args.model_config_file)
 
     # Running through Snakemake
     # output_dir = os.path.dirname(args.model_directory)
-    config_file, experiment_obj_file, model_config_file = main(args.config_file, args.model_directory, args.sim_directory, experiment_name=args.experiment_name, experiment_directory=args.experiment_directory)
+    config_file, experiment_obj_file, model_config_file = main(args.config_file, args.model_config_file, args.model_directory, args.sim_directory, experiment_name=args.experiment_name, experiment_directory=args.experiment_directory)
 
     # Verify that the output files match the expected paths
     # assert (

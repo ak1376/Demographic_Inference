@@ -2,9 +2,19 @@ import os
 import json
 
 # Load the configuration file
+# configfile: "experiment_config.yaml"
+# experiment_config = config["experiment"]
+# model_config = config["model"]
+
 CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
+MODEL_CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config.json'
+
 with open(CONFIG_FILEPATH, 'r') as f:
-    experiment_config = json.load(f)
+   experiment_config = json.load(f)
+
+with open(MODEL_CONFIG_FILEPATH, 'r') as f:
+   model_config = json.load(f)
+
 
 CWD = os.getcwd()
 
@@ -12,7 +22,7 @@ CWD = os.getcwd()
 EXPERIMENT_DIRECTORY = f'bottleneck_experiments'
 EXPERIMENT_NAME = f'sims_pretrain_{experiment_config["num_sims_pretrain"]}_sims_inference_{experiment_config["num_sims_inference"]}_seed_{experiment_config["seed"]}_num_replicates_{experiment_config["k"]}'
 SIM_DIRECTORY = f"{EXPERIMENT_DIRECTORY}/{EXPERIMENT_NAME}"
-MODEL_DIRECTORY = f"{EXPERIMENT_DIRECTORY}/{EXPERIMENT_NAME}/num_hidden_neurons_{experiment_config['neural_net_hyperparameters']['hidden_size']}_num_hidden_layers_{experiment_config['neural_net_hyperparameters']['num_layers']}_num_epochs_{experiment_config['neural_net_hyperparameters']['num_epochs']}_dropout_value_{experiment_config['neural_net_hyperparameters']['dropout_rate']}_weight_decay_{experiment_config['neural_net_hyperparameters']['weight_decay']}"
+MODEL_DIRECTORY = f"{EXPERIMENT_DIRECTORY}/{EXPERIMENT_NAME}/num_hidden_neurons_{model_config['neural_net_hyperparameters']['hidden_size']}_num_hidden_layers_{model_config['neural_net_hyperparameters']['num_layers']}_num_epochs_{model_config['neural_net_hyperparameters']['num_epochs']}_dropout_value_{model_config['neural_net_hyperparameters']['dropout_rate']}_weight_decay_{model_config['neural_net_hyperparameters']['weight_decay']}"
 
 rule all:
     input:
@@ -32,6 +42,8 @@ rule all:
 
 
 
+
+# DELETE THIS RULE
 rule setup_folders:
     shell:
         """
@@ -39,37 +51,34 @@ rule setup_folders:
         mkdir -p {SIM_DIRECTORY} 
         mkdir -p {MODEL_DIRECTORY} 
         """
-
+# References both sim_dir and model_dir. This is a problem. 
 rule create_experiment:
     params:
         CONFIG_FILEPATH = CONFIG_FILEPATH,
         EXPERIMENT_NAME = EXPERIMENT_NAME,
         EXPERIMENT_DIRECTORY = EXPERIMENT_DIRECTORY,
         SIM_DIRECTORY = SIM_DIRECTORY,
-        MODEL_DIRECTORY = MODEL_DIRECTORY
+        MODEL_DIRECTORY = MODEL_DIRECTORY,
     output:
         config_file = f"{SIM_DIRECTORY}/config.json",
         experiment_obj_file = f"{MODEL_DIRECTORY}/experiment_obj.pkl",
-        model_config_file = f"{MODEL_DIRECTORY}/model_config.json",
         inference_config_file = f"{MODEL_DIRECTORY}/inference_config_file.json",
         colors_shades_file = f"{SIM_DIRECTORY}/color_shades.pkl",
         main_colors_file = f"{SIM_DIRECTORY}/main_colors.pkl"
-
-    # conda: 
-    #     "myenv"
     run:
         with open(output.config_file, 'w') as f:
             json.dump(experiment_config, f, indent=4)
-        
+
         # Call shell command inside the Python 'run' block
         shell(f"""
             PYTHONPATH={CWD} python {CWD}/snakemake_scripts/setup_experiment.py \
             --config_file {params.CONFIG_FILEPATH} \
             --experiment_name {params.EXPERIMENT_NAME} \
-            --experiment_directory {EXPERIMENT_DIRECTORY} \
+            --experiment_directory {params.EXPERIMENT_DIRECTORY} \
             --sim_directory {params.SIM_DIRECTORY} \
             --model_directory {params.MODEL_DIRECTORY}
         """)
+
 
 rule obtain_features:
     input:
@@ -79,11 +88,11 @@ rule obtain_features:
         main_colors_file = rules.create_experiment.output.main_colors_file
     output:
         preprocessing_results = f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
-        linear_model = f"{MODEL_DIRECTORY}/linear_regression_model.pkl"
 
     params:
         model_directory = MODEL_DIRECTORY,
-        sim_directory = SIM_DIRECTORY
+        sim_directory = SIM_DIRECTORY,
+        model_config_file = MODEL_CONFIG_FILEPATH
 
     # conda: 
     #     "myenv"
@@ -118,16 +127,41 @@ rule get_features:
         --sim_directory {params.sim_directory} \
         """
 
+rule linear_evaluation: 
+    input:
+        preprocessing_results_filepath = rules.obtain_features.output.preprocessing_results,
+        experiment_config_filepath = CONFIG_FILEPATH,
+        color_shades_file = rules.create_experiment.output.colors_shades_file,
+        main_colors_file = rules.create_experiment.output.main_colors_file
+    
+    output:
+        linear_model = f"{MODEL_DIRECTORY}/linear_regression_model.pkl"  
+    
+    params:
+        model_directory = MODEL_DIRECTORY
+
+    shell:
+        """
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/linear_evaluation.py \
+        --preprocessing_results_filepath {input.preprocessing_results_filepath} \
+        --experiment_config_filepath {input.experiment_config_filepath} \
+        --color_shades_file {input.color_shades_file} \
+        --main_colors_file {input.main_colors_file} \
+        --model_directory {params.model_directory}
+        """
+
+
 rule train_and_predict:
     input:
-        model_config_file = rules.create_experiment.output.model_config_file, #TODO: Replace this with model config file saved to Demographic_Inference folder 
         features_file = rules.get_features.output.features_output,
         colors_shades_file = rules.create_experiment.output.colors_shades_file,
         main_colors_file = rules.create_experiment.output.main_colors_file,
         additional_features_file = rules.get_features.output.additional_features_output
     params:
         use_FIM = False,
-        experiment_directory = MODEL_DIRECTORY
+        experiment_directory = MODEL_DIRECTORY,
+        MODEL_CONFIG_FILEPATH = MODEL_CONFIG_FILEPATH  # Add this if missing
+
 
     output:
         model_results = f"{MODEL_DIRECTORY}/snn_results.pkl",
@@ -135,7 +169,7 @@ rule train_and_predict:
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/setup_trainer.py \
-        --model_config {input.model_config_file} \
+        --model_config {params.MODEL_CONFIG_FILEPATH} \
         --experiment_directory {params.experiment_directory} \
         --features_file {input.features_file} \
         --color_shades {input.colors_shades_file} \

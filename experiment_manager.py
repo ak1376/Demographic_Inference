@@ -29,6 +29,7 @@ class Experiment_Manager:
     def __init__(self, config_file, experiment_name, experiment_directory):
         # Later have a config file for model hyperparameters
         self.experiment_config = config_file
+        # self.model_config = model_config_file
 
         self.upper_bound_params = config_file["upper_bound_params"]
         self.lower_bound_params = config_file["lower_bound_params"]
@@ -48,7 +49,7 @@ class Experiment_Manager:
         self.seed = config_file["seed"]
         self.normalization = config_file["normalization"]
         self.remove_outliers = config_file["remove_outliers"]
-        self.neural_net_hyperparameters = config_file["neural_net_hyperparameters"]
+        # self.neural_net_hyperparameters = model_config_file["neural_net_hyperparameters"]
 
         self.demographic_model = config_file["demographic_model"]
         self.parameter_names = config_file["parameter_names"]

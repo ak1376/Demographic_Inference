@@ -13,7 +13,7 @@
         "t_bottleneck_start": 1500,
         "t_bottleneck_end": 800
     },
-    "num_sims_pretrain": 10,
+    "num_sims_pretrain": 30,
     "num_sims_inference": 5,
     "num_samples": 20,
     "dadi_analysis": true,
@@ -29,23 +29,6 @@
     "normalization": true,
     "remove_outliers": true,
     "use_FIM": true,
-    "neural_net_hyperparameters": {
-        "input_size": 60,
-        "hidden_size": 10,
-        "output_size": 5,
-        "num_epochs": 100,
-        "learning_rate": 0.0003,
-        "num_layers": 5,
-        "dropout_rate": 0,
-        "weight_decay": 0,
-        "parameter_names": [
-            "N0",
-            "Nb",
-            "N_recover",
-            "t_bottleneck_start",
-            "t_bottleneck_end"
-        ]
-    },
     "k": 3,
     "training_percentage": 0.8,
     "demographic_model": "bottleneck_model",

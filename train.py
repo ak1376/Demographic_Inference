@@ -9,8 +9,8 @@ class Trainer:
     def __init__(self, experiment_directory, model_config, color_shades, main_colors, param_names, use_FIM=True):
         self.experiment_directory = experiment_directory
         self.model_config = model_config
-        self.num_epochs = self.model_config["num_epochs"]
-        self.learning_rate = self.model_config["learning_rate"]
+        self.num_epochs = self.model_config['neural_net_hyperparameters']["num_epochs"]
+        self.learning_rate = self.model_config['neural_net_hyperparameters']["learning_rate"]
         self.color_shades = color_shades
         self.main_colors = main_colors
         self.param_names = param_names
@@ -37,14 +37,14 @@ class Trainer:
             y_train=training_targets,
             X_val=validation_data,
             y_val=validation_targets,
-            input_size=self.model_config["input_size"],
-            hidden_size=self.model_config["hidden_size"],
-            output_size=self.model_config["output_size"],
-            num_layers=self.model_config["num_layers"],
-            num_epochs=self.model_config["num_epochs"],
-            learning_rate=self.model_config["learning_rate"],
-            weight_decay=self.model_config["weight_decay"],
-            dropout_rate=self.model_config["dropout_rate"],
+            input_size=self.model_config['neural_net_hyperparameters']["input_size"],
+            hidden_size=self.model_config['neural_net_hyperparameters']["hidden_size"],
+            output_size=self.model_config['neural_net_hyperparameters']["output_size"],
+            num_layers=self.model_config['neural_net_hyperparameters']["num_layers"],
+            num_epochs=self.model_config['neural_net_hyperparameters']["num_epochs"],
+            learning_rate=self.model_config['neural_net_hyperparameters']["learning_rate"],
+            weight_decay=self.model_config['neural_net_hyperparameters']["weight_decay"],
+            dropout_rate=self.model_config['neural_net_hyperparameters']["dropout_rate"],
             additional_features = additional_features,
             use_FIM=self.use_FIM
 

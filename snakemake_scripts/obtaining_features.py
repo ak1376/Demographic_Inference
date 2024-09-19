@@ -142,82 +142,82 @@ def obtain_features(
         main_colors=main_colors,
     )
 
-    ## LINEAR REGRESSION
+    # ## LINEAR REGRESSION
 
-    linear_mdl = LinearReg(
-        training_features=preprocessing_results_obj["training"]["predictions"],
-        training_targets=preprocessing_results_obj["training"]["targets"],
-        validation_features=preprocessing_results_obj["validation"]["predictions"],
-        validation_targets=preprocessing_results_obj["validation"]["targets"],
-        testing_features=preprocessing_results_obj["testing"]["predictions"],
-        testing_targets=preprocessing_results_obj["testing"]["targets"],
-    )
+    # linear_mdl = LinearReg(
+    #     training_features=preprocessing_results_obj["training"]["predictions"],
+    #     training_targets=preprocessing_results_obj["training"]["targets"],
+    #     validation_features=preprocessing_results_obj["validation"]["predictions"],
+    #     validation_targets=preprocessing_results_obj["validation"]["targets"],
+    #     testing_features=preprocessing_results_obj["testing"]["predictions"],
+    #     testing_targets=preprocessing_results_obj["testing"]["targets"],
+    # )
 
-    if experiment_config["use_FIM"]:
+    # if experiment_config["use_FIM"]:
 
-        upper_triangular_features = {}
-        upper_triangular_features["training"] = preprocessing_results_obj["training"][
-            "upper_triangular_FIM"
-        ]
-        upper_triangular_features["validation"] = preprocessing_results_obj[
-            "validation"
-        ]["upper_triangular_FIM"]
-        upper_triangular_features["testing"] = preprocessing_results_obj["testing"][
-            "upper_triangular_FIM"
-        ]
+    #     upper_triangular_features = {}
+    #     upper_triangular_features["training"] = preprocessing_results_obj["training"][
+    #         "upper_triangular_FIM"
+    #     ]
+    #     upper_triangular_features["validation"] = preprocessing_results_obj[
+    #         "validation"
+    #     ]["upper_triangular_FIM"]
+    #     upper_triangular_features["testing"] = preprocessing_results_obj["testing"][
+    #         "upper_triangular_FIM"
+    #     ]
 
-        training_predictions, validation_predictions, testing_predictions = (
-            linear_mdl.train_and_validate(upper_triangular_features)
-        )
+    #     training_predictions, validation_predictions, testing_predictions = (
+    #         linear_mdl.train_and_validate(upper_triangular_features)
+    #     )
 
-    else:
-        training_predictions, validation_predictions, testing_predictions = (
-            linear_mdl.train_and_validate()
-        )
+    # else:
+    #     training_predictions, validation_predictions, testing_predictions = (
+    #         linear_mdl.train_and_validate()
+    #     )
 
-    linear_mdl_obj = linear_mdl.organizing_results(
-        preprocessing_results_obj,
-        training_predictions,
-        validation_predictions,
-        testing_predictions,
-    )
+    # linear_mdl_obj = linear_mdl.organizing_results(
+    #     preprocessing_results_obj,
+    #     training_predictions,
+    #     validation_predictions,
+    #     testing_predictions,
+    # )
 
-    linear_mdl_obj["param_names"] = experiment_config["parameter_names"]
+    # linear_mdl_obj["param_names"] = experiment_config["parameter_names"]
 
-    # Now calculate the linear model error
+    # # Now calculate the linear model error
 
-    rrmse_dict = {}
-    rrmse_dict["training"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
-    )
-    rrmse_dict["validation"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
-    )
-    rrmse_dict["testing"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
-    )
+    # rrmse_dict = {}
+    # rrmse_dict["training"] = root_mean_squared_error(
+    #     y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
+    # )
+    # rrmse_dict["validation"] = root_mean_squared_error(
+    #     y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
+    # )
+    # rrmse_dict["testing"] = root_mean_squared_error(
+    #     y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
+    # )
 
-    # Open a file to save the object
-    with open(
-        f"{model_directory}/linear_mdl_obj.pkl", "wb"
-    ) as file:  # "wb" mode opens the file in binary write mode
-        pickle.dump(linear_mdl_obj, file)
+    # # Open a file to save the object
+    # with open(
+    #     f"{model_directory}/linear_mdl_obj.pkl", "wb"
+    # ) as file:  # "wb" mode opens the file in binary write mode
+    #     pickle.dump(linear_mdl_obj, file)
 
-    # Save rrmse_dict to a JSON file
-    with open(f"{model_directory}/linear_model_error.json", "w") as json_file:
-        json.dump(rrmse_dict, json_file, indent=4)
+    # # Save rrmse_dict to a JSON file
+    # with open(f"{model_directory}/linear_model_error.json", "w") as json_file:
+    #     json.dump(rrmse_dict, json_file, indent=4)
 
-    # targets
-    visualizing_results(
-        linear_mdl_obj,
-        "linear_results",
-        save_loc=model_directory,
-        stages=["training", "validation"],
-        color_shades=color_shades,
-        main_colors=main_colors,
-    )
+    # # targets
+    # visualizing_results(
+    #     linear_mdl_obj,
+    #     "linear_results",
+    #     save_loc=model_directory,
+    #     stages=["training", "validation"],
+    #     color_shades=color_shades,
+    #     main_colors=main_colors,
+    # )
 
-    joblib.dump(linear_mdl, f"{model_directory}/linear_regression_model.pkl")
+    # joblib.dump(linear_mdl, f"{model_directory}/linear_regression_model.pkl")
     # torch.save(
     #     snn_model.state_dict(),
     #     f"{self.model_directory}/neural_network_model.pth",
