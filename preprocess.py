@@ -133,18 +133,22 @@ class Processor:
     def sample_params(self):
         sampled_params = {}
         for key in self.lower_bound_params:
-            sampled_value = np.random.uniform(
-                self.lower_bound_params[key], self.upper_bound_params[key]
-            )
+            lower_bound = self.lower_bound_params[key]
+            upper_bound = self.upper_bound_params[key]
+            sampled_value = np.random.uniform(lower_bound, upper_bound)
+            sampled_params[key] = int(sampled_value)
 
-            if self.demographic_model == "split_isolation_model":
-                if key == "m_pre_isolation" or key == "m_post_isolation":
-                    sampled_params[key] = sampled_value
-                else:
-                    sampled_params[key] = int(sampled_value)
-            else:
-                sampled_params[key] = int(sampled_value)
 
+            # Check if the sampled parameter is equal to the mean of the uniform distribution
+            mean_value = (lower_bound + upper_bound) / 2
+            if sampled_value == mean_value:
+                # Add a small random value to avoid exact mean, while keeping within bounds
+                adjustment = np.random.uniform(-0.1 * (upper_bound - lower_bound), 0.1 * (upper_bound - lower_bound))
+                adjusted_value = sampled_value + adjustment
+                
+                # Ensure the adjusted value is still within the bounds
+                adjusted_value = max(min(adjusted_value, upper_bound), lower_bound)
+                sampled_params[key] = int(adjusted_value)
 
         return sampled_params
 

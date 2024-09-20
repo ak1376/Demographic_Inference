@@ -17,7 +17,7 @@ def create_experiment(config, experiment_name, experiment_directory):
     return Experiment_Manager(config, experiment_name, experiment_directory)
 
 
-def main(config_file, model_config_file, model_directory, sim_directory, experiment_name, experiment_directory):
+def main(config_file, model_config_file, sim_directory, experiment_name, experiment_directory):
     '''
     This function will take in the model directory and the simulation directory. I want to save the following in the experiment directory:
     1. The config file
@@ -46,10 +46,8 @@ def main(config_file, model_config_file, model_directory, sim_directory, experim
     experiment = create_experiment(config, experiment_name = experiment_name, experiment_directory=experiment_directory)
     # experiment = create_experiment(config, model_config_file=model_config, experiment_name = experiment_name, experiment_directory=experiment_directory)
 
-    print(f'Model directory: {model_directory}')
-
     # Save the config files
-    save_config(model_directory, config)
+    save_config(sim_directory, config)
 
     # Now create the color scheme we will use for visualizing. Save them as pkl files
     color_shades, main_colors = create_color_scheme(len(config["parameter_names"]))
@@ -61,14 +59,14 @@ def main(config_file, model_config_file, model_directory, sim_directory, experim
         pickle.dump(main_colors, f)
 
     # Define file paths
-    config_file = os.path.join(model_directory, "config.json")
-    experiment_obj_file = os.path.join(model_directory, "experiment_obj.pkl")
+    config_file = os.path.join(sim_directory, "config.json")
+    experiment_obj_file = os.path.join(sim_directory, "experiment_obj.pkl")
     # model_config_file = os.path.join(model_directory, "model_config.json")
 
     # Save the inference config file
     inference_config = config.copy()
-    inference_config["experiment_directory"] = model_directory
-    with open(f"{model_directory}/inference_config_file.json", "w") as f:
+    inference_config["experiment_directory"] = sim_directory
+    with open(f"{sim_directory}/inference_config_file.json", "w") as f:
         json.dump(inference_config, f, indent=4)
 
     # Save the experiment object
@@ -92,15 +90,13 @@ if __name__ == "__main__":
     parser.add_argument("--experiment_name", help="Name of the experiment")
     parser.add_argument("--experiment_directory", help="Directory to save the experiment object")
     parser.add_argument("--sim_directory", help="Directory containing the simulation data")
-    parser.add_argument("--model_directory", help="Directory containing the raw experiment data")
 
     args = parser.parse_args()
 
-    print(args.model_config_file)
 
     # Running through Snakemake
     # output_dir = os.path.dirname(args.model_directory)
-    config_file, experiment_obj_file, model_config_file = main(args.config_file, args.model_config_file, args.model_directory, args.sim_directory, experiment_name=args.experiment_name, experiment_directory=args.experiment_directory)
+    config_file, experiment_obj_file, model_config_file = main(args.config_file, args.model_config_file, args.sim_directory, experiment_name=args.experiment_name, experiment_directory=args.experiment_directory)
 
     # Verify that the output files match the expected paths
     # assert (

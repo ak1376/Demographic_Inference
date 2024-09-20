@@ -13,7 +13,7 @@
         "t_bottleneck_start": 1500,
         "t_bottleneck_end": 800
     },
-    "num_sims_pretrain": 30,
+    "num_sims_pretrain": 1000,
     "num_sims_inference": 5,
     "num_samples": 20,
     "dadi_analysis": true,
@@ -29,7 +29,7 @@
     "normalization": true,
     "remove_outliers": true,
     "use_FIM": true,
-    "k": 3,
+    "k": 5,
     "training_percentage": 0.8,
     "demographic_model": "bottleneck_model",
     "parameter_names": [

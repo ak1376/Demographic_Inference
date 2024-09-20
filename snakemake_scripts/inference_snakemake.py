@@ -32,17 +32,21 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model_config", type=str, required=True)
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--experiment_directory", type=str, required=True)
     parser.add_argument("--trained_weights", type=str, required=True)
     parser.add_argument("--inference_obj_path", type=str, required=True)
 
     args = parser.parse_args()
+
+    with open(args.model_config, "r") as f:
+        model_config = json.load(f)
+
+
     with open(args.config, "r") as f:
         config = json.load(f)
 
-    # with open(args.model_config, "r") as f:
-    #     model_config = json.load(f)
 
     inference_obj = Inference(
         vcf_filepath=config["vcf_filepath"],
@@ -56,7 +60,7 @@ if __name__ == "__main__":
 
 
     # Initialize the model
-    mdl = initialize_model(config)
+    mdl = initialize_model(model_config)
 
     # Load the trained weights
     mdl = load_trained_weights(mdl, args.trained_weights)

@@ -28,7 +28,6 @@ def str2bool(v):
 
 def obtain_features(
     experiment_config,
-    model_directory,
     sim_directory,
     color_shades_file,
     main_colors_file,
@@ -47,7 +46,7 @@ def obtain_features(
 
     processor = Processor(
         experiment_config,
-        model_directory,
+        experiment_directory = sim_directory,
         recombination_rate=experiment_config["recombination_rate"],
         mutation_rate=experiment_config["mutation_rate"],
         window_length=experiment_config["window_length"],
@@ -117,7 +116,6 @@ def obtain_features(
     )
 
     # Open a file to save the object
-    print("SIMDIRECTORY", sim_directory)
     with open(
         f"{sim_directory}/preprocessing_results_obj.pkl", "wb"
     ) as file:  # "wb" mode opens the file in binary write mode
@@ -142,89 +140,6 @@ def obtain_features(
         main_colors=main_colors,
     )
 
-    # ## LINEAR REGRESSION
-
-    # linear_mdl = LinearReg(
-    #     training_features=preprocessing_results_obj["training"]["predictions"],
-    #     training_targets=preprocessing_results_obj["training"]["targets"],
-    #     validation_features=preprocessing_results_obj["validation"]["predictions"],
-    #     validation_targets=preprocessing_results_obj["validation"]["targets"],
-    #     testing_features=preprocessing_results_obj["testing"]["predictions"],
-    #     testing_targets=preprocessing_results_obj["testing"]["targets"],
-    # )
-
-    # if experiment_config["use_FIM"]:
-
-    #     upper_triangular_features = {}
-    #     upper_triangular_features["training"] = preprocessing_results_obj["training"][
-    #         "upper_triangular_FIM"
-    #     ]
-    #     upper_triangular_features["validation"] = preprocessing_results_obj[
-    #         "validation"
-    #     ]["upper_triangular_FIM"]
-    #     upper_triangular_features["testing"] = preprocessing_results_obj["testing"][
-    #         "upper_triangular_FIM"
-    #     ]
-
-    #     training_predictions, validation_predictions, testing_predictions = (
-    #         linear_mdl.train_and_validate(upper_triangular_features)
-    #     )
-
-    # else:
-    #     training_predictions, validation_predictions, testing_predictions = (
-    #         linear_mdl.train_and_validate()
-    #     )
-
-    # linear_mdl_obj = linear_mdl.organizing_results(
-    #     preprocessing_results_obj,
-    #     training_predictions,
-    #     validation_predictions,
-    #     testing_predictions,
-    # )
-
-    # linear_mdl_obj["param_names"] = experiment_config["parameter_names"]
-
-    # # Now calculate the linear model error
-
-    # rrmse_dict = {}
-    # rrmse_dict["training"] = root_mean_squared_error(
-    #     y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
-    # )
-    # rrmse_dict["validation"] = root_mean_squared_error(
-    #     y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
-    # )
-    # rrmse_dict["testing"] = root_mean_squared_error(
-    #     y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
-    # )
-
-    # # Open a file to save the object
-    # with open(
-    #     f"{model_directory}/linear_mdl_obj.pkl", "wb"
-    # ) as file:  # "wb" mode opens the file in binary write mode
-    #     pickle.dump(linear_mdl_obj, file)
-
-    # # Save rrmse_dict to a JSON file
-    # with open(f"{model_directory}/linear_model_error.json", "w") as json_file:
-    #     json.dump(rrmse_dict, json_file, indent=4)
-
-    # # targets
-    # visualizing_results(
-    #     linear_mdl_obj,
-    #     "linear_results",
-    #     save_loc=model_directory,
-    #     stages=["training", "validation"],
-    #     color_shades=color_shades,
-    #     main_colors=main_colors,
-    # )
-
-    # joblib.dump(linear_mdl, f"{model_directory}/linear_regression_model.pkl")
-    # torch.save(
-    #     snn_model.state_dict(),
-    #     f"{self.model_directory}/neural_network_model.pth",
-    # )
-
-    # Save the color shades and main colors for usage with the neural network
-
     print("Training complete!")
 
 
@@ -234,14 +149,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_config", type=str, required=True)
     parser.add_argument("--sim_directory", type=str, required=True)
-    parser.add_argument("--model_directory", type=str, required=True)
     parser.add_argument("--color_shades_file", type=str, required=True)
     parser.add_argument("--main_colors_file", type=str, required=True)
     args = parser.parse_args()
 
     obtain_features(
         experiment_config=args.experiment_config,
-        model_directory=args.model_directory,
         sim_directory=args.sim_directory,
         color_shades_file=args.color_shades_file,
         main_colors_file=args.main_colors_file,
