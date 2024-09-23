@@ -4,9 +4,9 @@ import json
 from utils import visualizing_results, root_mean_squared_error
 from models import LinearReg
 
-def linear_evaluation(preprocessing_results_path, model_directory, experiment_config_path, color_shades_path, main_colors_path):
+def linear_evaluation(postprocessing_results_path, model_directory, experiment_config_path, color_shades_path, main_colors_path):
     
-    preprocessing_results_obj = pickle.load(open(preprocessing_results_path, "rb"))
+    postprocessing_results_obj = pickle.load(open(postprocessing_results_path, "rb"))
     experiment_config = json.load(open(experiment_config_path, "r"))
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
@@ -14,41 +14,22 @@ def linear_evaluation(preprocessing_results_path, model_directory, experiment_co
     ## LINEAR REGRESSION
 
     linear_mdl = LinearReg(
-        training_features=preprocessing_results_obj["training"]["predictions"],
-        training_targets=preprocessing_results_obj["training"]["targets"],
-        validation_features=preprocessing_results_obj["validation"]["predictions"],
-        validation_targets=preprocessing_results_obj["validation"]["targets"],
-        testing_features=preprocessing_results_obj["testing"]["predictions"],
-        testing_targets=preprocessing_results_obj["testing"]["targets"],
+        training_features=postprocessing_results_obj["training"]["predictions"],
+        training_targets=postprocessing_results_obj["training"]["targets"],
+        validation_features=postprocessing_results_obj["validation"]["predictions"],
+        validation_targets=postprocessing_results_obj["validation"]["targets"],
     )
 
-    if experiment_config["use_FIM"]:
+    training_predictions, validation_predictions = (
+        linear_mdl.train_and_validate()
+    )
 
-        upper_triangular_features = {}
-        upper_triangular_features["training"] = preprocessing_results_obj["training"][
-            "upper_triangular_FIM"
-        ]
-        upper_triangular_features["validation"] = preprocessing_results_obj[
-            "validation"
-        ]["upper_triangular_FIM"]
-        upper_triangular_features["testing"] = preprocessing_results_obj["testing"][
-            "upper_triangular_FIM"
-        ]
 
-        training_predictions, validation_predictions, testing_predictions = (
-            linear_mdl.train_and_validate(upper_triangular_features)
-        )
-
-    else:
-        training_predictions, validation_predictions, testing_predictions = (
-            linear_mdl.train_and_validate()
-        )
 
     linear_mdl_obj = linear_mdl.organizing_results(
-        preprocessing_results_obj,
+        postprocessing_results_obj,
         training_predictions,
-        validation_predictions,
-        testing_predictions,
+        validation_predictions
     )
 
     linear_mdl_obj["param_names"] = experiment_config["parameter_names"]
@@ -61,9 +42,6 @@ def linear_evaluation(preprocessing_results_path, model_directory, experiment_co
     )
     rrmse_dict["validation"] = root_mean_squared_error(
         y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
-    )
-    rrmse_dict["testing"] = root_mean_squared_error(
-        y_true=linear_mdl_obj["testing"]["targets"], y_pred=testing_predictions
     )
 
     # Open a file to save the object
@@ -96,7 +74,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Linear Evaluation")
     parser.add_argument(
-        "--preprocessing_results_filepath",
+        "--postprocessing_results_filepath",
         type=str,
         help="Path to the preprocessing results object",
     )
@@ -128,7 +106,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     linear_evaluation(
-        preprocessing_results_path=args.preprocessing_results_filepath,
+        postprocessing_results_path=args.postprocessing_results_filepath,
         model_directory=args.model_directory,
         experiment_config_path=args.experiment_config_filepath,
         color_shades_path=args.color_shades_file,
