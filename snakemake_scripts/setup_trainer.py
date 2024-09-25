@@ -1,11 +1,11 @@
 import pickle
 import argparse
-from models import ShallowNN
+from src.models import ShallowNN
 import os
-from utils import visualizing_results, calculate_model_errors
+from src.utils import visualizing_results, calculate_model_errors
 import json
 import torch
-from train import Trainer
+from src.train import Trainer
 
 
 def str2bool(v):

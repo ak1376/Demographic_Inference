@@ -1,20 +1,14 @@
 import pickle
-from experiment_manager import Experiment_Manager
 import os
 import argparse
 import json
-from utils import create_color_scheme
+from src.utils import create_color_scheme
 
 def save_config(experiment_directory, experiment_config):
 # def save_config(experiment_directory, experiment_config, model_config):
     # Save the full config
     with open(f"{experiment_directory}/config.json", "w") as json_file:
         json.dump(experiment_config, json_file, indent=4)
-
-
-def create_experiment(config, experiment_name, experiment_directory):
-# def create_experiment(config, model_config_file, experiment_name, experiment_directory):
-    return Experiment_Manager(config, experiment_name, experiment_directory)
 
 
 def main(config_file, model_config_file, sim_directory, experiment_name, experiment_directory):
@@ -43,7 +37,6 @@ def main(config_file, model_config_file, sim_directory, experiment_name, experim
     # Create the Experiment_Manager object
     # experiment_directory will store the results for that particular experiment: 
     # 1. neural network specific results
-    experiment = create_experiment(config, experiment_name = experiment_name, experiment_directory=experiment_directory)
     # experiment = create_experiment(config, model_config_file=model_config, experiment_name = experiment_name, experiment_directory=experiment_directory)
 
     # Save the config files
@@ -68,10 +61,6 @@ def main(config_file, model_config_file, sim_directory, experiment_name, experim
     inference_config["experiment_directory"] = sim_directory
     with open(f"{sim_directory}/inference_config_file.json", "w") as f:
         json.dump(inference_config, f, indent=4)
-
-    # Save the experiment object
-    with open(experiment_obj_file, "wb") as f:
-        pickle.dump(experiment, f)
 
     return config_file, experiment_obj_file, model_config_file
 

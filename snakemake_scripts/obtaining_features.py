@@ -4,14 +4,14 @@ import numpy as np
 import time
 import pickle
 import joblib
-from preprocess import Processor
-from utils import (
+from src.preprocess import Processor
+from src.utils import (
     visualizing_results,
     root_mean_squared_error,
     calculate_and_save_rrmse
 )
 
-from models import LinearReg
+from src.models import LinearReg
 import json
 
 

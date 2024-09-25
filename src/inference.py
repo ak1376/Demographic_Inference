@@ -1,12 +1,12 @@
 import numpy as np
 import allel
 import dadi
-from parameter_inference import (
+from src.parameter_inference import (
     run_inference_dadi,
     run_inference_moments,
     run_inference_momentsLD,
 )
-from preprocess import Processor
+from src.preprocess import Processor
 import pickle
 import torch
 

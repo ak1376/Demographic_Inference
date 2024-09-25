@@ -6,8 +6,8 @@ import msprime
 import dadi
 import glob
 import time
-import Demographic_Inference.src.demographic_models as demographic_models
-from parameter_inference import (
+import src.demographic_models as demographic_models 
+from src.parameter_inference import (
     run_inference_dadi,
     run_inference_moments,
     run_inference_momentsLD,

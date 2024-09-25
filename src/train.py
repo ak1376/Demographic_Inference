@@ -1,5 +1,5 @@
-from models import ShallowNN
-from utils import visualizing_results, calculate_model_errors
+from src.models import ShallowNN
+from src.utils import visualizing_results, calculate_model_errors
 import torch
 
 class Trainer:
@@ -21,14 +21,6 @@ class Trainer:
         validation_targets,
         visualize=True,
     ):
-        print("=====================================")
-        print("Checking shapes")
-        print(f"Training data shape: {training_data.shape}")
-        print(f"Training targets shape: {training_targets.shape}")
-        print(f"Validation data shape: {validation_data.shape}")
-        print(f"Validation targets shape: {validation_targets.shape}")
-        print("=====================================")
-
         
         snn_model, train_losses, val_losses = ShallowNN.train_and_validate(
             X_train=training_data,

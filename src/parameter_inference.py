@@ -5,8 +5,8 @@ import numpy as np
 import time
 from moments.Godambe import _get_godambe
 import nlopt
-import Demographic_Inference.src.demographic_models as demographic_models
-from optimize import opt
+import src.demographic_models as demographic_models
+from src.optimize import opt
 
 
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):

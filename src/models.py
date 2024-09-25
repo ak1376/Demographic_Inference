@@ -1,7 +1,7 @@
 from sklearn.multioutput import MultiOutputRegressor
 import xgboost as xgb
 import numpy as np
-from utils import root_mean_squared_error
+from src.utils import root_mean_squared_error
 
 import torch
 import torch.nn as nn
@@ -10,7 +10,8 @@ from sklearn.model_selection import cross_val_score, cross_val_predict
 from torch.optim.adam import Adam
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.linear_model import LinearRegression
-from torch.nn import MSELoss
+from torch.amp.autocast_mode import autocast  # Correct import for autocast
+from torch.amp.grad_scaler import GradScaler  # Correct import for GradScaler
 
 class LinearReg:
     def __init__(self, training_features, training_targets, validation_features, validation_targets):
@@ -29,6 +30,11 @@ class LinearReg:
         I think the additional features should be a dictionary with keys 'training', 'validation', and 'testing'
         """
         # Train the model on the training data
+
+        training_features = self.training_features.reshape(self.training_features.shape[0], -1)
+
+        print(self.training_features.shape)
+        print(self.training_targets.shape)
 
         self.model.fit(self.training_features, self.training_targets)
 
@@ -169,14 +175,14 @@ class ShallowNN(nn.Module):
 
         # First layer (input to first hidden layer)
         layers.append(nn.Linear(input_size, hidden_size))
-        # layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
+        layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
         layers.append(nn.ReLU())
         layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
 
         # Hidden layers (loop through to add layers dynamically)
         for _ in range(num_layers - 1):
             layers.append(nn.Linear(hidden_size, hidden_size))
-            # layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
+            layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
 
@@ -185,6 +191,8 @@ class ShallowNN(nn.Module):
 
         # Combine the layers into a sequential container
         self.network = nn.Sequential(*layers)
+
+
 
 
     def forward(self, x):
@@ -234,6 +242,9 @@ class ShallowNN(nn.Module):
         batch_size=64,
         patience=10,  # Early stopping patience
     ):
+        # Initialize the scaler for mixed-precision training
+        scaler = GradScaler('cuda')  # Specify 'cuda' as the device
+
         model = ShallowNN(
             input_size,
             hidden_size,
@@ -246,6 +257,12 @@ class ShallowNN(nn.Module):
         optimizer = Adam(
             model.parameters(), lr=learning_rate, weight_decay=weight_decay
         )
+
+        # Check if CUDA is available
+        if torch.cuda.is_available():
+            print("CUDA is available! GPU can be used.")
+        else:
+            print("CUDA is not available. Using CPU.")
 
         # Convert training and validation data into PyTorch tensors
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).cuda()
@@ -263,9 +280,8 @@ class ShallowNN(nn.Module):
         train_losses = []
         val_losses = []
 
-        best_val_loss = float('inf')
-        patience_counter = 0
-        best_model_state = None
+        # smoothed_train_losses = []
+        # smoothed_val_losses = []
 
         for epoch in range(num_epochs):
             model.train()  # Set model to training mode
@@ -275,13 +291,16 @@ class ShallowNN(nn.Module):
             # Training step
             for train_inputs, train_targets in train_loader:
                 optimizer.zero_grad()  # Clear gradients
-                train_outputs = model(train_inputs)  # Forward pass for training
-                train_loss = criterion(train_outputs, train_targets)  # Calculate training loss
-                train_loss.backward()  # Backward pass
-                optimizer.step()  # Update model weights
-
+                with autocast('cuda'):
+                    train_outputs = model(train_inputs)  # Forward pass for training
+                    train_loss = criterion(train_outputs, train_targets)  # Calculate training loss
+                scaler.scale(train_loss).backward()  # Backward pass
+                scaler.step(optimizer)
+                scaler.update()
+                
                 # Accumulate training loss for the epoch
                 epoch_train_loss += train_loss.item()
+                # train_losses.append(train_loss.item())
 
             # Validation step
             model.eval()  # Set model to evaluation mode
@@ -290,10 +309,12 @@ class ShallowNN(nn.Module):
                     val_outputs = model(val_inputs)  # Forward pass for validation
                     val_loss = criterion(val_outputs, val_targets).item()  # Calculate validation loss
                     epoch_val_loss += val_loss
+                    # val_losses.append(val_loss)
 
             # Calculate average losses for the epoch
             avg_train_loss = epoch_train_loss / len(train_loader)
             avg_val_loss = epoch_val_loss / len(validation_loader)
+
 
             train_losses.append(avg_train_loss)
             val_losses.append(avg_val_loss)
@@ -302,23 +323,71 @@ class ShallowNN(nn.Module):
             if (epoch + 1) % 10 == 0:
                 print(f"Epoch {epoch+1}/{num_epochs}, Avg Train Loss: {avg_train_loss:.4f}, Avg Validation Loss: {avg_val_loss:.4f}")
 
-            # Early stopping logic
-            if avg_val_loss < best_val_loss:
-                best_val_loss = avg_val_loss
-                best_model_state = model.state_dict()  # Save the best model state
-                patience_counter = 0  # Reset patience counter
-            else:
-                patience_counter += 1
+        # train_losses = []
+        # val_losses = []
 
-            if patience_counter >= patience:
-                print(f"Early stopping at epoch {epoch+1}")
-                break
+        # best_val_loss = float('inf')
+        # patience_counter = 0
+        # best_model_state = None
 
-        # Load the best model before returning
-        if best_model_state is not None:
-            model.load_state_dict(best_model_state)
+        # for epoch in range(num_epochs):
+        #     model.train()  # Set model to training mode
+        #     epoch_train_loss = 0.0
+        #     epoch_val_loss = 0.0
+
+        #     # Training step
+        #     for train_inputs, train_targets in train_loader:
+        #         optimizer.zero_grad()  # Clear gradients
+        #         train_outputs = model(train_inputs)  # Forward pass for training
+        #         train_loss = criterion(train_outputs, train_targets)  # Calculate training loss
+        #         train_loss.backward()  # Backward pass
+        #         optimizer.step()  # Update model weights
+
+        #         # Accumulate training loss for the epoch
+        #         epoch_train_loss += train_loss.item()
+
+        #     # Validation step
+        #     model.eval()  # Set model to evaluation mode
+        #     with torch.no_grad():  # Disable gradient calculation for validation
+        #         for val_inputs, val_targets in validation_loader:
+        #             val_outputs = model(val_inputs)  # Forward pass for validation
+        #             val_loss = criterion(val_outputs, val_targets).item()  # Calculate validation loss
+        #             epoch_val_loss += val_loss
+
+        #     # Calculate average losses for the epoch
+        #     avg_train_loss = epoch_train_loss / len(train_loader)
+        #     avg_val_loss = epoch_val_loss / len(validation_loader)
+
+        #     train_losses.append(avg_train_loss)
+        #     val_losses.append(avg_val_loss)
+
+        #     # Print train and validation loss for this epoch
+        #     if (epoch + 1) % 10 == 0:
+        #         print(f"Epoch {epoch+1}/{num_epochs}, Avg Train Loss: {avg_train_loss:.4f}, Avg Validation Loss: {avg_val_loss:.4f}")
+
+        #     # Early stopping logic
+        #     if avg_val_loss < best_val_loss:
+        #         best_val_loss = avg_val_loss
+        #         best_model_state = model.state_dict()  # Save the best model state
+        #         patience_counter = 0  # Reset patience counter
+        #     else:
+        #         patience_counter += 1
+
+        #     if patience_counter >= patience:
+        #         print(f"Early stopping at epoch {epoch+1}")
+        #         break
+
+        # # Load the best model before returning
+        # if best_model_state is not None:
+        #     model.load_state_dict(best_model_state)
+
+        # Apply moving average to batch losses
+        smoothed_train_losses = np.convolve(train_losses, np.ones(20) / 20, mode='valid')
+        smoothed_val_losses = np.convolve(val_losses, np.ones(20) / 20, mode='valid')
 
         return model, train_losses, val_losses
+
+        # return model, smoothed_train_losses, smoothed_val_losses
 
         # for epoch in range(num_epochs):
         #     model.train()
@@ -393,7 +462,7 @@ class ShallowNN(nn.Module):
         plt.xlabel("Batch")
         plt.ylabel("Loss")
         plt.yscale("log")
-        plt.title("Training and Validation Loss Curves (Batch-by-Batch)")
+        plt.title("Training and Validation Loss Curves (Epoch-by-Epoch)")
         plt.legend()
         plt.savefig(save_path)
         plt.close()

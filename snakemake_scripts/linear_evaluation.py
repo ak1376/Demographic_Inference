@@ -1,12 +1,12 @@
 import pickle 
 import joblib
 import json
-from utils import visualizing_results, root_mean_squared_error
-from models import LinearReg
+from src.utils import visualizing_results, root_mean_squared_error
+from src.models import LinearReg
 
-def linear_evaluation(postprocessing_results_path, model_directory, experiment_config_path, color_shades_path, main_colors_path):
+def linear_evaluation(features_and_targets_filepath, model_directory, experiment_config_path, color_shades_path, main_colors_path):
     
-    postprocessing_results_obj = pickle.load(open(postprocessing_results_path, "rb"))
+    features_and_targets = pickle.load(open(features_and_targets_filepath, "rb"))
     experiment_config = json.load(open(experiment_config_path, "r"))
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
@@ -14,10 +14,10 @@ def linear_evaluation(postprocessing_results_path, model_directory, experiment_c
     ## LINEAR REGRESSION
 
     linear_mdl = LinearReg(
-        training_features=postprocessing_results_obj["training"]["predictions"],
-        training_targets=postprocessing_results_obj["training"]["targets"],
-        validation_features=postprocessing_results_obj["validation"]["predictions"],
-        validation_targets=postprocessing_results_obj["validation"]["targets"],
+        training_features=features_and_targets["training"]["features"],
+        training_targets=features_and_targets["training"]["targets"],
+        validation_features=features_and_targets["validation"]["features"],
+        validation_targets=features_and_targets["validation"]["targets"],
     )
 
     training_predictions, validation_predictions = (
@@ -27,7 +27,7 @@ def linear_evaluation(postprocessing_results_path, model_directory, experiment_c
 
 
     linear_mdl_obj = linear_mdl.organizing_results(
-        postprocessing_results_obj,
+        features_and_targets,
         training_predictions,
         validation_predictions
     )
@@ -74,9 +74,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Linear Evaluation")
     parser.add_argument(
-        "--postprocessing_results_filepath",
+        "--features_and_targets_filepath",
         type=str,
-        help="Path to the preprocessing results object",
+        help="Path to the features and targets results object",
     )
 
     parser.add_argument(
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     linear_evaluation(
-        postprocessing_results_path=args.postprocessing_results_filepath,
+        features_and_targets_filepath=args.features_and_targets_filepath,
         model_directory=args.model_directory,
         experiment_config_path=args.experiment_config_filepath,
         color_shades_path=args.color_shades_file,
