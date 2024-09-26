@@ -1,8 +1,6 @@
 import pickle
 import argparse
 from src.models import ShallowNN
-import os
-from src.utils import visualizing_results, calculate_model_errors
 import json
 import torch
 from src.train import Trainer
@@ -18,7 +16,10 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
-def main(experiment_directory, model_config_file, features_file, color_shades, main_colors):
+
+def main(
+    experiment_directory, model_config_file, features_file, color_shades, main_colors
+):
     # Load model config
     with open(model_config_file, "r") as f:
         model_config = json.load(f)
@@ -28,31 +29,47 @@ def main(experiment_directory, model_config_file, features_file, color_shades, m
         features = pickle.load(f)
 
     # Load the list back
-    with open(color_shades, 'rb') as f:
+    with open(color_shades, "rb") as f:
         color_shades = pickle.load(f)
 
-    with open(main_colors, 'rb') as f:
+    with open(main_colors, "rb") as f:
         main_colors = pickle.load(f)
 
-
-    trainer = Trainer(experiment_directory, model_config, color_shades, main_colors, param_names=model_config['neural_net_hyperparameters']['parameter_names'])
-
-    # Train the model
-    snn_model, train_losses, val_losses = trainer.train(
-        training_data = features["training"]["features"],
-        training_targets = features["training"]["targets"],
-        validation_data = features["validation"]["features"],
-        validation_targets = features["validation"]["targets"],
-        visualize=True
+    mdl = ShallowNN(
+        input_size=model_config["neural_net_hyperparameters"]["input_size"],
+        hidden_sizes=model_config["neural_net_hyperparameters"]["hidden_size"],
+        num_layers=model_config["neural_net_hyperparameters"]["num_layers"],
+        output_size=model_config["neural_net_hyperparameters"]["output_size"],
+        dropout_rate=model_config["neural_net_hyperparameters"]["dropout_rate"],
+        weight_decay=model_config["neural_net_hyperparameters"]["weight_decay"],
+        BatchNorm=model_config["neural_net_hyperparameters"]["BatchNorm"],
     )
     
+    trainer = Trainer(
+        experiment_directory,
+        model_config,
+        color_shades,
+        main_colors,
+        param_names=model_config["neural_net_hyperparameters"]["parameter_names"],
+    )
+
+    snn_model, train_losses, val_losses = trainer.train(
+        model = mdl,
+        X_train = features["training"]["features"],
+        y_train = features["training"]["targets"],
+        X_val = features["validation"]["features"],
+        y_val = features["validation"]["targets"],
+        num_epochs=model_config["neural_net_hyperparameters"]["num_epochs"]
+
+    )
+
     snn_results = trainer.predict(
-        snn_model = snn_model,
-        training_data = features["training"]["features"],
-        validation_data = features["validation"]["features"],
-        training_targets = features["training"]["targets"],
-        validation_targets = features["validation"]["targets"],
-        visualize=True
+        snn_model=snn_model,
+        training_data=features["training"]["features"],
+        validation_data=features["validation"]["features"],
+        training_targets=features["training"]["targets"],
+        validation_targets=features["validation"]["targets"],
+        visualize=True,
     )
 
     # Save the trained model
@@ -79,5 +96,5 @@ if __name__ == "__main__":
         args.model_config_file,
         args.features_file,
         args.color_shades,
-        args.main_colors
+        args.main_colors,
     )

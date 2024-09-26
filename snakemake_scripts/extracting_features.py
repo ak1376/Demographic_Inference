@@ -1,33 +1,9 @@
 import pickle
-import json
 
 def getting_the_features(postprocessing_results_filepath, sim_directory):
 
     with open(postprocessing_results_filepath, "rb") as file:
         postprocessing_results_obj = pickle.load(file)
-
-    # # print(f"TRAINING FEATURES SHAPE: {preprocessing_results_obj['training']['predictions'].shape}")
-    # # print(f"TRAINING TARGETS SHAPE: {preprocessing_results_obj['training']['targets'].shape}")
-    # # print(f"VALIDATION FEATURES SHAPE: {preprocessing_results_obj['validation']['predictions'].shape}")
-    # # print(f"VALIDATION TARGETS SHAPE: {preprocessing_results_obj['validation']['targets'].shape}")
-
-    # training_features = preprocessing_results_obj["training"]["predictions"]
-    # training_targets = preprocessing_results_obj["training"]["targets"]
-    # validation_features = preprocessing_results_obj["validation"]["predictions"]
-    # validation_targets = preprocessing_results_obj["validation"]["targets"]
-
-    # testing_features = preprocessing_results_obj["testing"]["predictions"]
-    # testing_targets = preprocessing_results_obj["testing"]["targets"]
-
-    # # Needs to be some flag checking if this is true or not. 
-    # additional_features = None
-    # if config["use_FIM"]:
-    #     additional_features = {}
-    #     additional_features['training'] = preprocessing_results_obj['training']['upper_triangular_FIM']
-    #     additional_features['validation'] = preprocessing_results_obj['validation']['upper_triangular_FIM']
-    #     additional_features['testing'] = preprocessing_results_obj['testing']['upper_triangular_FIM']
-
-    # I want to save a dictionary of training, validation, and testing features and targets.
 
     features = {
         "training": {"features": postprocessing_results_obj['training']['predictions'], "targets": postprocessing_results_obj['training']['targets']},

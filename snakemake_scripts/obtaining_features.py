@@ -1,17 +1,8 @@
 # obtain_features.py
 
 import numpy as np
-import time
 import pickle
-import joblib
 from src.preprocess import Processor
-from src.utils import (
-    visualizing_results,
-    root_mean_squared_error,
-    calculate_and_save_rrmse
-)
-
-from src.models import LinearReg
 import json
 
 

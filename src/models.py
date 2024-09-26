@@ -33,9 +33,6 @@ class LinearReg:
 
         training_features = self.training_features.reshape(self.training_features.shape[0], -1)
 
-        print(self.training_features.shape)
-        print(self.training_targets.shape)
-
         self.model.fit(self.training_features, self.training_targets)
 
         training_predictions = self.model.predict(self.training_features).reshape(self.training_features.shape[0], -1)
@@ -66,8 +63,6 @@ class LinearReg:
 class XGBoost:
     def __init__(
         self,
-        feature_names,
-        target_names,
         objective="reg:squarederror",
         n_estimators=100,
         learning_rate=0.1,
@@ -77,8 +72,6 @@ class XGBoost:
         loo=None,
     ):
 
-        self.feature_names = feature_names
-        self.target_names = target_names
         self.objective = objective
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
@@ -160,40 +153,51 @@ class ShallowNN(nn.Module):
     def __init__(
         self,
         input_size,
-        hidden_size,
+        hidden_sizes,  # Can be an integer or a list of hidden layer sizes
+        num_layers,
         output_size,
-        num_layers=3,
         dropout_rate=0.1,
         weight_decay=1e-4,
+        BatchNorm=False,
     ):
         super(ShallowNN, self).__init__()
-        self.num_layers = num_layers
         self.dropout_rate = dropout_rate
         self.weight_decay = weight_decay
 
         layers = []
 
+        # Check if hidden_sizes is an integer, if so, use num_layers
+        if isinstance(hidden_sizes, int):
+            hidden_sizes = [hidden_sizes] * num_layers  # Create a list with num_layers entries
+
         # First layer (input to first hidden layer)
-        layers.append(nn.Linear(input_size, hidden_size))
-        layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
+        layers.append(nn.Linear(input_size, hidden_sizes[0]))
+        if BatchNorm:
+            layers.append(nn.BatchNorm1d(hidden_sizes[0]))  # Add BatchNorm
         layers.append(nn.ReLU())
         layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
 
         # Hidden layers (loop through to add layers dynamically)
-        for _ in range(num_layers - 1):
-            layers.append(nn.Linear(hidden_size, hidden_size))
-            layers.append(nn.BatchNorm1d(hidden_size))  # Add BatchNorm
+        for i in range(1, len(hidden_sizes)):
+            layers.append(nn.Linear(hidden_sizes[i-1], hidden_sizes[i]))
+            if BatchNorm:
+                layers.append(nn.BatchNorm1d(hidden_sizes[i]))  # Add BatchNorm
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
 
         # Output layer (no dropout after the output layer)
-        layers.append(nn.Linear(hidden_size, output_size))
+        layers.append(nn.Linear(hidden_sizes[-1], output_size))
 
         # Combine the layers into a sequential container
         self.network = nn.Sequential(*layers)
 
+        # Calculate the number of trainable parameters
+        num_params = sum(p.numel() for p in self.network.parameters() if p.requires_grad)
+        print("================================================")
+        print(f"Number of trainable parameters: {num_params}")
+        print("================================================")
 
-
+        self.num_params = num_params
 
     def forward(self, x):
         return self.network(x)
@@ -224,245 +228,3 @@ class ShallowNN(nn.Module):
             # print(predictions)
 
         return predictions.cpu().numpy()
-
-    @staticmethod
-    def train_and_validate(
-        X_train,
-        y_train,
-        X_val,
-        y_val,
-        input_size,
-        hidden_size,
-        output_size,
-        num_layers=3,
-        num_epochs=1000,
-        learning_rate=3e-4,
-        weight_decay=1e-4,
-        dropout_rate=0.1,
-        batch_size=64,
-        patience=10,  # Early stopping patience
-    ):
-        # Initialize the scaler for mixed-precision training
-        scaler = GradScaler('cuda')  # Specify 'cuda' as the device
-
-        model = ShallowNN(
-            input_size,
-            hidden_size,
-            output_size,
-            num_layers,
-            dropout_rate=dropout_rate,
-            weight_decay=weight_decay,
-        ).cuda()
-        criterion = nn.MSELoss()
-        optimizer = Adam(
-            model.parameters(), lr=learning_rate, weight_decay=weight_decay
-        )
-
-        # Check if CUDA is available
-        if torch.cuda.is_available():
-            print("CUDA is available! GPU can be used.")
-        else:
-            print("CUDA is not available. Using CPU.")
-
-        # Convert training and validation data into PyTorch tensors
-        X_train_tensor = torch.tensor(X_train, dtype=torch.float32).cuda()
-        y_train_tensor = torch.tensor(y_train, dtype=torch.float32).cuda()
-        X_val_tensor = torch.tensor(X_val, dtype=torch.float32).cuda()
-        y_val_tensor = torch.tensor(y_val, dtype=torch.float32).cuda()
-
-        # Create DataLoader for mini-batch training
-        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-        validation_dataset = TensorDataset(X_val_tensor, y_val_tensor)
-        validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
-
-        train_losses = []
-        val_losses = []
-
-        # smoothed_train_losses = []
-        # smoothed_val_losses = []
-
-        for epoch in range(num_epochs):
-            model.train()  # Set model to training mode
-            epoch_train_loss = 0.0
-            epoch_val_loss = 0.0
-
-            # Training step
-            for train_inputs, train_targets in train_loader:
-                optimizer.zero_grad()  # Clear gradients
-                with autocast('cuda'):
-                    train_outputs = model(train_inputs)  # Forward pass for training
-                    train_loss = criterion(train_outputs, train_targets)  # Calculate training loss
-                scaler.scale(train_loss).backward()  # Backward pass
-                scaler.step(optimizer)
-                scaler.update()
-                
-                # Accumulate training loss for the epoch
-                epoch_train_loss += train_loss.item()
-                # train_losses.append(train_loss.item())
-
-            # Validation step
-            model.eval()  # Set model to evaluation mode
-            with torch.no_grad():  # Disable gradient calculation for validation
-                for val_inputs, val_targets in validation_loader:
-                    val_outputs = model(val_inputs)  # Forward pass for validation
-                    val_loss = criterion(val_outputs, val_targets).item()  # Calculate validation loss
-                    epoch_val_loss += val_loss
-                    # val_losses.append(val_loss)
-
-            # Calculate average losses for the epoch
-            avg_train_loss = epoch_train_loss / len(train_loader)
-            avg_val_loss = epoch_val_loss / len(validation_loader)
-
-
-            train_losses.append(avg_train_loss)
-            val_losses.append(avg_val_loss)
-
-            # Print train and validation loss for this epoch
-            if (epoch + 1) % 10 == 0:
-                print(f"Epoch {epoch+1}/{num_epochs}, Avg Train Loss: {avg_train_loss:.4f}, Avg Validation Loss: {avg_val_loss:.4f}")
-
-        # train_losses = []
-        # val_losses = []
-
-        # best_val_loss = float('inf')
-        # patience_counter = 0
-        # best_model_state = None
-
-        # for epoch in range(num_epochs):
-        #     model.train()  # Set model to training mode
-        #     epoch_train_loss = 0.0
-        #     epoch_val_loss = 0.0
-
-        #     # Training step
-        #     for train_inputs, train_targets in train_loader:
-        #         optimizer.zero_grad()  # Clear gradients
-        #         train_outputs = model(train_inputs)  # Forward pass for training
-        #         train_loss = criterion(train_outputs, train_targets)  # Calculate training loss
-        #         train_loss.backward()  # Backward pass
-        #         optimizer.step()  # Update model weights
-
-        #         # Accumulate training loss for the epoch
-        #         epoch_train_loss += train_loss.item()
-
-        #     # Validation step
-        #     model.eval()  # Set model to evaluation mode
-        #     with torch.no_grad():  # Disable gradient calculation for validation
-        #         for val_inputs, val_targets in validation_loader:
-        #             val_outputs = model(val_inputs)  # Forward pass for validation
-        #             val_loss = criterion(val_outputs, val_targets).item()  # Calculate validation loss
-        #             epoch_val_loss += val_loss
-
-        #     # Calculate average losses for the epoch
-        #     avg_train_loss = epoch_train_loss / len(train_loader)
-        #     avg_val_loss = epoch_val_loss / len(validation_loader)
-
-        #     train_losses.append(avg_train_loss)
-        #     val_losses.append(avg_val_loss)
-
-        #     # Print train and validation loss for this epoch
-        #     if (epoch + 1) % 10 == 0:
-        #         print(f"Epoch {epoch+1}/{num_epochs}, Avg Train Loss: {avg_train_loss:.4f}, Avg Validation Loss: {avg_val_loss:.4f}")
-
-        #     # Early stopping logic
-        #     if avg_val_loss < best_val_loss:
-        #         best_val_loss = avg_val_loss
-        #         best_model_state = model.state_dict()  # Save the best model state
-        #         patience_counter = 0  # Reset patience counter
-        #     else:
-        #         patience_counter += 1
-
-        #     if patience_counter >= patience:
-        #         print(f"Early stopping at epoch {epoch+1}")
-        #         break
-
-        # # Load the best model before returning
-        # if best_model_state is not None:
-        #     model.load_state_dict(best_model_state)
-
-        # Apply moving average to batch losses
-        smoothed_train_losses = np.convolve(train_losses, np.ones(20) / 20, mode='valid')
-        smoothed_val_losses = np.convolve(val_losses, np.ones(20) / 20, mode='valid')
-
-        return model, train_losses, val_losses
-
-        # return model, smoothed_train_losses, smoothed_val_losses
-
-        # for epoch in range(num_epochs):
-        #     model.train()
-        #     for inputs, targets in train_loader:
-        #         optimizer.zero_grad()
-        #         outputs = model(inputs)
-        #         train_loss = criterion(outputs, targets)
-        #         train_loss.backward()
-        #         optimizer.step()
-
-        #         # Store training loss for the batch
-        #         train_losses.append(train_loss.item())
-
-        #         # **Monitoring BatchNorm Statistics**
-        #         # Register the hook to all BatchNorm layers in the model
-        #         # for layer in model.modules():
-        #         #     if isinstance(layer, nn.BatchNorm1d) or isinstance(layer, nn.BatchNorm2d):
-        #         #         layer.register_forward_hook(inspect_batchnorm_output)
-
-        #         # Set model to evaluation mode for validation
-        #         model.eval()
-                
-        #         # Disable gradient calculations for validation
-        #         val_loss = 0.0
-        #         with torch.no_grad():
-        #             for val_inputs, val_targets in val_loader:  # Loop through validation data
-        #                 val_outputs = model(val_inputs)  # Forward pass on validation data
-        #                 val_loss += criterion(val_outputs, val_targets).item()  # Accumulate validation loss
-
-        #         # Average validation loss over all batches in the validation set
-        #         val_loss /= len(val_loader)
-                
-        #         # Store validation loss for the epoch
-        #         val_losses.append(val_loss)
-
-        #         # Print progress every 10 epochs
-        #         if (epoch) % 10 == 0:
-        #             print(
-        #                 f"Epoch {epoch+1}/{num_epochs}, Last Batch Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}"
-        #             )
-
-
-
-
-
-        #         # Validate on the full validation set
-        #         model.eval()
-        #         with torch.no_grad():
-        #             print("====================================")
-        #             print(f'y val tensor maximum: {y_val_tensor.max()}')
-        #             print(f'y val tensor minimum: {y_val_tensor.min()}')
-        #             print("====================================")
-        #             val_outputs = model(X_val_tensor)
-        #             val_loss = criterion(val_outputs, y_val_tensor).item()
-
-        #         # Store validation loss for the batch
-        #         val_losses.append(val_loss)
-
-        #     if (epoch) % 10 == 0:
-        #         print(
-        #             f"Epoch {epoch+1}/{num_epochs}, Last Batch Train Loss: {train_loss.item():.4f}, Validation Loss: {val_loss:.4f}"
-        #         )
-
-
-    @staticmethod
-    def plot_loss_curves(train_losses, val_losses, save_path):
-        import matplotlib.pyplot as plt
-
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_losses, label="Train Loss", color="blue", linewidth=2)
-        plt.plot(val_losses, label="Validation Loss", color="red", linewidth=2)
-        plt.xlabel("Batch")
-        plt.ylabel("Loss")
-        plt.yscale("log")
-        plt.title("Training and Validation Loss Curves (Epoch-by-Epoch)")
-        plt.legend()
-        plt.savefig(save_path)
-        plt.close()

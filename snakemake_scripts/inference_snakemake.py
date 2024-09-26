@@ -1,9 +1,9 @@
 # run_inference.py
 
 import json
-from inference import Inference
+from src.inference import Inference
 import torch 
-from models import ShallowNN
+from src.models import ShallowNN
 import pickle
 
 def load_trained_weights(mdl, path):
@@ -13,12 +13,13 @@ def load_trained_weights(mdl, path):
 def initialize_model(config):
     mdl = ShallowNN(
         input_size=config["neural_net_hyperparameters"]["input_size"],
+        hidden_sizes=config["neural_net_hyperparameters"]["hidden_size"],
+        num_layers=config["neural_net_hyperparameters"]["num_layers"],
         output_size=config["neural_net_hyperparameters"]["output_size"],
-        hidden_size=config["neural_net_hyperparameters"]["hidden_size"],
         dropout_rate=config["neural_net_hyperparameters"]["dropout_rate"],
         weight_decay=config["neural_net_hyperparameters"]["weight_decay"],
-        num_layers=config["neural_net_hyperparameters"]["num_layers"]
-    )
+        BatchNorm=config["neural_net_hyperparameters"]["BatchNorm"])
+
     return mdl
 
 def load_inference_obj(path):
