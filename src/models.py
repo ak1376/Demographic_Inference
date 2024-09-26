@@ -7,11 +7,9 @@ import torch
 import torch.nn as nn
 from torch.optim.adam import Adam
 from sklearn.model_selection import cross_val_score, cross_val_predict
-from torch.optim.adam import Adam
-from torch.utils.data import DataLoader, TensorDataset
 from sklearn.linear_model import LinearRegression
-from torch.amp.autocast_mode import autocast  # Correct import for autocast
-from torch.amp.grad_scaler import GradScaler  # Correct import for GradScaler
+import pytorch_lightning as pl
+from torchmetrics import MeanSquaredError
 
 class LinearReg:
     def __init__(self, training_features, training_targets, validation_features, validation_targets):
@@ -149,20 +147,26 @@ def inspect_batchnorm_output(module, input, output):
     print(f"BatchNorm Output Variance: {output.var().item()}")
 
 
-class ShallowNN(nn.Module):
+class ShallowNN(pl.LightningModule):
     def __init__(
         self,
         input_size,
         hidden_sizes,  # Can be an integer or a list of hidden layer sizes
         num_layers,
         output_size,
-        dropout_rate=0.1,
+        learning_rate=1e-3,
         weight_decay=1e-4,
+        dropout_rate=0.1,
         BatchNorm=False,
     ):
         super(ShallowNN, self).__init__()
-        self.dropout_rate = dropout_rate
+        self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.dropout_rate = dropout_rate
+
+        # For storing losses
+        self.train_losses_per_batch = []
+        self.val_losses_per_batch = []
 
         layers = []
 
@@ -192,30 +196,53 @@ class ShallowNN(nn.Module):
         self.network = nn.Sequential(*layers)
 
         # Calculate the number of trainable parameters
-        num_params = sum(p.numel() for p in self.network.parameters() if p.requires_grad)
+        self.num_params = sum(p.numel() for p in self.network.parameters() if p.requires_grad)
         print("================================================")
-        print(f"Number of trainable parameters: {num_params}")
+        print(f"Number of trainable parameters: {self.num_params}")
         print("================================================")
 
-        self.num_params = num_params
+        # Loss function
+        self.criterion = nn.MSELoss()
+
+        # Metrics
+        self.train_mse = MeanSquaredError()
+        self.val_mse = MeanSquaredError()
 
     def forward(self, x):
         return self.network(x)
 
-    def predict(self, X, eval_mode = False):
-        """
-        Make predictions using the trained model.
+    def training_step(self, batch, batch_idx):
+        X, y = batch
+        preds = self(X)
+        loss = self.criterion(preds, y)
+        mse = self.train_mse(preds, y)
+        self.log("train_loss", loss, prog_bar=True)
+        self.log("train_mse", mse, prog_bar=True)
 
-        Args:
-        X (numpy.ndarray or torch.Tensor): Input data for prediction.
+        # Store train loss for this batch
+        self.train_losses_per_batch.append(loss.item())
 
-        Returns:
-        numpy.ndarray: Predicted outputs.
-        """
+        return loss
 
+    def validation_step(self, batch, batch_idx):
+        X, y = batch
+        preds = self(X)
+        val_loss = self.criterion(preds, y)
+        val_mse = self.val_mse(preds, y)
+        self.log("val_loss", val_loss, prog_bar=True)
+        self.log("val_mse", val_mse, prog_bar=True)
+
+        # Store validation loss for this batch
+        self.val_losses_per_batch.append(val_loss.item())
+        
+        return val_loss
+
+    def configure_optimizers(self):
+        return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+
+    def predict_from_trained_network(self, X, eval_mode=False):
         if eval_mode:
-            self.eval()  # Set the model to evaluation mode
-
+            self.eval()
         else:
             self.train()
 
@@ -225,6 +252,5 @@ class ShallowNN(nn.Module):
             if X.device != next(self.parameters()).device:
                 X = X.to(next(self.parameters()).device)
             predictions = self(X)
-            # print(predictions)
 
         return predictions.cpu().numpy()

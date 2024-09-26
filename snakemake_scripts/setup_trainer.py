@@ -1,9 +1,10 @@
 import pickle
 import argparse
 from src.models import ShallowNN
+from src.utils import plot_loss_curves
 import json
 import torch
-from src.train import Trainer
+from src.train import MLPTrainer
 
 
 def str2bool(v):
@@ -40,12 +41,14 @@ def main(
         hidden_sizes=model_config["neural_net_hyperparameters"]["hidden_size"],
         num_layers=model_config["neural_net_hyperparameters"]["num_layers"],
         output_size=model_config["neural_net_hyperparameters"]["output_size"],
-        dropout_rate=model_config["neural_net_hyperparameters"]["dropout_rate"],
+        learning_rate=model_config["neural_net_hyperparameters"]["learning_rate"],
         weight_decay=model_config["neural_net_hyperparameters"]["weight_decay"],
+        dropout_rate=model_config["neural_net_hyperparameters"]["dropout_rate"],
         BatchNorm=model_config["neural_net_hyperparameters"]["BatchNorm"],
     )
+
     
-    trainer = Trainer(
+    trainer = MLPTrainer(
         experiment_directory,
         model_config,
         color_shades,
@@ -59,24 +62,24 @@ def main(
         y_train = features["training"]["targets"],
         X_val = features["validation"]["features"],
         y_val = features["validation"]["targets"],
-        num_epochs=model_config["neural_net_hyperparameters"]["num_epochs"]
-
     )
 
     snn_results = trainer.predict(
-        snn_model=snn_model,
+        model=snn_model,
         training_data=features["training"]["features"],
         validation_data=features["validation"]["features"],
         training_targets=features["training"]["targets"],
         validation_targets=features["validation"]["targets"],
         visualize=True,
     )
-
     # Save the trained model
     torch.save(snn_model.state_dict(), f"{experiment_directory}/snn_model.pth")
 
     snn_results["train_losses"] = train_losses
     snn_results["val_losses"] = val_losses
+
+
+    plot_loss_curves(train_losses = train_losses, val_losses = val_losses, save_path = f'{experiment_directory}/loss_curves.png')
 
     with open(f"{experiment_directory}/snn_results.pkl", "wb") as f:
         pickle.dump(snn_results, f)
