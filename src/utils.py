@@ -45,7 +45,7 @@ def visualizing_results(
             plt.scatter(
                 targets_flat,
                 predictions_flat,
-                alpha=0.2,
+                alpha=0.5,
                 color=color_shades[main_colors[i % len(main_colors)]][j],  # type: ignore
                 label=f"{stage.capitalize()}",
             )

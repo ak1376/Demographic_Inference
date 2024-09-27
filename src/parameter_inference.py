@@ -27,7 +27,7 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
 
 
 def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
-    start_time = time.time()
+    # start_time = time.time()
 
     flat_map_path = os.path.join(folderpath, "flat_map.txt")
     pop_file_path = os.path.join(folderpath, "samples.txt")
@@ -57,6 +57,7 @@ def run_inference_dadi(
     upper_bound=[1, 1, 1, 1],
     mutation_rate=1.26e-8,
     length=1e8,
+    top_values_k = 3
 ):
     """
     This should do the parameter inference for dadi
@@ -73,6 +74,7 @@ def run_inference_dadi(
     opt_params_dict_list = []
     model_list = []
     opt_theta_list = []
+    ll_list = []
 
     for i in np.arange(k):
 
@@ -84,7 +86,7 @@ def run_inference_dadi(
 
         # print(f'GUESS PARAMETER: {p_guess}')
 
-        opt_params = dadi.Inference.opt(
+        opt_params, ll_value = dadi.Inference.opt(
             p_guess,
             sfs,
             func_ex,
@@ -95,13 +97,19 @@ def run_inference_dadi(
             maxeval=10,
         )
 
-        opt_params = opt_params[0]
+        ll_list.append(ll_value)
+        opt_params_dict_list.append(opt_params)
 
-        print(f"OPT DADI PARAMETER: {opt_params}")
+    
+    # Now find the indices of the top top_k_values (those with the highest likelihood)
+    top_k_indices = np.argsort(ll_list)[-top_values_k:]
+    top_k_indices = np.array(top_k_indices, dtype=int)  # Convert to numpy integer array
 
-        end = time.time()
-        # print(f"Dadi optimization took {end - start} seconds")
-
+    opt_params_dict_list_top_values = [opt_params_dict_list[i] for i in top_k_indices]
+    opt_params_final_list = []
+    
+    for j in np.arange(top_values_k):
+        opt_params = opt_params_dict_list_top_values[j]
         model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
         opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
 
@@ -114,25 +122,15 @@ def run_inference_dadi(
                 "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
                 "t_bottleneck_end": opt_params[2] * 2 * N_ref,
             }
-        
-        elif demographic_model == "split_isolation_model":
-            N_ref = opt_theta / (4 * mutation_rate * length)
-            opt_params_dict = {
-                "N0": N_ref,
-                "N1": opt_params[0] * N_ref,
-                "N2": opt_params[1] * N_ref,
-                "t_split": opt_params[2] * 2 * N_ref,
-                "t_isolation_start": opt_params[3] * 2 * N_ref,
-                "t_isolation_end": opt_params[4] * 2 * N_ref
-            }
 
         model = model * opt_theta
 
         model_list.append(model)
         opt_theta_list.append(opt_theta)
-        opt_params_dict_list.append(opt_params_dict)
-    
-    return model_list, opt_theta_list, opt_params_dict_list
+        opt_params_final_list.append(opt_params_dict)
+
+    # print(f'Log Likelihood Values for Dadi: {ll_list}')
+    return model_list, opt_theta_list, opt_params_final_list, ll_list # ll_list is across all simulations
 
 
 def run_inference_moments(
@@ -145,11 +143,12 @@ def run_inference_moments(
     use_FIM=False,
     mutation_rate=1.26e-8,
     length=1e7,
+    top_values_k = 3
 ):
     """
     This should do the parameter inference for moments
     """
-
+    ll_list = []
     model_list = []
     opt_theta_list = []
     opt_params_dict_list = []
@@ -163,9 +162,7 @@ def run_inference_moments(
         if demographic_model == "bottleneck_model":
             model_func = moments.Demographics1D.three_epoch
 
-        start = time.time()
-
-        opt_params =opt(
+        opt_params, ll =opt(
             p_guess,
             sfs,
             model_func,
@@ -174,21 +171,29 @@ def run_inference_moments(
             log_opt=True, 
             algorithm=nlopt.LN_BOBYQA,
             maxeval=10
-        )[0] # I don't want the log likelihood. 
+        ) # I don't want the log likelihood. 
 
-        print(f"OPT MOMENTS PARAMETER: {opt_params}")
+        ll_list.append(ll)
+        opt_params_dict_list.append(opt_params)
 
+        # print(f"OPT MOMENTS PARAMETER: {opt_params}")
+    
+    # Now find the indices of the top top_k_values (those with the highest likelihood)
+    top_k_indices = np.array(np.argsort(ll_list)[-top_values_k:], dtype = int)    
+    
+    opt_params_dict_list_top_values = [opt_params_dict_list[i] for i in top_k_indices]
+    opt_params_final_list = []
+
+    for j in np.arange(top_values_k):
+        opt_params = opt_params_dict_list_top_values[j]
         model = model_func(opt_params, sfs.sample_sizes)
         opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
 
         N_ref = opt_theta / (4 * mutation_rate * length)
 
-        end = time.time()
-
         if use_FIM:
 
             # Let's extract the hessian
-            # H = moments.Godambe\.get_hess(func = model_func, p0 = opt_params, eps = 1e-6, args = (np.array(sfs.sample_sizes),))
             H = _get_godambe(
                 model_func,
                 all_boot=[],
@@ -229,9 +234,10 @@ def run_inference_moments(
 
         model_list.append(model)
         opt_theta_list.append(opt_theta)
-        opt_params_dict_list.append(opt_params_dict)
+        opt_params_final_list.append(opt_params_dict)
 
-    return model_list, opt_theta_list, opt_params_dict_list
+    # print(f'Log Likelihood Values for Moments: {ll_list}')
+    return model_list, opt_theta_list, opt_params_final_list, ll_list
 
 
 def run_inference_momentsLD(

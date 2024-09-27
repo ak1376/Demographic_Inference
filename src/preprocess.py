@@ -12,8 +12,6 @@ from src.parameter_inference import (
     run_inference_moments,
     run_inference_momentsLD,
 )
-import pandas as pd
-from scipy.stats import zscore
 
 def generate_window(ts, window_length, n_samples):
     start = np.random.randint(0, n_samples - window_length)
@@ -48,7 +46,6 @@ class Processor:
         experiment_directory,
         recombination_rate=1e-8,
         mutation_rate=1e-8,
-        window_length=1e6,
     ):
 
         self.experiment_config = experiment_config
@@ -237,7 +234,7 @@ class Processor:
 
             mega_result_dict = {"simulated_params": sampled_params, "sfs": sfs}
 
-            print(f'Simulation Time: {end - start}')
+            # print(f'Simulation Time: {end - start}')
 
             # Simulate process and save windows as VCF files
             if self.experiment_config["momentsLD_analysis"]:
@@ -247,7 +244,7 @@ class Processor:
 
             # Conditional analysis based on provided functions
             if self.experiment_config["dadi_analysis"]:
-                model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = (
+                model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi, ll_list_dadi = (
                     run_inference_dadi(
                         sfs,
                         p0= self.experiment_config['optimization_initial_guess'],
@@ -257,7 +254,8 @@ class Processor:
                         demographic_model=self.experiment_config['demographic_model'],
                         mutation_rate=self.mutation_rate,
                         length=self.L,
-                        k  = self.experiment_config['k']
+                        k  = self.experiment_config['k'], 
+                        top_values_k = self.experiment_config['top_values_k']
                     )
                 )
 
@@ -266,12 +264,13 @@ class Processor:
                     "model_sfs_dadi": model_sfs_dadi,
                     "opt_theta_dadi": opt_theta_dadi,
                     "opt_params_dadi": opt_params_dict_dadi,
+                    "ll_all_replicates_dadi": ll_list_dadi,
                 }
 
                 mega_result_dict.update(dadi_results)
 
             if self.experiment_config["moments_analysis"]:
-                model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
+                model_sfs_moments, opt_theta_moments, opt_params_dict_moments, ll_list_moments = (
                     run_inference_moments(
                         sfs,
                         p0=self.experiment_config['optimization_initial_guess'],
@@ -281,14 +280,17 @@ class Processor:
                         use_FIM=self.experiment_config["use_FIM"],
                         mutation_rate=self.mutation_rate,
                         length=self.L,
-                        k = self.experiment_config['k']
+                        k = self.experiment_config['k'],
+                        top_values_k=self.experiment_config['top_values_k']
                     )
                 )
+
 
                 moments_results = {
                     "model_sfs_moments": model_sfs_moments,
                     "opt_theta_moments": opt_theta_moments,
                     "opt_params_moments": opt_params_dict_moments,
+                    "ll_all_replicates_moments": ll_list_moments
                 }
 
                 mega_result_dict.update(moments_results)
@@ -329,6 +331,7 @@ class Processor:
         analysis_data = []
         upper_triangular_data = []
         targets_data = []
+        ll_values_data = []
 
         # Step 2: Dynamically extract and append data based on configuration
         for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
@@ -342,6 +345,7 @@ class Processor:
                     for index in np.arange(len(result[analysis_key])):
                         param_values = list(result[analysis_key][index].values())
                         target_values = list(result['simulated_params'].values())
+                        
 
                         if analysis_type == 'moments_analysis' and self.experiment_config.get('use_FIM', True):
                             # Extract and store the upper triangular FIM separately
@@ -352,15 +356,17 @@ class Processor:
                                 # Remove 'upper_triangular_FIM' from param_values if it was included
                                 # Assuming 'upper_triangular_FIM' is the last key in the dictionary
                                 param_values = [value for value in param_values if not isinstance(value, np.ndarray)]
-
-
+                        
                         # Append the processed param values to analysis_type_data
                         analysis_type_data.append(param_values)
                         targets_type_data.append(target_values)
+                    
+                    ll_values = result["ll_all_replicates_"+analysis_type.split('_')[0]]
 
                 # Add the collected parameter data (excluding FIM if stored separately) to analysis_data
                 analysis_data.append(analysis_type_data)
                 targets_data.append(targets_type_data)
+                ll_values_data.append(ll_values)
 
         # Step 3: Convert the collected data into NumPy arrays
         analysis_arrays = np.array(analysis_data)
@@ -388,79 +394,4 @@ class Processor:
         else:
             upper_triangular_array = None  # Handle case where FIM data does not exist
 
-
-        # if self.experiment_config['remove_outliers'] == True:
-        #     print("===> Removing outliers and imputing with median values.")
-
-        #     # NOW LET'S DO OUTLIER REMOVAL AND MEDIAN IMPUTATION. 
-            
-            
-        #     # Step 1: Reshape to (num_sims*num_reps, num_analyses*num_params)
-        #     reshaped = features.reshape(num_sims*num_reps, num_analyses*num_params)
-
-        #     # Step 2: Calculate Z-scores for the entire array
-        #     z_scores = np.abs(zscore(reshaped, axis=0))
-
-        #     # Define the threshold for outliers (Grubbs test Z-score = 3)
-        #     threshold = 3
-        #     outliers = z_scores > threshold
-
-        #     # Step 3: Replace outliers with the median of the non-outlier values
-        #     # Compute the median of the values that are not outliers
-        #     median_value = np.median(reshaped[~outliers])
-
-        #     # Replace outliers with the median
-        #     reshaped[outliers] = median_value
-
-        #     # Step 4: Reshape the data back to the original format
-        #     features = reshaped.reshape((num_sims, num_reps, num_analyses, num_params))
-
-        return features, targets, upper_triangular_array
-                
-        # normalized_targets = None
-        # normalized_features = None
-        
-        # if self.experiment_config['normalization'] == True:
-        #     print("===> Normalizing the data.")
-            
-        #     # Convert dict values to NumPy arrays for element-wise operations
-        #     upper_bound_values = np.array(list(self.experiment_config['upper_bound_params'].values()))
-        #     lower_bound_values = np.array(list(self.experiment_config['lower_bound_params'].values()))
-
-        #     # Calculate mean and standard deviation vectors
-        #     mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
-        #     std_vector = (upper_bound_values - lower_bound_values) / np.sqrt(12)  # Correct std deviation for uniform distribution
-
-        #     # Normalize the targets
-        #     normalized_targets = (targets - mean_vector) / (std_vector)
-
-        #     # NORMALIZE THE FEATURES TOO (FOR THE PREPROCESSING PLOTTING)
-        #     normalized_features = (features - mean_vector) / (std_vector)
-
-        #     # Check for zero values in the normalized targets
-        #     zero_target_indices = np.where(normalized_targets == 0)
-        #     if zero_target_indices[0].size > 0:  # If any zero values are found
-        #         print("Warning: Zero values found in the normalized targets!")
-        #         # Extract raw target values where normalized target values are 0
-        #         raw_target_values = targets[zero_target_indices]
-        #         print("Raw target values corresponding to zero normalized targets:", raw_target_values)
-
-        #         # Add 1 to the normalized targets that are zero
-        #         normalized_targets[zero_target_indices] += 1
-        #         print("Added 1 to zero normalized target values.")
-        #     else:
-        #         print("No zero values found in the normalized targets.")
-
-        #     # Check for zero values in the normalized features
-        #     zero_feature_indices = np.where(normalized_features == 0)
-        #     if zero_feature_indices[0].size > 0:  # If any zero values are found
-        #         print("Warning: Zero values found in the normalized features!")
-        #         # Extract raw feature values where normalized feature values are 0
-        #         raw_feature_values = features[zero_feature_indices]
-        #         print("Raw feature values corresponding to zero normalized features:", raw_feature_values)
-        #     else:
-        #         print("No zero values found in the normalized features.")                        
-       
-        # # Return features, targets, and upper triangular array (if exists)
-        # #TODO: Fix code in the case where experiment_config['normalization'] == False
-        # return features, normalized_features, targets, normalized_targets, upper_triangular_array
+        return features, targets, upper_triangular_array, ll_values_data

@@ -30,8 +30,8 @@ def obtain_features(
         experiment_config,
         experiment_directory = sim_directory,
         recombination_rate=experiment_config["recombination_rate"],
-        mutation_rate=experiment_config["mutation_rate"],
-        window_length=experiment_config["window_length"],
+        mutation_rate=experiment_config["mutation_rate"]
+        
     )
 
     # Now I want to define training, validation, and testing indices:
@@ -64,13 +64,14 @@ def obtain_features(
 
         # Call the remote function and get the ObjectRef
         print(f"Processing {stage} data")
-        features, targets, upper_triangle_features = processor.pretrain_processing(
+        features, targets, upper_triangle_features, ll_values_data = processor.pretrain_processing(
             indices
         )
 
         preprocessing_results_obj[stage]["predictions"] = features
         preprocessing_results_obj[stage]["targets"] = targets
         preprocessing_results_obj[stage]["upper_triangular_FIM"] = upper_triangle_features
+        preprocessing_results_obj[stage]["ll_values"] = ll_values_data
 
         features = features.reshape(features.shape[0], -1)
         print(f"Features shape: {features.shape}")
