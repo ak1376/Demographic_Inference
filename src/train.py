@@ -5,8 +5,11 @@ import torch
 from src.utils import visualizing_results, calculate_model_errors
 from pytorch_lightning.loggers import TensorBoardLogger
 
+
 class MLPTrainer:
-    def __init__(self, experiment_directory, model_config, color_shades, main_colors, param_names):
+    def __init__(
+        self, experiment_directory, model_config, color_shades, main_colors, param_names
+    ):
         self.experiment_directory = experiment_directory
         self.model_config = model_config
         self.color_shades = color_shades
@@ -15,16 +18,34 @@ class MLPTrainer:
 
     def train(self, model, X_train, y_train, X_val, y_val):
         # Prepare datasets and dataloaders
-        train_dataset = TensorDataset(torch.tensor(X_train, dtype=torch.float32), torch.tensor(y_train, dtype=torch.float32))
-        val_dataset = TensorDataset(torch.tensor(X_val, dtype=torch.float32), torch.tensor(y_val, dtype=torch.float32))
+        train_dataset = TensorDataset(
+            torch.tensor(X_train, dtype=torch.float32),
+            torch.tensor(y_train, dtype=torch.float32),
+        )
+        val_dataset = TensorDataset(
+            torch.tensor(X_val, dtype=torch.float32),
+            torch.tensor(y_val, dtype=torch.float32),
+        )
 
-        train_loader = DataLoader(train_dataset, batch_size=self.model_config['neural_net_hyperparameters']['batch_size'], shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=self.model_config['neural_net_hyperparameters']['batch_size'], shuffle=False)
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=self.model_config["neural_net_hyperparameters"]["batch_size"],
+            shuffle=True
+        )
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=self.model_config["neural_net_hyperparameters"]["batch_size"],
+            shuffle=False
+        )
 
         # Add early stopping callback if enabled
         callbacks = []
-        if self.model_config['neural_net_hyperparameters']['EarlyStopping']:
-            early_stopping = EarlyStopping(monitor='val_loss', patience=self.model_config['neural_net_hyperparameters']['patience'], mode='min')
+        if self.model_config["neural_net_hyperparameters"]["EarlyStopping"]:
+            early_stopping = EarlyStopping(
+                monitor="val_loss",
+                patience=self.model_config["neural_net_hyperparameters"]["patience"],
+                mode="min",
+            )
             callbacks.append(early_stopping)
 
         # Set up the logger
@@ -32,43 +53,60 @@ class MLPTrainer:
 
         # Instantiate the PyTorch Lightning Trainer
         trainer = Trainer(
-            logger = logger,
-            max_epochs=self.model_config['neural_net_hyperparameters']['num_epochs'],
+            logger=logger,
+            max_epochs=self.model_config["neural_net_hyperparameters"]["num_epochs"],
             callbacks=callbacks,
-            log_every_n_steps=10,
-            accelerator='gpu' if torch.cuda.is_available() else 'cpu',
+            # log_every_n_steps=10,
+            accelerator="gpu" if torch.cuda.is_available() else "cpu",
+            # enable_progress_bar=True,
+            enable_checkpointing=True,
+            devices = 3
         )
 
         # Train the model
         trainer.fit(model, train_loader, val_loader)
 
         # Store batch losses
-        self.train_losses_per_batch = model.train_losses_per_batch
-        self.val_losses_per_batch = model.val_losses_per_batch
+        self.train_losses_per_epoch = model.train_losses_per_epoch
+        self.val_losses_per_epoch = model.val_losses_per_epoch
 
-        return model, self.train_losses_per_batch, self.val_losses_per_batch
+        model.num_params = len(self.param_names)
 
-    def predict(self, model, training_data, validation_data, training_targets, validation_targets, visualize=True):
+        return model, self.train_losses_per_epoch, self.val_losses_per_epoch
+
+    def predict(
+        self,
+        model,
+        training_data,
+        validation_data,
+        training_targets,
+        validation_targets,
+        visualize=True,
+    ):
         # Convert data to tensors
         training_features = torch.tensor(training_data, dtype=torch.float32).cuda()
         validation_features = torch.tensor(validation_data, dtype=torch.float32).cuda()
 
         # Predictions
-        training_predictions = model.predict_from_trained_network(training_features, eval_mode=False)
-        validation_predictions = model.predict_from_trained_network(validation_features, eval_mode=True)
+        training_predictions = model.predict_from_trained_network(
+            training_features, eval_mode=False
+        )
+        validation_predictions = model.predict_from_trained_network(
+            validation_features, eval_mode=True
+        )
 
         # Prepare the result object
         snn_mdl_obj = {
             "training": {
                 "predictions": training_predictions,
-                "targets": training_targets
+                "targets": training_targets,
             },
             "validation": {
                 "predictions": validation_predictions,
-                "targets": validation_targets
+                "targets": validation_targets,
             },
             "param_names": self.param_names,
-            "num_params": model.num_params
+            "num_params": model.num_params,
         }
 
         if visualize:
@@ -78,10 +116,12 @@ class MLPTrainer:
                 save_loc=self.experiment_directory,
                 stages=["training", "validation"],
                 color_shades=self.color_shades,
-                main_colors=self.main_colors
+                main_colors=self.main_colors,
             )
 
-        model_error = calculate_model_errors(snn_mdl_obj, "snn", datasets=["training", "validation"])
+        model_error = calculate_model_errors(
+            snn_mdl_obj, "snn", datasets=["training", "validation"]
+        )
 
         # Save results to a text file
         with open(f"{self.experiment_directory}/MLP_model_error.txt", "w") as f:
@@ -91,11 +131,6 @@ class MLPTrainer:
                     f.write(f"  {dataset.capitalize()} RMSE: {error:.4f}\n")
 
         return snn_mdl_obj
-
-
-
-
-
 
 
 # from src.utils import visualizing_results, calculate_model_errors, plot_loss_curves
@@ -124,7 +159,7 @@ class MLPTrainer:
 #         self.main_colors = main_colors
 #         self.param_names = param_names
 
-        
+
 #     def train(
 #         self,
 #         model,
@@ -144,7 +179,7 @@ class MLPTrainer:
 
 #         criterion = nn.MSELoss()
 #         optimizer = Adam(
-#             model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay 
+#             model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
 #         )
 
 #         # Convert training and validation data into PyTorch tensors
@@ -182,7 +217,7 @@ class MLPTrainer:
 
 #                 scaler.step(optimizer)
 #                 scaler.update()
-                
+
 #                 # Accumulate training loss for the epoch
 #                 epoch_train_loss += train_loss.item()
 
@@ -231,10 +266,10 @@ class MLPTrainer:
 #         print("Neural Network trained LFG")
 #         writer.close()
 
-        
+
 #         plot_loss_curves(train_losses, val_losses, f'{self.experiment_directory}/loss_curves.png')
 
-#         return model, train_losses, val_losses    
+#         return model, train_losses, val_losses
 
 #     def predict_from_trained_network(self, model, X, eval_mode = False):
 #         """
@@ -262,7 +297,7 @@ class MLPTrainer:
 #             # print(predictions)
 
 #         return predictions.cpu().numpy()
-    
+
 #     def predict(
 #         self,
 #         snn_model,
@@ -272,7 +307,7 @@ class MLPTrainer:
 #         validation_targets,
 #         visualize=True,
 #     ):
-        
+
 #         training_features = torch.tensor(training_data, dtype = torch.float32).cuda()
 #         validation_features = torch.tensor(validation_data, dtype = torch.float32).cuda()
 
@@ -299,7 +334,7 @@ class MLPTrainer:
 #                 "snn_results",
 #                 save_loc=self.experiment_directory,
 #                 stages=["training", "validation"],
-#                 color_shades=self.color_shades, 
+#                 color_shades=self.color_shades,
 #                 main_colors=self.main_colors
 #             )
 

@@ -269,6 +269,8 @@ class Processor:
 
                 mega_result_dict.update(dadi_results)
 
+                # print(dadi_results['ll_all_replicates_dadi'])
+
             if self.experiment_config["moments_analysis"]:
                 model_sfs_moments, opt_theta_moments, opt_params_dict_moments, ll_list_moments = (
                     run_inference_moments(
@@ -331,7 +333,8 @@ class Processor:
         analysis_data = []
         upper_triangular_data = []
         targets_data = []
-        ll_values_data = []
+        ll_data = []
+        
 
         # Step 2: Dynamically extract and append data based on configuration
         for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
@@ -341,12 +344,13 @@ class Processor:
 
                 analysis_type_data = []
                 targets_type_data = []
+                ll_values_data = []
                 for result in list_of_mega_result_dicts:
-                    for index in np.arange(len(result[analysis_key])):
+                    ll_values = result["ll_all_replicates_"+analysis_type.split('_')[0]]
+                    for index in np.arange(len(result[analysis_key])): # this iterates over the demographic parameters
                         param_values = list(result[analysis_key][index].values())
                         target_values = list(result['simulated_params'].values())
-                        
-
+                    
                         if analysis_type == 'moments_analysis' and self.experiment_config.get('use_FIM', True):
                             # Extract and store the upper triangular FIM separately
                             upper_triangular = result['opt_params_moments'][index].get('upper_triangular_FIM', None)
@@ -361,16 +365,18 @@ class Processor:
                         analysis_type_data.append(param_values)
                         targets_type_data.append(target_values)
                     
-                    ll_values = result["ll_all_replicates_"+analysis_type.split('_')[0]]
+                    ll_values_data.append(ll_values)
 
+                
                 # Add the collected parameter data (excluding FIM if stored separately) to analysis_data
                 analysis_data.append(analysis_type_data)
                 targets_data.append(targets_type_data)
-                ll_values_data.append(ll_values)
 
         # Step 3: Convert the collected data into NumPy arrays
         analysis_arrays = np.array(analysis_data)
         targets_arrays = np.array(targets_data)
+        
+        ll_data = np.array(ll_values_data)
 
         # Now we need to transpose it to get the shape (num_sims*k, num_analyses, num_params)
 
@@ -394,4 +400,4 @@ class Processor:
         else:
             upper_triangular_array = None  # Handle case where FIM data does not exist
 
-        return features, targets, upper_triangular_array, ll_values_data
+        return features, targets, upper_triangular_array, ll_data

@@ -62,84 +62,102 @@ class XGBoost:
     def __init__(
         self,
         objective="reg:squarederror",
-        n_estimators=100,
-        learning_rate=0.1,
-        max_depth=5,
+        n_estimators=200,  # Increased for smaller learning rate
+        learning_rate=0.05,  # Reduced to prevent overfitting
+        max_depth=3,  # Reduced for simpler trees
         verbosity=2,
+        alpha=0.01,  # L1 regularization
+        lambd=1,  # L2 regularization (lambda is a reserved keyword, hence using lambd)
+        subsample=0.8,  # Row subsampling to prevent overfitting
+        colsample_bytree=0.8,  # Column subsampling to prevent overfitting
+        min_child_weight=5,  # More conservative learning
         train_percentage=0.8,
-        loo=None,
     ):
-
         self.objective = objective
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
         self.max_depth = max_depth
         self.verbosity = verbosity
+        self.alpha = alpha
+        self.lambd = lambd
+        self.subsample = subsample
+        self.colsample_bytree = colsample_bytree
+        self.min_child_weight = min_child_weight
         self.train_percentage = train_percentage
-        self.loo = loo
-
-        # Initialize XGBoost model
-        xgb_model = xgb.XGBRegressor(
-            objective=self.objective,
-            n_estimators=self.n_estimators,
-            learning_rate=self.learning_rate,
-            max_depth=self.max_depth,
-            verbosity=self.verbosity,
-        )
-        # Wrap the XGBoost model with MultiOutputRegressor
-        multi_output_model = MultiOutputRegressor(xgb_model)
-
-        self.xgb_model = multi_output_model
+        self.models = []  # To store the individual XGBRegressor models for each target
+        self.eval_results = []  # To store evaluation results for each target
 
     def train_and_validate(
-        self, X_train, y_train, X_test=None, y_test=None, cross_val=False
+        self, X_train, y_train, X_test=None, y_test=None
     ):
         """
-        Train the model
+        Train the model and track training/validation losses per epoch.
         """
-        if cross_val:
-            # Check that X_test and y_test are not None
-            if X_test is not None and y_test is not None:
-                features = np.concatenate([X_train, X_test], axis=0)
-                targets = np.concatenate([y_train, y_test], axis=0)
+        # Ensure that test data is provided
+        if X_test is None or y_test is None:
+            raise ValueError("X_test and y_test must be provided")
 
-            scores = cross_val_score(
-                self.xgb_model,
+        # Clear previous models and evaluation results
+        self.models = []
+        self.eval_results = []
+
+        # Train one XGBRegressor for each target (each column in y_train/y_test)
+        for i in range(y_train.shape[1]):
+            estimator = xgb.XGBRegressor(
+                objective=self.objective,
+                n_estimators=self.n_estimators,
+                learning_rate=self.learning_rate,
+                max_depth=self.max_depth,
+                verbosity=self.verbosity,
+                alpha=self.alpha,  # L1 regularization
+                lambd=self.lambd,  # L2 regularization (lambda)
+                subsample=self.subsample,  # Row subsampling
+                colsample_bytree=self.colsample_bytree,  # Column subsampling
+                min_child_weight=self.min_child_weight,  # Minimum child weight
+                eval_metric="rmse"  # Metric for evaluation
+            )
+            
+            # Fit one target at a time
+            estimator.fit(
                 X_train,
-                y_train,
-                cv=self.loo,
-                scoring="neg_mean_squared_error",
-            )
-            predictions = cross_val_predict(
-                self.xgb_model, features, targets, cv=self.loo
+                y_train[:, i],
+                eval_set=[(X_train, y_train[:, i]), (X_test, y_test[:, i])],
+                verbose=True  # Set to True if you want to see training progress
             )
 
-            return (
-                scores.mean(),
-                predictions,
-                None,
-            )  # Return the mean cross-validation score
+            # Store the model and its eval results
+            self.models.append(estimator)
+            self.eval_results.append(estimator.evals_result())
 
+        # Make predictions on both train and test data
+        y_pred_train = np.column_stack([model.predict(X_train) for model in self.models])
+        y_pred_test = np.column_stack([model.predict(X_test) for model in self.models])
+
+        # Calculate training and validation errors
+        train_error = root_mean_squared_error(y_train, y_pred_train)
+        validation_error = root_mean_squared_error(y_test, y_pred_test)
+
+        return train_error, validation_error, y_pred_train, y_pred_test
+
+    def get_epoch_losses(self):
+        """
+        Get training and validation losses for each epoch.
+        Returns two lists: training losses and validation losses for each output regressor.
+        """
+        if self.eval_results:
+            train_losses_per_target = []
+            val_losses_per_target = []
+
+            # Extract RMSE values for each target's model
+            for result in self.eval_results:
+                train_losses = result['validation_0']['rmse']
+                val_losses = result['validation_1']['rmse']
+                train_losses_per_target.append(train_losses)
+                val_losses_per_target.append(val_losses)
+
+            return train_losses_per_target, val_losses_per_target
         else:
-            if X_test is None or y_test is None:
-                raise ValueError(
-                    "X_test and y_test must be provided if cross_val is False"
-                )
-
-            # Train the model on the training data
-            self.xgb_model.fit(X_train, y_train)
-
-            # Make predictions on the test data
-            y_pred_test = self.xgb_model.predict(X_test)
-
-            # Calculate training and validation errors
-            train_error = root_mean_squared_error(
-                y_train, self.xgb_model.predict(X_train)
-            )
-            validation_error = root_mean_squared_error(y_test, y_pred_test)
-
-            return train_error, validation_error, y_pred_test
-
+            raise ValueError("No evaluation results available. Train the model first.")        
 
 # Hook function to inspect BatchNorm outputs
 def inspect_batchnorm_output(module, input, output):
@@ -148,31 +166,22 @@ def inspect_batchnorm_output(module, input, output):
 
 
 class ShallowNN(pl.LightningModule):
-    def __init__(
-        self,
-        input_size,
-        hidden_sizes,  # Can be an integer or a list of hidden layer sizes
-        num_layers,
-        output_size,
-        learning_rate=1e-3,
-        weight_decay=1e-4,
-        dropout_rate=0.1,
-        BatchNorm=False,
-    ):
+    def __init__(self, input_size, hidden_sizes, num_layers, output_size, 
+                 learning_rate=1e-3, weight_decay=1e-4, dropout_rate=0.1, BatchNorm=False):
         super(ShallowNN, self).__init__()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.dropout_rate = dropout_rate
 
-        # For storing losses
-        self.train_losses_per_batch = []
-        self.val_losses_per_batch = []
+        # Initialize lists to store epoch losses
+        self.train_losses_per_epoch = []
+        self.val_losses_per_epoch = []
 
         layers = []
 
-        # Check if hidden_sizes is an integer, if so, use num_layers
+        # Check if hidden_sizes is an integer, if so, create a list
         if isinstance(hidden_sizes, int):
-            hidden_sizes = [hidden_sizes] * num_layers  # Create a list with num_layers entries
+            hidden_sizes = [hidden_sizes] * num_layers
 
         # First layer (input to first hidden layer)
         layers.append(nn.Linear(input_size, hidden_sizes[0]))
@@ -181,32 +190,22 @@ class ShallowNN(pl.LightningModule):
         layers.append(nn.ReLU())
         layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
 
-        # Hidden layers (loop through to add layers dynamically)
+        # Hidden layers
         for i in range(1, len(hidden_sizes)):
-            layers.append(nn.Linear(hidden_sizes[i-1], hidden_sizes[i]))
+            layers.append(nn.Linear(hidden_sizes[i - 1], hidden_sizes[i]))
             if BatchNorm:
                 layers.append(nn.BatchNorm1d(hidden_sizes[i]))  # Add BatchNorm
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
 
-        # Output layer (no dropout after the output layer)
+        # Output layer
         layers.append(nn.Linear(hidden_sizes[-1], output_size))
 
         # Combine the layers into a sequential container
         self.network = nn.Sequential(*layers)
 
-        # Calculate the number of trainable parameters
-        self.num_params = sum(p.numel() for p in self.network.parameters() if p.requires_grad)
-        print("================================================")
-        print(f"Number of trainable parameters: {self.num_params}")
-        print("================================================")
-
         # Loss function
         self.criterion = nn.MSELoss()
-
-        # Metrics
-        self.train_mse = MeanSquaredError()
-        self.val_mse = MeanSquaredError()
 
     def forward(self, x):
         return self.network(x)
@@ -215,12 +214,9 @@ class ShallowNN(pl.LightningModule):
         X, y = batch
         preds = self(X)
         loss = self.criterion(preds, y)
-        mse = self.train_mse(preds, y)
-        self.log("train_loss", loss, prog_bar=True)
-        self.log("train_mse", mse, prog_bar=True)
 
-        # Store train loss for this batch
-        self.train_losses_per_batch.append(loss.item())
+        # Log the training loss per batch without adding to progress bar
+        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
 
         return loss
 
@@ -228,14 +224,40 @@ class ShallowNN(pl.LightningModule):
         X, y = batch
         preds = self(X)
         val_loss = self.criterion(preds, y)
-        val_mse = self.val_mse(preds, y)
-        self.log("val_loss", val_loss, prog_bar=True)
-        self.log("val_mse", val_mse, prog_bar=True)
 
-        # Store validation loss for this batch
-        self.val_losses_per_batch.append(val_loss.item())
-        
+        # Log the validation loss per batch without adding to progress bar
+        self.log('val_loss', val_loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+
         return val_loss
+
+    def on_validation_epoch_end(self):
+        # Retrieve the average training loss for the epoch
+        avg_train_loss = self.trainer.callback_metrics.get('train_loss', None)
+        # Retrieve the average validation loss for the epoch
+        avg_val_loss = self.trainer.callback_metrics.get('val_loss', None)
+
+        # Log the training loss to the progress bar first
+        if avg_train_loss is not None:
+            self.log('train_loss_epoch', avg_train_loss, prog_bar=True, logger=False, sync_dist=True)
+
+        # Then log the validation loss to the progress bar
+        if avg_val_loss is not None:
+            self.log('val_loss_epoch', avg_val_loss, prog_bar=True, logger=False, sync_dist=True)
+
+        # Update your own lists if needed
+        if avg_train_loss is not None:
+            self.train_losses_per_epoch.append(avg_train_loss.item())
+        if avg_val_loss is not None:
+            self.val_losses_per_epoch.append(avg_val_loss.item())
+
+        # Print losses if you wish
+        # current_epoch = self.trainer.current_epoch
+        # if avg_train_loss is not None and avg_val_loss is not None:
+        #     print(f"Epoch {current_epoch}: Train Loss: {avg_train_loss:.4f} | Validation Loss: {avg_val_loss:.4f}")
+        # elif avg_val_loss is not None:
+        #     print(f"Epoch {current_epoch}: Validation Loss: {avg_val_loss:.4f}")
+        # else:
+        #     print(f"Epoch {current_epoch}: No losses logged yet.")
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)

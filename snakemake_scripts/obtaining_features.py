@@ -74,7 +74,7 @@ def obtain_features(
         preprocessing_results_obj[stage]["ll_values"] = ll_values_data
 
         features = features.reshape(features.shape[0], -1)
-        print(f"Features shape: {features.shape}")
+        # print(f"Features shape: {features.shape}")
 
         # Concatenate the features and upper triangle features column-wise
 

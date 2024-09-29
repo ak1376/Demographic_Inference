@@ -1,0 +1,21 @@
+{
+    "xgb_hyperparameters": {
+        "n_estimators": 200,
+        "learning_rate": 0.05,
+        "max_depth": 3,
+        "verbosity": 2,
+        "train_percentage": 0.8,
+        "alpha": 0.1,
+        "lambda": 1,
+        "min_child_weight": 5,
+        "colsample_bytree": 0.8,
+        "subsample": 0.8,
+        "parameter_names": [
+            "N0",
+            "Nb",
+            "N_recover",
+            "t_bottleneck_start",
+            "t_bottleneck_end"
+        ]
+    }
+}

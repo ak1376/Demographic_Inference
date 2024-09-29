@@ -45,7 +45,7 @@ def visualizing_results(
             plt.scatter(
                 targets_flat,
                 predictions_flat,
-                alpha=0.5,
+                alpha=0.2,
                 color=color_shades[main_colors[i % len(main_colors)]][j],  # type: ignore
                 label=f"{stage.capitalize()}",
             )
@@ -102,8 +102,6 @@ def calculate_model_errors(model_obj, model_name, datasets):
     errors = {}
 
     for dataset in datasets:
-        print(f'Dataset : {dataset}, max predicted value: {np.max(model_obj[dataset]["predictions"])}, min predicted value: {np.min(model_obj[dataset]["predictions"])}')
-        print(f'Dataset : {dataset}, max target value: {np.max(model_obj[dataset]["targets"])}, min target value: {np.min(model_obj[dataset]["targets"])}')
         errors[dataset] = root_mean_squared_error(
             model_obj[dataset]["targets"],
             model_obj[dataset][
@@ -113,62 +111,22 @@ def calculate_model_errors(model_obj, model_name, datasets):
     return {model_name: errors}
 
 
-# def calculate_and_save_rrmse(
-#     analysis_obj,
-#     save_path
-# ):
-
-#     rrmse_dict = {}
-
-#     rrmse_training = root_mean_squared_error(
-#         y_true =  analysis_obj['training']['targets'], y_pred = analysis_obj['training']['predictions']
-#     )
-#     rrmse_validation = root_mean_squared_error(
-#         y_true = analysis_obj['validation']['targets'], y_pred = analysis_obj['validation']['predictions']
-#     )
-
-#     rrmse_testing = root_mean_squared_error(
-#         y_true = analysis_obj['testing']['targets'], y_pred = analysis_obj['testing']['predictions']
-#     )
-    
-
-    rrmse_dict["training"] = rrmse_training
-    rrmse_dict["validation"] = rrmse_validation
-    rrmse_dict["testing"] = rrmse_testing
-
-    # Save rrmse_dict to a JSON file
-    with open(save_path, "w") as json_file:
-        json.dump(rrmse_dict, json_file, indent=4)
-
-    return rrmse_dict
-
 def root_mean_squared_error(y_true, y_pred):
 
     # Ensure y_true and y_pred have the same shape
-    assert (
-        y_true.shape == y_pred.shape
-    ), "Shapes of y_true and y_pred must match after processing"
+    assert y_true.shape == y_pred.shape, "Shapes of y_true and y_pred must match"
 
-    try:
-        # Check if there are any zero values in y_true to prevent division by zero
-        if np.any(y_true == 0):
-            # Find the indices where y_true is zero
-            zero_indices = np.where(y_true == 0)
-            print(f"Offending values in y_true causing division by zero: {y_true[zero_indices]}")
-            print(f"Corresponding y_pred values: {y_pred[zero_indices]}")
-            raise ValueError("Division by zero encountered in y_true.")
-        
-        relative_error = (y_pred - y_true) / y_true
-        squared_relative_error = np.square(relative_error)
-        rrmse_value = np.sqrt(np.mean(np.sum(squared_relative_error, axis=1)))
+    # Check for zeros in y_true to avoid division by zero
+    if np.any(y_true == 0):
+        zero_indices = np.where(y_true == 0)
+        raise ValueError(f"Division by zero encountered in y_true at indices {zero_indices}")
 
-    except Exception as e:
-        print(f"Error encountered: {e}")
-        # Optional: Save error details to a log file
-        with open('error_log.txt', 'a') as log_file:
-            log_file.write(f"Error encountered: {e}\n")
-            log_file.write(f"Offending values in y_true: {y_true[zero_indices]}\n")
-            log_file.write(f"Corresponding values in y_pred: {y_pred[zero_indices]}\n")
+    # Compute relative error
+    relative_error = (y_pred - y_true) / y_true
+    squared_relative_error = np.square(relative_error)
+    
+    # Take mean over all parameters
+    rrmse_value = np.sqrt(np.mean(squared_relative_error))
     
     return rrmse_value
 
@@ -246,6 +204,7 @@ def create_color_scheme(num_params):
     return color_shades, main_colors
 
 def plot_loss_curves(train_losses, val_losses, save_path):
+
     plt.figure(figsize=(10, 6))
     plt.plot(train_losses, label="Train Loss", color="blue", linewidth=2)
     plt.plot(val_losses, label="Validation Loss", color="red", linewidth=2)

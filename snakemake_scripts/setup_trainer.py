@@ -64,6 +64,7 @@ def main(
         y_val = features["validation"]["targets"],
     )
 
+
     snn_results = trainer.predict(
         model=snn_model,
         training_data=features["training"]["features"],
