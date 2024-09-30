@@ -1,15 +1,13 @@
-from sklearn.multioutput import MultiOutputRegressor
 import xgboost as xgb
 import numpy as np
 from src.utils import root_mean_squared_error
-
 import torch
 import torch.nn as nn
 from torch.optim.adam import Adam
-from sklearn.model_selection import cross_val_score, cross_val_predict
 from sklearn.linear_model import LinearRegression
 import pytorch_lightning as pl
-from torchmetrics import MeanSquaredError
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 
 class LinearReg:
     def __init__(self, training_features, training_targets, validation_features, validation_targets):
@@ -260,8 +258,11 @@ class ShallowNN(pl.LightningModule):
         #     print(f"Epoch {current_epoch}: No losses logged yet.")
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-
+        optimizer = Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        # scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
+        # Return both optimizer and scheduler
+        return optimizer
+    
     def predict_from_trained_network(self, X, eval_mode=False):
         if eval_mode:
             self.eval()
