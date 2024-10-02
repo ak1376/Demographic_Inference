@@ -112,24 +112,30 @@ def calculate_model_errors(model_obj, model_name, datasets):
 
 
 def root_mean_squared_error(y_true, y_pred):
+    """
+    Compute the relative root mean squared error (RRMSE) for each row and average the results.
+    This version uses vectorized NumPy operations for efficiency.
+
+    Parameters:
+    y_true (np.ndarray): Ground truth values (2D array, with rows representing different samples).
+    y_pred (np.ndarray): Predicted values (2D array, with rows representing different samples).
+
+    Returns:
+    float: The average RRMSE across all rows.
+    """
 
     # Ensure y_true and y_pred have the same shape
     assert y_true.shape == y_pred.shape, "Shapes of y_true and y_pred must match"
 
-    # Check for zeros in y_true to avoid division by zero
-    if np.any(y_true == 0):
-        zero_indices = np.where(y_true == 0)
-        raise ValueError(f"Division by zero encountered in y_true at indices {zero_indices}")
-
-    # Compute relative error
+    # Compute relative error for all rows at once
     relative_error = (y_pred - y_true) / y_true
     squared_relative_error = np.square(relative_error)
-    
-    # Take mean over all parameters
-    rrmse_value = np.sqrt(np.mean(squared_relative_error))
-    
-    return rrmse_value
 
+    # Compute RRMSE for each row by summing squared errors along columns (axis=1)
+    rrmse_per_row = np.sqrt(np.sum(squared_relative_error, axis=1))
+
+    # Return the average RRMSE across rows
+    return np.mean(rrmse_per_row)
 
 def save_windows_to_vcf(windows, prefix="window"):
     """

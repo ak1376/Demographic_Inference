@@ -163,51 +163,9 @@ def inspect_batchnorm_output(module, input, output):
     print(f"BatchNorm Output Variance: {output.var().item()}")
 
 
-# class ShallowNN(pl.LightningModule):
-#     def __init__(self, input_size, hidden_sizes, num_layers, output_size, 
-#                  learning_rate=1e-3, weight_decay=1e-4, dropout_rate=0.1, BatchNorm=False):
-#         super(ShallowNN, self).__init__()
-#         self.learning_rate = learning_rate
-#         self.weight_decay = weight_decay
-#         self.dropout_rate = dropout_rate
-
-#         # Initialize lists to store epoch losses
-#         self.train_losses_per_epoch = []
-#         self.val_losses_per_epoch = []
-
-#         layers = []
-
-#         # Check if hidden_sizes is an integer, if so, create a list
-#         if isinstance(hidden_sizes, int):
-#             hidden_sizes = [hidden_sizes] * num_layers
-
-#         # First layer (input to first hidden layer)
-#         layers.append(nn.Linear(input_size, hidden_sizes[0]))
-#         if BatchNorm:
-#             layers.append(nn.BatchNorm1d(hidden_sizes[0]))  # Add BatchNorm
-#         layers.append(nn.ELU())
-#         layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
-
-#         # Hidden layers
-#         for i in range(1, len(hidden_sizes)):
-#             layers.append(nn.Linear(hidden_sizes[i - 1], hidden_sizes[i]))
-#             if BatchNorm:
-#                 layers.append(nn.BatchNorm1d(hidden_sizes[i]))  # Add BatchNorm
-#             layers.append(nn.ELU())
-#             layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
-
-#         # Output layer
-#         layers.append(nn.Linear(hidden_sizes[-1], output_size))
-
-#         # Combine the layers into a sequential container
-#         self.network = nn.Sequential(*layers)
-
-#         # Loss function
-#         self.criterion = nn.MSELoss()
-
 class ShallowNN(pl.LightningModule):
     def __init__(self, input_size, hidden_sizes, num_layers, output_size, 
-                 learning_rate=1e-3, weight_decay=1e-4, dropout_rate=0.25, BatchNorm=True):
+                 learning_rate=1e-3, weight_decay=1e-4, dropout_rate=0.1, BatchNorm=False):
         super(ShallowNN, self).__init__()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -223,22 +181,20 @@ class ShallowNN(pl.LightningModule):
         if isinstance(hidden_sizes, int):
             hidden_sizes = [hidden_sizes] * num_layers
 
-        # BatchNorm as the very first layer
-        if BatchNorm:
-            layers.append(nn.BatchNorm1d(input_size))  # Apply BatchNorm on the input
-
-        # First dense layer (input to first hidden layer)
+        # First layer (input to first hidden layer)
         layers.append(nn.Linear(input_size, hidden_sizes[0]))
-        layers.append(nn.ELU())  # Activation
+        if BatchNorm:
+            layers.append(nn.BatchNorm1d(hidden_sizes[0]))  # Add BatchNorm
+        layers.append(nn.ELU())
+        layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
 
         # Hidden layers
         for i in range(1, len(hidden_sizes)):
             layers.append(nn.Linear(hidden_sizes[i - 1], hidden_sizes[i]))
-            layers.append(nn.ELU())  # Activation
-
-            # Dropout right after the middle layer
-            if i == len(hidden_sizes) // 2:  # Dropout after the middle layer
-                layers.append(nn.Dropout(self.dropout_rate))
+            if BatchNorm:
+                layers.append(nn.BatchNorm1d(hidden_sizes[i]))  # Add BatchNorm
+            layers.append(nn.ELU())
+            layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
 
         # Output layer
         layers.append(nn.Linear(hidden_sizes[-1], output_size))
