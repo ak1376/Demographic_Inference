@@ -24,6 +24,8 @@ def linear_evaluation(features_and_targets_filepath, model_directory, experiment
         linear_mdl.train_and_validate()
     )
 
+    print(f'PREDICTIONS SHAPE TRAINING: {training_predictions.shape}')
+
 
 
     linear_mdl_obj = linear_mdl.organizing_results(

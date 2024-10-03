@@ -185,7 +185,7 @@ class ShallowNN(pl.LightningModule):
         layers.append(nn.Linear(input_size, hidden_sizes[0]))
         if BatchNorm:
             layers.append(nn.BatchNorm1d(hidden_sizes[0]))  # Add BatchNorm
-        layers.append(nn.ELU())
+        layers.append(nn.ReLU())
         layers.append(nn.Dropout(dropout_rate))  # Dropout after the first layer
 
         # Hidden layers
@@ -193,7 +193,7 @@ class ShallowNN(pl.LightningModule):
             layers.append(nn.Linear(hidden_sizes[i - 1], hidden_sizes[i]))
             if BatchNorm:
                 layers.append(nn.BatchNorm1d(hidden_sizes[i]))  # Add BatchNorm
-            layers.append(nn.ELU())
+            layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout_rate))  # Dropout after each hidden layer
 
         # Output layer

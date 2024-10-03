@@ -128,6 +128,7 @@ class Processor:
         return samples_file, flat_map_file
 
     def sample_params(self):
+        np.random.seed(self.experiment_config['seed'])
         sampled_params = {}
         for key in self.lower_bound_params:
             lower_bound = self.lower_bound_params[key]
@@ -168,7 +169,7 @@ class Processor:
                 demography=demog,
                 sequence_length=self.L,
                 recombination_rate=self.recombination_rate,
-                random_seed=295,
+                random_seed=self.experiment_config['seed'],
             )
             ts = msprime.sim_mutations(ts, rate=mutation_rate)
             
@@ -180,8 +181,6 @@ class Processor:
 
             sfs = moments.Spectrum(sfs)
 
-            
-            
         elif mode == "inference":
             vcf_file = kwargs.get("vcf_file", None)
             pop_file = kwargs.get("pop_file", None)
@@ -197,9 +196,10 @@ class Processor:
                 dd, [popname], projections=[2 * num_samples], polarized=True
             )
 
+        
         return sfs
 
-    def pretrain_processing(self, indices_of_interest):
+    def pretrain_processing(self):
         """
         This really should be subdivided into more functions so that when we do inference I can separately call the helper functions.
         """
@@ -213,121 +213,120 @@ class Processor:
 
         list_of_mega_result_dicts = []
 
-        for i in tqdm(range(len(indices_of_interest))):
-            mega_result_dict = (
-                {}
-            )  # This will store all the results (downstream postprocessing) later
+        mega_result_dict = (
+            {}
+        )  # This will store all the results (downstream postprocessing) later
 
-            sampled_params = self.sample_params()
+        sampled_params = self.sample_params()
 
-            start = time.time()
-            sfs = self.create_SFS(
-                sampled_params,
-                mode="pretrain",
-                num_samples=self.num_samples,
-                demographic_model=demographic_model_simulation,
-                length=self.L,
-                mutation_rate=self.mutation_rate,
+        start = time.time()
+        sfs = self.create_SFS(
+            sampled_params,
+            mode="pretrain",
+            num_samples=self.num_samples,
+            demographic_model=demographic_model_simulation,
+            length=self.L,
+            mutation_rate=self.mutation_rate,
+        )
+
+        end = time.time()
+
+        mega_result_dict = {"simulated_params": sampled_params, "sfs": sfs}
+
+        # print(f'Simulation Time: {end - start}')
+
+        # Simulate process and save windows as VCF files
+        if self.experiment_config["momentsLD_analysis"]:
+            g = demographic_model_simulation(sampled_params)
+            self.run_msprime_replicates(g)
+            samples_file, flat_map_file = self.write_samples_and_rec_map()
+
+        # Conditional analysis based on provided functions
+        if self.experiment_config["dadi_analysis"]:
+            model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi, ll_list_dadi = (
+                run_inference_dadi(
+                    sfs,
+                    p0= self.experiment_config['optimization_initial_guess'],
+                    lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) - 1),
+                    upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
+                    num_samples=100, #TODO: Need to change this to not rely on a hardcoded value
+                    demographic_model=self.experiment_config['demographic_model'],
+                    mutation_rate=self.mutation_rate,
+                    length=self.L,
+                    k  = self.experiment_config['k'], 
+                    top_values_k = self.experiment_config['top_values_k']
+                )
             )
 
-            end = time.time()
 
-            mega_result_dict = {"simulated_params": sampled_params, "sfs": sfs}
+            dadi_results = {
+                "model_sfs_dadi": model_sfs_dadi,
+                "opt_theta_dadi": opt_theta_dadi,
+                "opt_params_dadi": opt_params_dict_dadi,
+                "ll_all_replicates_dadi": ll_list_dadi,
+            }
 
-            # print(f'Simulation Time: {end - start}')
+            mega_result_dict.update(dadi_results)
 
-            # Simulate process and save windows as VCF files
-            if self.experiment_config["momentsLD_analysis"]:
-                g = demographic_model_simulation(sampled_params)
-                self.run_msprime_replicates(g)
-                samples_file, flat_map_file = self.write_samples_and_rec_map()
+            # print(dadi_results['ll_all_replicates_dadi'])
 
-            # Conditional analysis based on provided functions
-            if self.experiment_config["dadi_analysis"]:
-                model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi, ll_list_dadi = (
-                    run_inference_dadi(
-                        sfs,
-                        p0= self.experiment_config['optimization_initial_guess'],
-                        lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) - 1),
-                        upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
-                        num_samples=100, #TODO: Need to change this to not rely on a hardcoded value
-                        demographic_model=self.experiment_config['demographic_model'],
-                        mutation_rate=self.mutation_rate,
-                        length=self.L,
-                        k  = self.experiment_config['k'], 
-                        top_values_k = self.experiment_config['top_values_k']
-                    )
-                )
-
-
-                dadi_results = {
-                    "model_sfs_dadi": model_sfs_dadi,
-                    "opt_theta_dadi": opt_theta_dadi,
-                    "opt_params_dadi": opt_params_dict_dadi,
-                    "ll_all_replicates_dadi": ll_list_dadi,
-                }
-
-                mega_result_dict.update(dadi_results)
-
-                # print(dadi_results['ll_all_replicates_dadi'])
-
-            if self.experiment_config["moments_analysis"]:
-                model_sfs_moments, opt_theta_moments, opt_params_dict_moments, ll_list_moments = (
-                    run_inference_moments(
-                        sfs,
-                        p0=self.experiment_config['optimization_initial_guess'],
-                        lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) -1),
-                        upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
-                        demographic_model=self.experiment_config['demographic_model'],
-                        use_FIM=self.experiment_config["use_FIM"],
-                        mutation_rate=self.mutation_rate,
-                        length=self.L,
-                        k = self.experiment_config['k'],
-                        top_values_k=self.experiment_config['top_values_k']
-                    )
-                )
-
-
-                moments_results = {
-                    "model_sfs_moments": model_sfs_moments,
-                    "opt_theta_moments": opt_theta_moments,
-                    "opt_params_moments": opt_params_dict_moments,
-                    "ll_all_replicates_moments": ll_list_moments
-                }
-
-                mega_result_dict.update(moments_results)
-
-                # results.update(
-                #     {
-                #         "opt_params_dict_moments": opt_params_dict_moments,
-                #         "model_sfs_moments": model_sfs_moments,
-                #         "opt_theta_moments": opt_theta_moments,
-                #     }
-                # )
-
-            if self.experiment_config["momentsLD_analysis"]:
-
-                p_guess = self.experiment_config['optimization_initial_guess'].copy()
-                
-                p_guess.extend([20000])
-                print(f"p_guess: {p_guess}")
-
-                opt_params_momentsLD = run_inference_momentsLD(
-                    folderpath=self.folderpath,
-                    num_windows=self.num_windows,
-                    param_sample=sampled_params,
-                    p_guess=p_guess, #TODO: Need to change this to not rely on a hardcoded value
+        if self.experiment_config["moments_analysis"]:
+            model_sfs_moments, opt_theta_moments, opt_params_dict_moments, ll_list_moments = (
+                run_inference_moments(
+                    sfs,
+                    p0=self.experiment_config['optimization_initial_guess'],
+                    lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) -1),
+                    upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
                     demographic_model=self.experiment_config['demographic_model'],
-                    maxiter=self.maxiter
+                    use_FIM=self.experiment_config["use_FIM"],
+                    mutation_rate=self.mutation_rate,
+                    length=self.L,
+                    k = self.experiment_config['k'],
+                    top_values_k=self.experiment_config['top_values_k']
                 )
+            )
 
-                momentsLD_results = {"opt_params_momentsLD": opt_params_momentsLD}
 
-                mega_result_dict.update(momentsLD_results)
+            moments_results = {
+                "model_sfs_moments": model_sfs_moments,
+                "opt_theta_moments": opt_theta_moments,
+                "opt_params_moments": opt_params_dict_moments,
+                "ll_all_replicates_moments": ll_list_moments
+            }
 
-                # results.update({"opt_params_momentsLD": opt_params_momentsLD})
+            mega_result_dict.update(moments_results)
 
-            list_of_mega_result_dicts.append(mega_result_dict)
+            # results.update(
+            #     {
+            #         "opt_params_dict_moments": opt_params_dict_moments,
+            #         "model_sfs_moments": model_sfs_moments,
+            #         "opt_theta_moments": opt_theta_moments,
+            #     }
+            # )
+
+        if self.experiment_config["momentsLD_analysis"]:
+
+            p_guess = self.experiment_config['optimization_initial_guess'].copy()
+            
+            p_guess.extend([20000])
+            print(f"p_guess: {p_guess}")
+
+            opt_params_momentsLD = run_inference_momentsLD(
+                folderpath=self.folderpath,
+                num_windows=self.num_windows,
+                param_sample=sampled_params,
+                p_guess=p_guess, #TODO: Need to change this to not rely on a hardcoded value
+                demographic_model=self.experiment_config['demographic_model'],
+                maxiter=self.maxiter
+            )
+
+            momentsLD_results = {"opt_params_momentsLD": opt_params_momentsLD}
+
+            mega_result_dict.update(momentsLD_results)
+
+            # results.update({"opt_params_momentsLD": opt_params_momentsLD})
+
+        list_of_mega_result_dicts.append(mega_result_dict)
 
         # Step 1: Initialize an empty list to collect analysis data arrays
         analysis_data = []
