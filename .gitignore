@@ -8,3 +8,4 @@ error_log.txt
 e 
 /__pycache__/
 /archived/
+/src/__pycache__/
