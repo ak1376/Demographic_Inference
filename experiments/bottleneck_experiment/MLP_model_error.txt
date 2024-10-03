@@ -1,4 +1,0 @@
-
-SNN Model Errors:
-  Training RMSE: 0.0675
-  Validation RMSE: 0.1152
