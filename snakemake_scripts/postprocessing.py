@@ -74,7 +74,8 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
 
             features = reshaped.copy()
 
-        
+        normalized_features = []
+
         if experiment_config['normalization'] == True:
             print("===> Normalizing the data.")
             
@@ -121,19 +122,16 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
             else:
                 print("No zero values found in the normalized features.")  
 
-            features = normalized_features.copy()
-            print(f"Features shape after normalization: {features.shape}")
 
         targets = targets.reshape(targets.shape[0], -1)
 
         postprocessing_dict[stage] = {
             "normalization": experiment_config['normalization'],
             'predictions': features,
+            "normalized_predictions": normalized_features,
             'targets': targets
         }
     
-    print(postprocessing_dict['training']['predictions'].shape)
-
     return postprocessing_dict
 
 if __name__ == "__main__":

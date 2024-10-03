@@ -1,17 +1,17 @@
 {
     "neural_net_hyperparameters": {
-        "input_size": 100,
+        "input_size": 50,
         "hidden_size": 1000,
         "output_size": 5,
         "num_epochs": 500,
         "learning_rate": 3e-4,
-        "num_layers": 1,
+        "num_layers": 3,
         "dropout_rate": 0,
         "weight_decay": 0,
         "BatchNorm": true,
         "EarlyStopping": false,
-        "batch_size": 64,
-        "patience": 20,
+        "batch_size": 35,
+        "patience": 50,
         "parameter_names": [
             "N0",
             "Nb",

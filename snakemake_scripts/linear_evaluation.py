@@ -11,6 +11,14 @@ def linear_evaluation(features_and_targets_filepath, model_directory, experiment
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
 
+    print("=====================================")
+    print("Checking Shapes...")
+    print(f'Training Features Shape: {features_and_targets["training"]["features"].shape}')
+    print(f'Validation Features Shape: {features_and_targets["validation"]["features"].shape}')
+    print(f'Training Targets Shape: {features_and_targets["training"]["targets"].shape}')
+    print(f'Validation Targets Shape: {features_and_targets["validation"]["targets"].shape}')
+    print("=====================================")
+
     ## LINEAR REGRESSION
 
     linear_mdl = LinearReg(

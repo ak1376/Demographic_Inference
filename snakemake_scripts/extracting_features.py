@@ -5,6 +5,8 @@ def getting_the_features(postprocessing_results_filepath, sim_directory):
     with open(postprocessing_results_filepath, "rb") as file:
         postprocessing_results_obj = pickle.load(file)
 
+    print(postprocessing_results_obj.keys())
+
     features = {
         "training": {"features": postprocessing_results_obj['training']['predictions'], "targets": postprocessing_results_obj['training']['targets']},
         "validation": {"features": postprocessing_results_obj['validation']['predictions'], "targets": postprocessing_results_obj['validation']['targets']},

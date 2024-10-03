@@ -100,6 +100,8 @@ def run_inference_dadi(
         ll_list.append(ll_value)
         opt_params_dict_list.append(opt_params)
 
+        print(f"OPT DADI PARAMETER: {opt_params}")
+
     
     # Now find the indices of the top top_k_values (those with the highest likelihood)
     top_k_indices = np.argsort(ll_list)[-top_values_k:]
@@ -176,7 +178,7 @@ def run_inference_moments(
         ll_list.append(ll)
         opt_params_dict_list.append(opt_params)
 
-        # print(f"OPT MOMENTS PARAMETER: {opt_params}")
+        print(f"OPT MOMENTS PARAMETER: {opt_params}")
     
     # Now find the indices of the top top_k_values (those with the highest likelihood)
     top_k_indices = np.array(np.argsort(ll_list)[-top_values_k:], dtype = int)    

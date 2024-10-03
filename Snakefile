@@ -54,6 +54,13 @@ rule all:
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", 
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        # Outputs from run_simulation
+        # f"{SIM_DIRECTORY}/simulation_results/metadata.txt",
+        # Outputs from create_experiment
+        f"{SIM_DIRECTORY}/config.json",
+        f"{SIM_DIRECTORY}/inference_config_file.json",
+        f"{SIM_DIRECTORY}/color_shades.pkl",
+        f"{SIM_DIRECTORY}/main_colors.pkl",
         f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
         f"{SIM_DIRECTORY}/training_features.npy",
         f"{SIM_DIRECTORY}/training_targets.npy",
@@ -64,13 +71,6 @@ rule all:
         f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
         f"{MODEL_DIRECTORY}/snn_results.pkl",
         f"{MODEL_DIRECTORY}/snn_model.pth"
-        # Outputs from run_simulation
-        # f"{SIM_DIRECTORY}/simulation_results/metadata.txt",
-        # Outputs from create_experiment
-        # f"{SIM_DIRECTORY}/config.json",
-        # f"{SIM_DIRECTORY}/inference_config_file.json",
-        # f"{SIM_DIRECTORY}/color_shades.pkl",
-        # f"{SIM_DIRECTORY}/main_colors.pkl",
         # Outputs from model training (add these when you have corresponding rules)
         # f"{MODEL_DIRECTORY}/model_config.json",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",

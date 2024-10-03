@@ -1,4 +1,4 @@
-from models import ShallowNN
+from src.models import ShallowNN
 import torch
 import pickle
 import numpy as np

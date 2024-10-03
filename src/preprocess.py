@@ -128,7 +128,6 @@ class Processor:
         return samples_file, flat_map_file
 
     def sample_params(self):
-        np.random.seed(self.experiment_config['seed'])
         sampled_params = {}
         for key in self.lower_bound_params:
             lower_bound = self.lower_bound_params[key]
