@@ -1,0 +1,8 @@
+/tb_logs/
+/.snakemake/
+/lightning_logs/
+/runs/
+/bottleneck_experiments_seed_42/
+/Simulation_Software/
+error_log.txt
+e 
