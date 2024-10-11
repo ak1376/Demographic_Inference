@@ -62,7 +62,7 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
                     
                     for index in np.arange(len(result[analysis_key])):  # Iterate over the demographic parameters
                         param_values = list(result[analysis_key][index].values())
-                        target_values = list(result['simulated_params'].values())
+                        target_values = [result['simulated_params'][key] for key in experiment_config['parameters_to_estimate']]
                     
                         if analysis_type == 'moments_analysis' and processor.experiment_config.get('use_FIM', True):
                             # Store upper triangular FIM separately

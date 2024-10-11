@@ -5,13 +5,13 @@ import numpy as np
 import msprime
 import dadi
 import glob
-import time
-import src.demographic_models as demographic_models 
-from src.parameter_inference import (
-    run_inference_dadi,
-    run_inference_moments,
-    run_inference_momentsLD,
-)
+# import time
+# import src.demographic_models as demographic_models 
+# from src.parameter_inference import (
+#     run_inference_dadi,
+#     run_inference_moments,
+#     run_inference_momentsLD,
+# )
 
 def generate_window(ts, window_length, n_samples):
     start = np.random.randint(0, n_samples - window_length)
@@ -149,8 +149,8 @@ class Processor:
 
         return sampled_params
 
-    def create_SFS(self, 
-        sampled_params, mode, num_samples, demographic_model, length=1e7, mutation_rate=1.26e-8, **kwargs
+    def create_SFS(self,
+        sampled_params, mode, num_samples, demographic_model, length=1e7, mutation_rate=5.7e-9, recombination_rate = 3.386e-9, **kwargs
     ):
         """
         If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
@@ -158,28 +158,44 @@ class Processor:
         """
 
         if mode == "pretrain":
-        
+            # Simulate the demographic model
             g = demographic_model(sampled_params)
-                
             demog = msprime.Demography.from_demes(g)
 
+            # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
+            samples = [
+                msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
+                for pop_name, sample_size in num_samples.items()
+            ]
+
+            # Simulate ancestry for two populations (joint simulation)
             ts = msprime.sim_ancestry(
-                self.num_samples,
+                samples=samples,  # Two populations
                 demography=demog,
-                sequence_length=self.L,
-                recombination_rate=self.recombination_rate,
+                sequence_length=length,
+                recombination_rate=recombination_rate,
                 random_seed=self.experiment_config['seed'],
             )
-            ts = msprime.sim_mutations(ts, rate=mutation_rate)
             
-            # Now create the SFS
-            sfs = ts.allele_frequency_spectrum(mode="site", polarised=True)
-                        
-            # multiply sfs by L
+            # Simulate mutations over the ancestry tree sequence
+            ts = msprime.sim_mutations(ts, rate=mutation_rate)
+
+            # Define sample sets dynamically for the SFS
+            sample_sets = [
+                ts.samples(population=pop.id) 
+                for pop in ts.populations() 
+                if len(ts.samples(population=pop.id)) > 0  # Exclude populations with no samples
+            ]
+            
+            # Create the joint allele frequency spectrum
+            sfs = ts.allele_frequency_spectrum(sample_sets=sample_sets, mode="site", polarised=True)
+            
+            # Multiply SFS by the sequence length to adjust scale
             sfs *= length
 
+            # Convert to moments Spectrum for further use
             sfs = moments.Spectrum(sfs)
-
+        
         elif mode == "inference":
             vcf_file = kwargs.get("vcf_file", None)
             pop_file = kwargs.get("pop_file", None)
@@ -195,207 +211,4 @@ class Processor:
                 dd, [popname], projections=[2 * num_samples], polarized=True
             )
 
-        
         return sfs
-
-    def pretrain_processing(self):
-        """
-        This really should be subdivided into more functions so that when we do inference I can separately call the helper functions.
-        """
-
-        # Placeholder if statements 
-        if self.experiment_config["demographic_model"] == "bottleneck_model":
-            demographic_model_simulation = demographic_models.bottleneck_model
-        
-        elif self.experiment_config["demographic_model"] == "split_isolation_model":
-            demographic_model_simulation = demographic_models.split_isolation_model_simulation
-
-        list_of_mega_result_dicts = []
-
-        mega_result_dict = (
-            {}
-        )  # This will store all the results (downstream postprocessing) later
-
-        sampled_params = self.sample_params()
-
-        start = time.time()
-        sfs = self.create_SFS(
-            sampled_params,
-            mode="pretrain",
-            num_samples=self.num_samples,
-            demographic_model=demographic_model_simulation,
-            length=self.L,
-            mutation_rate=self.mutation_rate,
-        )
-
-        end = time.time()
-
-        mega_result_dict = {"simulated_params": sampled_params, "sfs": sfs}
-
-        # print(f'Simulation Time: {end - start}')
-
-        # Simulate process and save windows as VCF files
-        if self.experiment_config["momentsLD_analysis"]:
-            g = demographic_model_simulation(sampled_params)
-            self.run_msprime_replicates(g)
-            samples_file, flat_map_file = self.write_samples_and_rec_map()
-
-        # Conditional analysis based on provided functions
-        if self.experiment_config["dadi_analysis"]:
-            model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi, ll_list_dadi = (
-                run_inference_dadi(
-                    sfs,
-                    p0= self.experiment_config['optimization_initial_guess'],
-                    lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) - 1),
-                    upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
-                    num_samples=100, #TODO: Need to change this to not rely on a hardcoded value
-                    demographic_model=self.experiment_config['demographic_model'],
-                    mutation_rate=self.mutation_rate,
-                    length=self.L,
-                    k  = self.experiment_config['k'], 
-                    top_values_k = self.experiment_config['top_values_k']
-                )
-            )
-
-
-            dadi_results = {
-                "model_sfs_dadi": model_sfs_dadi,
-                "opt_theta_dadi": opt_theta_dadi,
-                "opt_params_dadi": opt_params_dict_dadi,
-                "ll_all_replicates_dadi": ll_list_dadi,
-            }
-
-            mega_result_dict.update(dadi_results)
-
-            # print(dadi_results['ll_all_replicates_dadi'])
-
-        if self.experiment_config["moments_analysis"]:
-            model_sfs_moments, opt_theta_moments, opt_params_dict_moments, ll_list_moments = (
-                run_inference_moments(
-                    sfs,
-                    p0=self.experiment_config['optimization_initial_guess'],
-                    lower_bound=[1e-4]*(len(self.experiment_config['parameter_names']) -1),
-                    upper_bound=[None] * (len(self.experiment_config['parameter_names']) - 1),
-                    demographic_model=self.experiment_config['demographic_model'],
-                    use_FIM=self.experiment_config["use_FIM"],
-                    mutation_rate=self.mutation_rate,
-                    length=self.L,
-                    k = self.experiment_config['k'],
-                    top_values_k=self.experiment_config['top_values_k']
-                )
-            )
-
-
-            moments_results = {
-                "model_sfs_moments": model_sfs_moments,
-                "opt_theta_moments": opt_theta_moments,
-                "opt_params_moments": opt_params_dict_moments,
-                "ll_all_replicates_moments": ll_list_moments
-            }
-
-            mega_result_dict.update(moments_results)
-
-            # results.update(
-            #     {
-            #         "opt_params_dict_moments": opt_params_dict_moments,
-            #         "model_sfs_moments": model_sfs_moments,
-            #         "opt_theta_moments": opt_theta_moments,
-            #     }
-            # )
-
-        if self.experiment_config["momentsLD_analysis"]:
-
-            p_guess = self.experiment_config['optimization_initial_guess'].copy()
-            
-            p_guess.extend([20000])
-            print(f"p_guess: {p_guess}")
-
-            opt_params_momentsLD = run_inference_momentsLD(
-                folderpath=self.folderpath,
-                num_windows=self.num_windows,
-                param_sample=sampled_params,
-                p_guess=p_guess, #TODO: Need to change this to not rely on a hardcoded value
-                demographic_model=self.experiment_config['demographic_model'],
-                maxiter=self.maxiter
-            )
-
-            momentsLD_results = {"opt_params_momentsLD": opt_params_momentsLD}
-
-            mega_result_dict.update(momentsLD_results)
-
-            # results.update({"opt_params_momentsLD": opt_params_momentsLD})
-
-        list_of_mega_result_dicts.append(mega_result_dict)
-
-        # Step 1: Initialize an empty list to collect analysis data arrays
-        analysis_data = []
-        upper_triangular_data = []
-        targets_data = []
-        ll_data = []
-        
-
-        # Step 2: Dynamically extract and append data based on configuration
-        for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
-            if self.experiment_config.get(analysis_type):
-                # Extract the appropriate data dynamically based on the analysis type
-                analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # This maps to 'opt_params_dadi', 'opt_params_moments', etc.
-
-                analysis_type_data = []
-                targets_type_data = []
-                ll_values_data = []
-                for result in list_of_mega_result_dicts:
-                    ll_values = result["ll_all_replicates_"+analysis_type.split('_')[0]]
-                    for index in np.arange(len(result[analysis_key])): # this iterates over the demographic parameters
-                        param_values = list(result[analysis_key][index].values())
-                        target_values = list(result['simulated_params'].values())
-                    
-                        if analysis_type == 'moments_analysis' and self.experiment_config.get('use_FIM', True):
-                            # Extract and store the upper triangular FIM separately
-                            upper_triangular = result['opt_params_moments'][index].get('upper_triangular_FIM', None)
-                            if upper_triangular is not None:
-                                upper_triangular_data.append(upper_triangular)  # Store upper triangular FIM separately
-                                
-                                # Remove 'upper_triangular_FIM' from param_values if it was included
-                                # Assuming 'upper_triangular_FIM' is the last key in the dictionary
-                                param_values = [value for value in param_values if not isinstance(value, np.ndarray)]
-                        
-                        # Append the processed param values to analysis_type_data
-                        analysis_type_data.append(param_values)
-                        targets_type_data.append(target_values)
-                    
-                    ll_values_data.append(ll_values)
-
-                
-                # Add the collected parameter data (excluding FIM if stored separately) to analysis_data
-                analysis_data.append(analysis_type_data)
-                targets_data.append(targets_type_data)
-
-        # Step 3: Convert the collected data into NumPy arrays
-        analysis_arrays = np.array(analysis_data)
-        targets_arrays = np.array(targets_data)
-        
-        ll_data = np.array(ll_values_data)
-
-        # Now we need to transpose it to get the shape (num_sims*k, num_analyses, num_params)
-
-        num_analyses = self.experiment_config['dadi_analysis'] + self.experiment_config['moments_analysis'] + self.experiment_config['momentsLD_analysis']
-        num_sims = len(list_of_mega_result_dicts)
-        num_reps = len(analysis_data[0]) // num_sims
-        num_params = len(analysis_data[0][0])
-
-        # Reshape to desired format
-        analysis_arrays = analysis_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
-        targets_arrays = targets_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
-
-        # Transpose to match the desired output shape (num_sims, num_reps, num_analyses, num_params)
-        features = np.transpose(analysis_arrays, (1, 2, 0, 3))
-        targets = np.transpose(targets_arrays, (1, 2, 0, 3))
-
-        # If upper triangular data exists, convert it to a NumPy array for further analysis
-        if upper_triangular_data:
-            upper_triangular_array = np.array(upper_triangular_data).reshape(((1, num_sims, num_reps, upper_triangular_data[0].shape[0])))  # Array of upper triangular matrices
-            upper_triangular_array = np.transpose(upper_triangular_array, (1, 2, 0, 3))
-        else:
-            upper_triangular_array = None  # Handle case where FIM data does not exist
-
-        return features, targets, upper_triangular_array, ll_data

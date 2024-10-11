@@ -1,6 +1,8 @@
 import demes
 from dadi import Numerics, PhiManip, Integration
 from dadi.Spectrum_mod import Spectrum
+import moments
+import numpy as np
 
 def bottleneck_model(sampled_params):
 
@@ -26,8 +28,8 @@ def bottleneck_model(sampled_params):
 
 def split_isolation_model_simulation(sampled_params):
     # Unpack the sampled parameters
-    N0, N1, N2, T_split = (
-        sampled_params["N0"],  # Effective population size of the ancestral population
+    Na, N1, N2, t_split = (
+        sampled_params["Na"],  # Effective population size of the ancestral population
         sampled_params["N1"],  # Size of population 1 after split
         sampled_params["N2"],  # Size of population 2 after split
         sampled_params["t_split"],  # Time of the population split (in generations)
@@ -40,15 +42,15 @@ def split_isolation_model_simulation(sampled_params):
     b.add_deme(
         "ancestral",
         epochs=[
-            dict(start_size=N0, end_time=T_split),  # Ancestor size until the split
+            dict(start_size=Na, end_time=t_split),  # Ancestor size until the split
         ],
     )
 
     # Add population 1 (deme A1) that splits from the ancestral population
     b.add_deme(
-        "A1",
+        "N1",
         ancestors=["ancestral"],  # Inherits from the ancestral population
-        start_time=T_split,  # Time of the split
+        start_time=t_split,  # Time of the split
         epochs=[
             dict(start_size=N1, end_time=0),  # Population 1 size post-split
         ],
@@ -56,9 +58,9 @@ def split_isolation_model_simulation(sampled_params):
 
     # Add population 2 (deme A2) that also splits from the ancestral population
     b.add_deme(
-        "A2",
+        "N2",
         ancestors=["ancestral"],  # Inherits from the ancestral population
-        start_time=T_split,  # Time of the split
+        start_time=t_split,  # Time of the split
         epochs=[
             dict(start_size=N2, end_time=0),  # Population 2 size post-split
         ],
@@ -69,7 +71,7 @@ def split_isolation_model_simulation(sampled_params):
 
     return g
 
-def split_isolation_model(params, ns, pts):
+def split_isolation_model_dadi(params, ns, pts):
     """
     params = (nu1, nu2, t_split)
     ns = (n1, n2)
@@ -98,4 +100,33 @@ def split_isolation_model(params, ns, pts):
     # Calculate the site frequency spectrum (SFS)
     fs = Spectrum.from_phi(phi, ns, (xx, xx))
 
+    return fs
+
+def split_isolation_model_moments(params, ns, pop_ids=None):
+    
+    """
+    Split into two populations of specifed size, with migration.
+
+    params = (nu1, nu2, T, m = 0)
+
+    ns = [n1, n2]
+
+    :param params: Tuple of length 4.
+
+        - nu1: Size of population 1 after split.
+        - nu2: Size of population 2 after split.
+        - T: Time in the past of split (in units of 2*Na generations)
+        - m: Migration rate between populations (2*Na*m) = 0
+    :param ns: List of length two specifying sample sizes n1 and n2.
+    :param pop_ids: List of population IDs.
+    """
+
+    if pop_ids is not None and len(pop_ids) != 2:
+        raise ValueError("pop_ids must be a list of two population IDs")
+    nu1, nu2, T = params
+    sts = moments.LinearSystem_1D.steady_state_1D(ns[0] + ns[1])
+    fs = moments.Spectrum(sts)
+    fs = moments.Manips.split_1D_to_2D(fs, ns[0], ns[1])
+    fs.integrate([nu1, nu2], T, m=np.array([[0, 0], [0, 0]])) # setting migration rates to constant 0
+    fs.pop_ids = pop_ids
     return fs

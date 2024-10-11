@@ -57,7 +57,7 @@ def run_inference_dadi(
     upper_bound=[1, 1, 1, 1],
     mutation_rate=1.26e-8,
     length=1e8,
-    top_values_k = 3
+    top_values_k=3
 ):
     """
     This should do the parameter inference for dadi
@@ -66,7 +66,10 @@ def run_inference_dadi(
         model_func = dadi.Demographics1D.three_epoch
 
     elif demographic_model == "split_isolation_model":
-        model_func = demographic_models.split_isolation_model
+        model_func = demographic_models.split_isolation_model_dadi
+
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     func_ex = dadi.Numerics.make_extrap_log_func(model_func)
     pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
@@ -77,15 +80,13 @@ def run_inference_dadi(
     ll_list = []
 
     for i in np.arange(k):
-
         p_guess = moments.Misc.perturb_params(
             p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
         )
 
         start = time.time()
 
-        # print(f'GUESS PARAMETER: {p_guess}')
-
+        # Optimization with dadi
         opt_params, ll_value = dadi.Inference.opt(
             p_guess,
             sfs,
@@ -102,18 +103,20 @@ def run_inference_dadi(
 
         print(f"OPT DADI PARAMETER: {opt_params}")
 
-    
-    # Now find the indices of the top top_k_values (those with the highest likelihood)
+    # Find the indices of the top top_k_values (those with the highest likelihood)
     top_k_indices = np.argsort(ll_list)[-top_values_k:]
     top_k_indices = np.array(top_k_indices, dtype=int)  # Convert to numpy integer array
 
     opt_params_dict_list_top_values = [opt_params_dict_list[i] for i in top_k_indices]
     opt_params_final_list = []
-    
+
     for j in np.arange(top_values_k):
         opt_params = opt_params_dict_list_top_values[j]
         model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
         opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
+        
+        # Initialize opt_params_dict properly in all cases
+        opt_params_dict = {}
 
         if demographic_model == "bottleneck_model":
             N_ref = opt_theta / (4 * mutation_rate * length)
@@ -125,15 +128,23 @@ def run_inference_dadi(
                 "t_bottleneck_end": opt_params[2] * 2 * N_ref,
             }
 
+        elif demographic_model == "split_isolation_model":
+            opt_params_dict = {
+                "N1": opt_params[0],
+                "N2": opt_params[1],
+                "t_split": opt_params[2]
+            }
+
+        else:
+            raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
         model = model * opt_theta
 
         model_list.append(model)
         opt_theta_list.append(opt_theta)
         opt_params_final_list.append(opt_params_dict)
 
-    # print(f'Log Likelihood Values for Dadi: {ll_list}')
-    return model_list, opt_theta_list, opt_params_final_list, ll_list # ll_list is across all simulations
-
+    return model_list, opt_theta_list, opt_params_final_list, ll_list
 
 def run_inference_moments(
     sfs,
@@ -163,6 +174,12 @@ def run_inference_moments(
 
         if demographic_model == "bottleneck_model":
             model_func = moments.Demographics1D.three_epoch
+
+        elif demographic_model == "split_isolation_model":
+            model_func = demographic_models.split_isolation_model_moments
+
+        else:
+            raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
         opt_params, ll =opt(
             p_guess,
@@ -229,8 +246,19 @@ def run_inference_moments(
                 "upper_triangular_FIM": upper_triangular,
             }
 
-            if opt_params_dict["upper_triangular_FIM"] is None:
-                del opt_params_dict["upper_triangular_FIM"]
+        elif demographic_model == "split_isolation_model":
+            opt_params_dict = {
+                "N1": opt_params[0],
+                "N2": opt_params[1],
+                "t_split": opt_params[2],
+                "upper_triangular_FIM": upper_triangular,
+            }
+
+        else:
+            raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
+        if opt_params_dict["upper_triangular_FIM"] is None:
+            del opt_params_dict["upper_triangular_FIM"]
 
         model = model * opt_theta
 

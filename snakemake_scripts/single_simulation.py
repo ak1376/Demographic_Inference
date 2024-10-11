@@ -23,11 +23,19 @@ def main(experiment_config, sim_directory, sim_number):
         mutation_rate=experiment_config["mutation_rate"],
     )
     sampled_params = processor.sample_params()
+    print(sampled_params)
 
     if experiment_config["demographic_model"] == "bottleneck_model":
         demographic_model = demographic_models.bottleneck_model
 
+    elif experiment_config["demographic_model"] == "split_isolation_model":
+        demographic_model = demographic_models.split_isolation_model_simulation
+
+    else:
+        raise ValueError(f"Unsupported demographic model: {experiment_config['demographic_model']}")
+
     # Now create the SFS
+    
     SFS = processor.create_SFS(
         sampled_params,
         mode="pretrain",

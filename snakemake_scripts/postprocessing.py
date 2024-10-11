@@ -79,9 +79,11 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
         if experiment_config['normalization'] == True:
             print("===> Normalizing the data.")
             
-            # Convert dict values to NumPy arrays for element-wise operations
-            upper_bound_values = np.array(list(experiment_config['upper_bound_params'].values()))
-            lower_bound_values = np.array(list(experiment_config['lower_bound_params'].values()))
+            # Extract upper bound values based on the keys in 'parameters_to_estimate'
+            upper_bound_values = np.array([experiment_config['upper_bound_params'][key] for key in experiment_config['parameters_to_estimate']])
+
+            # Extract lower bound values based on the keys in 'parameters_to_estimate'
+            lower_bound_values = np.array([experiment_config['lower_bound_params'][key] for key in experiment_config['parameters_to_estimate']])
 
             # Calculate mean and standard deviation vectors
             mean_vector = 0.5 * (upper_bound_values + lower_bound_values)

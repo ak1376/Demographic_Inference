@@ -65,9 +65,9 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             run_inference_dadi(
                 sfs = SFS,
                 p0= experiment_config['optimization_initial_guess'],
-                lower_bound=[1e-4]*(len(experiment_config['parameter_names']) - 1),
-                upper_bound=[None] * (len(experiment_config['parameter_names']) - 1),
-                num_samples=experiment_config['num_samples'], #TODO: Don't really understand why I had 100 before ... I think it was for optimization accuracy but not sure
+                lower_bound= [experiment_config['lower_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
+                upper_bound=[experiment_config['upper_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
+                num_samples=100,
                 demographic_model=experiment_config['demographic_model'],
                 mutation_rate=experiment_config['mutation_rate'],
                 length=experiment_config['genome_length'],
@@ -91,8 +91,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             run_inference_moments(
                 sfs = SFS,
                 p0=experiment_config['optimization_initial_guess'],
-                lower_bound=[1e-4]*(len(experiment_config['parameter_names']) -1),
-                upper_bound=[None] * (len(experiment_config['parameter_names']) - 1),
+                lower_bound= [experiment_config['lower_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
+                upper_bound=[experiment_config['upper_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
                 demographic_model=experiment_config['demographic_model'],
                 use_FIM=experiment_config["use_FIM"],
                 mutation_rate=experiment_config['mutation_rate'],

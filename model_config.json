@@ -1,8 +1,8 @@
 {
     "neural_net_hyperparameters": {
-        "input_size": 50,
+        "input_size": 30,
         "hidden_size": 1000,
-        "output_size": 5,
+        "output_size": 3,
         "num_epochs": 500,
         "learning_rate": 3e-4,
         "num_layers": 3,
@@ -13,11 +13,9 @@
         "batch_size": 35,
         "patience": 50,
         "parameter_names": [
-            "N0",
-            "Nb",
-            "N_recover",
-            "t_bottleneck_start",
-            "t_bottleneck_end"
+            "N1",
+            "N2",
+            "t_split"
         ]
     }
 }

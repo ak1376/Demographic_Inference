@@ -28,29 +28,25 @@ def visualizing_results(
         all_predictions = []
         all_targets = []
 
-        # Loop through each analysis (dimension 1)
+        # Loop through each stage and parameter combination
         for j, stage in enumerate(stages):
-            predictions = linear_mdl_obj[stage]["predictions"]
-            targets = linear_mdl_obj[stage]["targets"]
-            
-            # Flatten along the rows to plot results across analyses for each parameter
-            predictions_flat = predictions.reshape(-1)
-            targets_flat = targets.reshape(-1)
+            predictions = linear_mdl_obj[stage]["predictions"][:, i]  # Only for the current parameter
+            targets = linear_mdl_obj[stage]["targets"][:, i]  # Only for the current parameter
 
-            # Append all predictions and targets to determine the global min/max for each plot
-            all_predictions.extend(predictions_flat)
-            all_targets.extend(targets_flat)
+            # Append current parameter's predictions and targets to global lists for axis scaling
+            all_predictions.extend(predictions)
+            all_targets.extend(targets)
 
             # Scatter plot for each stage
             plt.scatter(
-                targets_flat,
-                predictions_flat,
+                targets,
+                predictions,
                 alpha=0.2,
-                color=color_shades[main_colors[i % len(main_colors)]][j],  # type: ignore
+                color=color_shades[main_colors[i % len(main_colors)]][j],  # Color for each stage #type:ignore 
                 label=f"{stage.capitalize()}",
             )
 
-        # Set equal axis limits
+        # Set equal axis limits based on global min/max for each parameter's predictions and targets
         max_value = max(max(all_predictions), max(all_targets))
         min_value = min(min(all_predictions), min(all_targets))
         

@@ -11,14 +11,6 @@ def linear_evaluation(features_and_targets_filepath, model_directory, experiment
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
 
-    print("=====================================")
-    print("Checking Shapes...")
-    print(f'Training Features Shape: {features_and_targets["training"]["features"].shape}')
-    print(f'Validation Features Shape: {features_and_targets["validation"]["features"].shape}')
-    print(f'Training Targets Shape: {features_and_targets["training"]["targets"].shape}')
-    print(f'Validation Targets Shape: {features_and_targets["validation"]["targets"].shape}')
-    print("=====================================")
-
     ## LINEAR REGRESSION
 
     linear_mdl = LinearReg(
@@ -34,15 +26,13 @@ def linear_evaluation(features_and_targets_filepath, model_directory, experiment
 
     print(f'PREDICTIONS SHAPE TRAINING: {training_predictions.shape}')
 
-
-
     linear_mdl_obj = linear_mdl.organizing_results(
         features_and_targets,
         training_predictions,
         validation_predictions
     )
 
-    linear_mdl_obj["param_names"] = experiment_config["parameter_names"]
+    linear_mdl_obj["param_names"] = experiment_config["parameters_to_estimate"]
 
     # Now calculate the linear model error
 

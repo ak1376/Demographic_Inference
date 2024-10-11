@@ -1,21 +1,19 @@
 {
     "upper_bound_params": {
-        "N0": 10000,
-        "Nb": 5000,
-        "N_recover": 7000,
-        "t_bottleneck_start": 2000,
-        "t_bottleneck_end": 1000
+        "t_split": 5000, 
+        "N1": 10000,
+        "N2": 10000,
+        "Na": 20000
     },
     "lower_bound_params": {
-        "N0": 8000,
-        "Nb": 4000,
-        "N_recover": 6000,
-        "t_bottleneck_start": 1500,
-        "t_bottleneck_end": 800
+        "t_split": 100, 
+        "N1": 100,
+        "N2": 100,
+        "Na": 100
     },
-    "num_sims_pretrain": 550,
+    "num_sims_pretrain": 500,
     "num_sims_inference": 5,
-    "num_samples": 20,
+    "num_samples": {"N1": 22, "N2": 18},
     "dadi_analysis": true,
     "moments_analysis": true,
     "momentsLD_analysis": false,
@@ -23,30 +21,33 @@
     "window_length": 10000.0,
     "maxiter": 100,
     "genome_length": 1000000.0,
-    "mutation_rate": 1.26e-8,
-    "recombination_rate": 1.007e-8,
+    "mutation_rate": 5.7e-9,
+    "recombination_rate": 3.386e-9,
     "seed": 42,
     "normalization": true,
     "remove_outliers": true,
     "use_FIM": false,
     "k": 10,
     "top_values_k": 5,
-    "training_percentage": 0.5,
-    "demographic_model": "bottleneck_model",
+    "training_percentage": 0.8,
+    "demographic_model": "split_isolation_model",
     "parameter_names": [
-        "N0",
-        "Nb",
-        "N_recover",
-        "t_bottleneck_start",
-        "t_bottleneck_end"
+        "Na",
+        "N1",
+        "N2",
+        "t_split"
     ],
     "optimization_initial_guess": [
-        0.25,
-        0.75,
-        0.1,
-        0.05
+        1000,
+        1000,
+        100
     ],
-    "vcf_filepath": "/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz",
+    "parameters_to_estimate": [
+        "N1",
+        "N2",
+        "t_split"
+    ],
+    "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
     "popname": "wisent"
 }

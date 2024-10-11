@@ -20,7 +20,7 @@ with open(MODEL_CONFIG_FILEPATH, 'r') as f:
 CWD = os.getcwd()
 
 # Use double quotes for the dictionary keys inside the f-string
-EXPERIMENT_DIRECTORY = f'bottleneck_experiments_seed_{experiment_config['seed']}'
+EXPERIMENT_DIRECTORY = f'{experiment_config['demographic_model']}_seed_{experiment_config['seed']}'
 EXPERIMENT_NAME = f'sims_pretrain_{experiment_config["num_sims_pretrain"]}_sims_inference_{experiment_config["num_sims_inference"]}_seed_{experiment_config["seed"]}_num_replicates_{experiment_config["k"]}_top_values_{experiment_config["top_values_k"]}'
 SIM_DIRECTORY = f"{EXPERIMENT_DIRECTORY}/sims/{EXPERIMENT_NAME}"
 
