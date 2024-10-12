@@ -15,7 +15,7 @@ def bottleneck_model(sampled_params):
     )
     b = demes.Builder()
     b.add_deme(
-        "A",
+        "N",
         epochs=[
             dict(start_size=N0, end_time=t_bottleneck_start),
             dict(start_size=nuB, end_time=t_bottleneck_end),

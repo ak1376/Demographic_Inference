@@ -18,16 +18,15 @@ def generate_window(ts, window_length, n_samples):
     end = start + window_length
     return ts.keep_intervals([[start, end]])
 
+# def process_window(demographic_model, ts_window, folderpath, ii):
+#     vcf_name = os.path.join(folderpath, f"bottleneck_window.{ii}.vcf")
 
-def process_window(ts_window, folderpath, ii):
-    vcf_name = os.path.join(folderpath, f"bottleneck_window.{ii}.vcf")
+#     with open(vcf_name, "w+") as fout:
+#         ts_window.write_vcf(fout, allow_position_zero=True)
 
-    with open(vcf_name, "w+") as fout:
-        ts_window.write_vcf(fout, allow_position_zero=True)
+#     os.system(f"gzip -f {vcf_name}")
 
-    os.system(f"gzip -f {vcf_name}")
-
-    return vcf_name  # Optionally return the filename or any other relevant information
+#     return vcf_name  # Optionally return the filename or any other relevant information
 
 
 def delete_vcf_files(directory):
@@ -82,17 +81,27 @@ class Processor:
         self.optimization_initial_guess = self.experiment_config['optimization_initial_guess']
 
 
-    def run_msprime_replicates(self, g):
-        delete_vcf_files(self.folderpath)
+    def run_msprime_replicates(self, g, sampled_params):
+        # delete_vcf_files(self.folderpath)
         demog = msprime.Demography.from_demes(g)
+
+        # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
+        samples = [
+            msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
+            for pop_name, sample_size in self.experiment_config['num_samples'].items()
+        ]
+
+        # Simulate ancestry for two populations (joint simulation)
         ts = msprime.sim_ancestry(
-            {"A": self.num_samples},
+            samples=samples,  # Two populations
             demography=demog,
-            sequence_length=self.L,
-            recombination_rate=self.recombination_rate,
-            random_seed=295,
+            sequence_length=self.experiment_config['genome_length'],
+            recombination_rate=self.experiment_config['recombination_rate'],
+            random_seed=self.experiment_config['seed'],
         )
-        ts = msprime.sim_mutations(ts, rate=self.mutation_rate)
+            
+        # Simulate mutations over the ancestry tree sequence
+        ts = msprime.sim_mutations(ts, rate=self.experiment_config['mutation_rate'])
 
         self.folderpath = f"{self.experiment_directory}/sampled_genome_windows"
         os.makedirs(self.folderpath, exist_ok=True)
@@ -104,22 +113,36 @@ class Processor:
             for _ in range(self.num_windows)
         ]
 
+        # Create the index
+        index = [f"{key}_{value}" for key, value in sampled_params.items()]
+
+        # Join the list elements into a single string, separated by a delimiter (e.g., a comma)
+        index = ", ".join(index)
+
         for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
-            vcf_name = os.path.join(self.folderpath, f"bottleneck_window.{ii}.vcf")
+            vcf_name = os.path.join(self.folderpath, f"{self.experiment_config['demographic_model']}_{index}_window.{ii}.vcf")
+            print(f'VCF NAME: {vcf_name}')
             with open(vcf_name, "w+") as fout:
                 ts_window.write_vcf(fout, allow_position_zero=True)
             os.system(f"gzip {vcf_name}")
 
     def write_samples_and_rec_map(self):
-
+        # Define the file paths
         samples_file = os.path.join(self.folderpath, f"samples.txt")
         flat_map_file = os.path.join(self.folderpath, f"flat_map.txt")
 
+        # Open and write the sample file
         with open(samples_file, "w+") as fout:
             fout.write("sample\tpop\n")
-            for ii in range(self.num_samples):
-                fout.write(f"tsk_{ii}\tA\n")
 
+            # Dynamically define samples based on the num_samples dictionary
+            sample_idx = 0  # Initialize sample index
+            for pop_name, sample_size in self.experiment_config['num_samples'].items():
+                for _ in range(sample_size):
+                    fout.write(f"tsk_{sample_idx}\t{pop_name}\n")
+                    sample_idx += 1
+
+        # Write the recombination map file
         with open(flat_map_file, "w+") as fout:
             fout.write("pos\tMap(cM)\n")
             fout.write("0\t0\n")

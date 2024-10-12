@@ -2,10 +2,11 @@
 /.snakemake/
 /lightning_logs/
 /runs/
-/bottleneck_experiments_seed_42/
+/bottleneck_*/
 /Simulation_Software/
 error_log.txt
 e 
 /__pycache__/
 /archived/
 /src/__pycache__/
+/split_isolation_model_*/

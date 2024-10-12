@@ -27,6 +27,9 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
 
+    upper_bound = [b if b is not None else None for b in experiment_config['upper_bound_optimization']]
+    lower_bound = [b if b is not None else None for b in experiment_config['lower_bound_optimization']]
+
     # Load in the SFS file
     with open(SFS, "rb") as f:
         SFS = pickle.load(f)
@@ -37,6 +40,9 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
 
     if experiment_config["demographic_model"] == "bottleneck_model":
         demographic_model = demographic_models.bottleneck_model
+
+    elif experiment_config["demographic_model"] == "split_isolation_model":
+        demographic_model = demographic_models.split_isolation_model_simulation
 
     mega_result_dict = (
             {}
@@ -56,8 +62,10 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     # Simulate process and save windows as VCF files
     if experiment_config["momentsLD_analysis"]:
         g = demographic_model(sampled_params)
-        processor.run_msprime_replicates(g)
+        processor.run_msprime_replicates(g, sampled_params)
+        print("MSPRIME REPLICATES DONE!!!!!!")
         samples_file, flat_map_file = processor.write_samples_and_rec_map()
+        print("SAMPLES AND REC MAP WRITTEN!!!!!!")
 
     # Conditional analysis based on provided functions
     if experiment_config["dadi_analysis"]:
@@ -65,8 +73,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             run_inference_dadi(
                 sfs = SFS,
                 p0= experiment_config['optimization_initial_guess'],
-                lower_bound= [experiment_config['lower_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
-                upper_bound=[experiment_config['upper_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
+                lower_bound= lower_bound,
+                upper_bound= upper_bound,
                 num_samples=100,
                 demographic_model=experiment_config['demographic_model'],
                 mutation_rate=experiment_config['mutation_rate'],
@@ -91,8 +99,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             run_inference_moments(
                 sfs = SFS,
                 p0=experiment_config['optimization_initial_guess'],
-                lower_bound= [experiment_config['lower_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
-                upper_bound=[experiment_config['upper_bound_params'][key] for key in experiment_config['parameters_to_estimate']],
+                lower_bound= lower_bound,
+                upper_bound= upper_bound,
                 demographic_model=experiment_config['demographic_model'],
                 use_FIM=experiment_config["use_FIM"],
                 mutation_rate=experiment_config['mutation_rate'],
@@ -101,6 +109,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
                 top_values_k=experiment_config['top_values_k']
             )
         )
+
 
         moments_results = {
             "model_sfs_moments": model_sfs_moments,
@@ -118,6 +127,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
         print(f"p_guess: {p_guess}")
 
         opt_params_momentsLD = run_inference_momentsLD(
+            index = [f"{key}_{value}" for key, value in sampled_params.items()], # unique identifier
             folderpath=processor.folderpath,
             num_windows=experiment_config['num_windows'],
             param_sample=sampled_params,

@@ -23,7 +23,6 @@ def main(experiment_config, sim_directory, sim_number):
         mutation_rate=experiment_config["mutation_rate"],
     )
     sampled_params = processor.sample_params()
-    print(sampled_params)
 
     if experiment_config["demographic_model"] == "bottleneck_model":
         demographic_model = demographic_models.bottleneck_model
@@ -52,6 +51,11 @@ def main(experiment_config, sim_directory, sim_number):
         pickle.dump(SFS, f)
 
     # Save the unique identifier in a .pkl file
+
+    if demographic_model == demographic_models.bottleneck_model:
+        sampled_params = {key: sampled_params[key] for key in experiment_config['parameters_to_estimate'] if key in sampled_params}
+
+    print(sampled_params.keys())
     pkl_filename = f"{simulation_results_directory}/sampled_params_{sim_number}.pkl"
     with open(pkl_filename, "wb") as f:
         pickle.dump(sampled_params, f)

@@ -11,12 +11,12 @@
         "N2": 100,
         "Na": 100
     },
-    "num_sims_pretrain": 500,
+    "num_sims_pretrain": 12,
     "num_sims_inference": 5,
     "num_samples": {"N1": 22, "N2": 18},
     "dadi_analysis": true,
     "moments_analysis": true,
-    "momentsLD_analysis": false,
+    "momentsLD_analysis": true,
     "num_windows": 50,
     "window_length": 10000.0,
     "maxiter": 100,
@@ -47,6 +47,19 @@
         "N2",
         "t_split"
     ],
+
+    "lower_bound_optimization": [
+        100,
+        100,
+        100
+    ],
+
+    "upper_bound_optimization": [
+        10000,
+        10000,
+        5000
+    ],
+
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
     "popname": "wisent"

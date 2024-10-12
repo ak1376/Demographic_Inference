@@ -84,12 +84,14 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
         # Step 3: Convert data into NumPy arrays
         analysis_arrays = np.array(analysis_data)
         targets_arrays = np.array(targets_data)
+        print(targets_arrays.shape)
+        print(analysis_arrays.shape)
 
         # Determine array dimensions
         num_analyses = processor.experiment_config['dadi_analysis'] + processor.experiment_config['moments_analysis'] + processor.experiment_config['momentsLD_analysis']
         num_sims = len(software_inferences_list)
         num_reps = len(analysis_data[0]) // num_sims
-        num_params = len(analysis_data[0][0])
+        num_params = len(processor.experiment_config['parameters_to_estimate'])
 
         # Reshape arrays to the desired format
         analysis_arrays = analysis_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
