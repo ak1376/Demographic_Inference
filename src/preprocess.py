@@ -5,13 +5,7 @@ import numpy as np
 import msprime
 import dadi
 import glob
-# import time
-# import src.demographic_models as demographic_models 
-# from src.parameter_inference import (
-#     run_inference_dadi,
-#     run_inference_moments,
-#     run_inference_momentsLD,
-# )
+
 
 def generate_window(ts, window_length, n_samples):
     start = np.random.randint(0, n_samples - window_length)
@@ -81,55 +75,70 @@ class Processor:
         self.optimization_initial_guess = self.experiment_config['optimization_initial_guess']
 
 
-    def run_msprime_replicates(self, g, sampled_params):
-        # delete_vcf_files(self.folderpath)
+    @staticmethod
+    def run_msprime_replicates(experiment_config, g, sim_number, folderpath):
+        '''
+        folderpath: where the window VCF files will be stored. This will be SIM_DIRECTORY/sampled_genome_windows in the snakemake script.
+        '''
+        # Set up the demography from demes
         demog = msprime.Demography.from_demes(g)
 
         # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
         samples = [
             msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
-            for pop_name, sample_size in self.experiment_config['num_samples'].items()
+            for pop_name, sample_size in experiment_config['num_samples'].items()
         ]
 
-        # Simulate ancestry for two populations (joint simulation)
+        # Simulate ancestry for multiple populations
         ts = msprime.sim_ancestry(
-            samples=samples,  # Two populations
+            samples=samples,
             demography=demog,
-            sequence_length=self.experiment_config['genome_length'],
-            recombination_rate=self.experiment_config['recombination_rate'],
-            random_seed=self.experiment_config['seed'],
+            sequence_length=experiment_config['genome_length'],
+            recombination_rate=experiment_config['recombination_rate'],
+            random_seed=experiment_config['seed'],
         )
-            
+        
         # Simulate mutations over the ancestry tree sequence
-        ts = msprime.sim_mutations(ts, rate=self.experiment_config['mutation_rate'])
+        ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'])
 
-        self.folderpath = f"{self.experiment_directory}/sampled_genome_windows"
-        os.makedirs(self.folderpath, exist_ok=True)
+        # Create directory for storing VCFs
+        output_folder = folderpath
+        os.makedirs(output_folder, exist_ok=True)
 
-        # Generate random windows in parallel
-
+        # Generate random windows
         windows = [
-            generate_window(ts, self.window_length, self.L)
-            for _ in range(self.num_windows)
+            generate_window(ts, experiment_config['window_length'], experiment_config['genome_length'])
+            for _ in range(experiment_config['num_windows'])
         ]
 
-        # Create the index
-        index = [f"{key}_{value}" for key, value in sampled_params.items()]
+        # List to store file paths of the generated VCFs
+        vcf_filepaths = []
 
-        # Join the list elements into a single string, separated by a delimiter (e.g., a comma)
-        index = ", ".join(index)
-
+        # Iterate over windows and write VCFs
         for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
-            vcf_name = os.path.join(self.folderpath, f"{self.experiment_config['demographic_model']}_{index}_window.{ii}.vcf")
-            print(f'VCF NAME: {vcf_name}')
+            vcf_name = os.path.join(output_folder, f'window.{ii}.vcf')
             with open(vcf_name, "w+") as fout:
                 ts_window.write_vcf(fout, allow_position_zero=True)
+            
+            # Compress the VCF file
             os.system(f"gzip {vcf_name}")
+            
+            # Store the compressed VCF file path
+            vcf_filepaths.append(f"{vcf_name}.gz")
+        
+        # Write the metadata file with all VCF file paths
+        metadata_file = os.path.join(output_folder, "metadata.txt")
+        with open(metadata_file, "w+") as metafile:
+            metafile.write("\n".join(vcf_filepaths))
 
-    def write_samples_and_rec_map(self):
+        print(f"Metadata file written to {metadata_file}")
+
+    @staticmethod
+    def write_samples_and_rec_map(experiment_config, folderpath):
+
         # Define the file paths
-        samples_file = os.path.join(self.folderpath, f"samples.txt")
-        flat_map_file = os.path.join(self.folderpath, f"flat_map.txt")
+        samples_file = os.path.join(folderpath, f"samples.txt")
+        flat_map_file = os.path.join(folderpath, f"flat_map.txt")
 
         # Open and write the sample file
         with open(samples_file, "w+") as fout:
@@ -137,7 +146,7 @@ class Processor:
 
             # Dynamically define samples based on the num_samples dictionary
             sample_idx = 0  # Initialize sample index
-            for pop_name, sample_size in self.experiment_config['num_samples'].items():
+            for pop_name, sample_size in experiment_config['num_samples'].items():
                 for _ in range(sample_size):
                     fout.write(f"tsk_{sample_idx}\t{pop_name}\n")
                     sample_idx += 1
@@ -146,7 +155,7 @@ class Processor:
         with open(flat_map_file, "w+") as fout:
             fout.write("pos\tMap(cM)\n")
             fout.write("0\t0\n")
-            fout.write(f"{self.L}\t{self.recombination_rate * self.L * 100}\n")
+            fout.write(f"{experiment_config['genome_length']}\t{experiment_config['recombination_rate'] * experiment_config['genome_length'] * 100}\n")
 
         return samples_file, flat_map_file
 

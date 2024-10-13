@@ -38,11 +38,11 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(sampled_params, "rb") as f:
         sampled_params = pickle.load(f)
 
-    if experiment_config["demographic_model"] == "bottleneck_model":
-        demographic_model = demographic_models.bottleneck_model
+    # if experiment_config["demographic_model"] == "bottleneck_model":
+    #     demographic_model = demographic_models.bottleneck_model
 
-    elif experiment_config["demographic_model"] == "split_isolation_model":
-        demographic_model = demographic_models.split_isolation_model_simulation
+    # elif experiment_config["demographic_model"] == "split_isolation_model":
+    #     demographic_model = demographic_models.split_isolation_model_simulation
 
     mega_result_dict = (
             {}
@@ -51,21 +51,13 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     mega_result_dict = {"simulated_params": sampled_params, "sfs": SFS}
 
     # Load the experiment config and run the simulation (as before)
-    processor = Processor(
-        experiment_config,
-        experiment_directory=sim_directory,
-        recombination_rate=experiment_config["recombination_rate"],
-        mutation_rate=experiment_config["mutation_rate"],
-    )
+    # processor = Processor(
+    #     experiment_config,
+    #     experiment_directory=sim_directory,
+    #     recombination_rate=experiment_config["recombination_rate"],
+    #     mutation_rate=experiment_config["mutation_rate"],
+    # )
 
-
-    # Simulate process and save windows as VCF files
-    if experiment_config["momentsLD_analysis"]:
-        g = demographic_model(sampled_params)
-        processor.run_msprime_replicates(g, sampled_params)
-        print("MSPRIME REPLICATES DONE!!!!!!")
-        samples_file, flat_map_file = processor.write_samples_and_rec_map()
-        print("SAMPLES AND REC MAP WRITTEN!!!!!!")
 
     # Conditional analysis based on provided functions
     if experiment_config["dadi_analysis"]:
@@ -124,13 +116,15 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
         p_guess = experiment_config['optimization_initial_guess'].copy()
         
         p_guess.extend([20000])
-        print(f"p_guess: {p_guess}")
+
+        flat_map_path = f'{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt'
+        metadata_path = f'{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt'
+        samples_path = f'{sim_directory}/sampled_genome_windows/sim_{sim_number}/samples.txt'
 
         opt_params_momentsLD = run_inference_momentsLD(
-            index = [f"{key}_{value}" for key, value in sampled_params.items()], # unique identifier
-            folderpath=processor.folderpath,
-            num_windows=experiment_config['num_windows'],
-            param_sample=sampled_params,
+            flat_map_path = flat_map_path,
+            samples_path = samples_path,
+            metadata_path = metadata_path,
             p_guess=p_guess, #TODO: Need to change this to not rely on a hardcoded value
             demographic_model=experiment_config['demographic_model'],
             maxiter=experiment_config['maxiter'],

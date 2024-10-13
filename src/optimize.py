@@ -173,6 +173,129 @@ def opt(p0, data, model_func, multinom=True,
 
     return xopt, opt_val
 
+def ld_opt(
+    p0, 
+    data, 
+    model_func, 
+    multinom=True,
+    lower_bound=None, 
+    upper_bound=None, 
+    fixed_params=None,
+    ineq_constraints=[], 
+    eq_constraints=[], 
+    algorithm=nlopt.LN_BOBYQA,
+    ftol_abs=1e-6, 
+    xtol_abs=1e-6,
+    maxeval=int(1e9), 
+    maxtime=np.inf,
+    stopval=0, 
+    log_opt=False,
+    local_optimizer=nlopt.LN_BOBYQA,
+    verbose=0, 
+    func_args=[], 
+    func_kwargs={}
+):
+    """
+    Optimize parameters of a demographic model using NLopt with optional constraints.
+    
+    Parameters:
+        p0 (list): Initial parameters to optimize.
+        data (list): Parsed data including means and varcovs, and possibly fs if `use_afs` is True.
+        model_func (list): Demographic model function(s) for LD and/or AFS.
+        multinom (bool): If True, fits multinomially; otherwise assumes theta is a parameter.
+        lower_bound (list): Lower bounds on parameter values.
+        upper_bound (list): Upper bounds on parameter values.
+        fixed_params (list): Parameters that should remain fixed during optimization.
+        ineq_constraints (list): List of inequality constraints with tolerances.
+        eq_constraints (list): List of equality constraints with tolerances.
+        algorithm (nlopt.Algorithm): Optimization algorithm to use (default: LN_BOBYQA).
+        ftol_abs (float): Absolute tolerance on log-likelihood.
+        xtol_abs (float): Absolute tolerance in parameter values.
+        maxeval (int): Maximum number of function evaluations.
+        maxtime (float): Maximum optimization time in seconds.
+        stopval (float): Stop optimization when the objective reaches this value.
+        log_opt (bool): If True, optimizes in logarithmic space of parameters.
+        local_optimizer (nlopt.Algorithm): Local optimizer for refinement.
+        verbose (int): Controls verbosity of the optimization process.
+        func_args (list): Additional arguments for `model_func`.
+        func_kwargs (dict): Additional keyword arguments for `model_func`.
+
+    Returns:
+        xopt (list): Optimized parameters.
+        opt_val (float): Final value of the optimization objective (log-likelihood).
+    """
+    if lower_bound is None:
+        lower_bound = [-np.inf] * len(p0)
+    lower_bound = _project_params_down(lower_bound, fixed_params)
+
+    if upper_bound is None:
+        upper_bound = [np.inf] * len(p0)
+    upper_bound = _project_params_down(upper_bound, fixed_params)
+
+    # Replace None in bounds with infinities
+    lower_bound = [-np.inf if lb is None else lb for lb in lower_bound]
+    upper_bound = [np.inf if ub is None else ub for ub in upper_bound]
+
+    if log_opt:
+        lower_bound = np.log(lower_bound)
+        upper_bound = np.log(upper_bound)
+        p0 = np.log(p0)
+
+    # Initialize optimizer
+    opt = nlopt.opt(algorithm, len(p0))
+    opt.set_lower_bounds(lower_bound)
+    opt.set_upper_bounds(upper_bound)
+
+    # Add constraints
+    for cons, tol in ineq_constraints:
+        opt.add_inequality_constraint(cons, tol)
+    for cons, tol in eq_constraints:
+        opt.add_equality_constraint(cons, tol)
+
+    opt.set_stopval(stopval)
+    opt.set_ftol_abs(ftol_abs)
+    opt.set_xtol_abs(xtol_abs)
+    opt.set_maxeval(maxeval)
+    opt.set_maxtime(maxtime)
+
+    # Set up the local optimizer for refinement
+    local_opt = nlopt.opt(local_optimizer, len(p0))
+    local_opt.set_stopval(stopval)
+    local_opt.set_ftol_abs(ftol_abs)
+    local_opt.set_xtol_abs(xtol_abs)
+    local_opt.set_maxeval(maxeval)
+    local_opt.set_maxtime(maxtime)
+    opt.set_local_optimizer(local_opt)
+
+    # Define the objective function
+    def f(x, grad):
+        if grad.size > 0:
+            raise ValueError("Gradients are not supported in this optimization.")
+        if log_opt:
+            x = np.exp(x)
+        return -_object_func(x, data, model_func, verbose=verbose, multinom=multinom, 
+                             func_args=func_args, func_kwargs=func_kwargs, fixed_params=fixed_params)
+
+    try:
+        opt.set_max_objective(f)
+
+        # Perform the optimization
+        xopt = opt.optimize(p0)
+        opt_val = opt.last_optimum_value()
+
+        if log_opt:
+            xopt = np.exp(xopt)
+
+        xopt = _project_params_up(xopt, fixed_params)
+
+    except nlopt.RoundoffLimited:
+        print("nlopt.RoundoffLimited occurred, consider adjusting boundaries or parameters.")
+        opt_val = -np.inf
+        xopt = [np.nan] * len(p0)
+
+    return xopt, opt_val
+
+
 # def nonlinear_optimizer(
 #     p0,
 #     data,
@@ -313,6 +436,7 @@ def _object_func(
     output_stream=sys.stdout,
     store_thetas=False,
 ):
+
     """
     Objective function for optimization.
     """
@@ -331,9 +455,18 @@ def _object_func(
         for pval, bound in zip(params_up, upper_bound):
             if bound is not None and pval > bound:
                 return -_out_of_bounds_val / ll_scale
+            
+    if hasattr(data, 'sample_sizes'):
+        ns = data.sample_sizes
+        all_args = [params_up, ns] + list(func_args)
 
-    ns = data.sample_sizes
-    all_args = [params_up, ns] + list(func_args)
+    else:
+        ns = None  # Or handle the case without sample sizes
+        # all_args = [params_up, ns] + list(func_args)
+        all_args = [params_up, ns] + list(func_args)
+
+    # ns = data.sample_sizes
+    # all_args = [params_up, ns] + list(func_args)
 
     func_kwargs = func_kwargs.copy()
     sfs = model_func(*all_args, **func_kwargs)
