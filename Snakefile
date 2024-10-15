@@ -52,6 +52,12 @@ rule all:
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("{sim_directory}/simulation_results/SFS_sim_{sim_number}.pkl", 
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/samples.txt",
+                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt",
+                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt",
+                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", 
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         # Outputs from run_simulation
@@ -61,23 +67,22 @@ rule all:
         f"{SIM_DIRECTORY}/inference_config_file.json",
         f"{SIM_DIRECTORY}/color_shades.pkl",
         f"{SIM_DIRECTORY}/main_colors.pkl",
-        f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
-        f"{SIM_DIRECTORY}/training_features.npy",
-        f"{SIM_DIRECTORY}/training_targets.npy",
-        f"{SIM_DIRECTORY}/validation_features.npy",
-        f"{SIM_DIRECTORY}/validation_targets.npy",
-        f'{SIM_DIRECTORY}/postprocessing_results.pkl',
-        f"{SIM_DIRECTORY}/features_and_targets.pkl",
-        f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
-        f"{MODEL_DIRECTORY}/snn_results.pkl",
-        f"{MODEL_DIRECTORY}/snn_model.pth"
+        # f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
+        # f"{SIM_DIRECTORY}/training_features.npy",
+        # f"{SIM_DIRECTORY}/training_targets.npy",
+        # f"{SIM_DIRECTORY}/validation_features.npy",
+        # f"{SIM_DIRECTORY}/validation_targets.npy",
+        # f'{SIM_DIRECTORY}/postprocessing_results.pkl',
+        # f"{SIM_DIRECTORY}/features_and_targets.pkl",
+        # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
+        # f"{MODEL_DIRECTORY}/snn_results.pkl",
+        # f"{MODEL_DIRECTORY}/snn_model.pth"
         # Outputs from model training (add these when you have corresponding rules)
         # f"{MODEL_DIRECTORY}/model_config.json",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",
         # f"{MODEL_DIRECTORY}/snn_model.pth",
         # f"{MODEL_DIRECTORY}/xgb_model_obj.pkl",
         # f"{MODEL_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
-
 
 # Rule: Create experiment
 rule create_experiment:
@@ -103,7 +108,6 @@ rule create_experiment:
             --sim_directory {params.SIM_DIRECTORY} \
         """)
 
-# Rule: Run simulation
 rule run_simulation:
     params:
         CONFIG_FILEPATH = CONFIG_FILEPATH,
@@ -120,12 +124,35 @@ rule run_simulation:
         --sim_number {wildcards.sim_number}
         """
 
+# Rule: create the windowed genome trees / vcf files
+
+rule genome_windows:
+    input:
+        sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
+    params:
+        CONFIG_FILEPATH = CONFIG_FILEPATH,
+        SIM_DIRECTORY = SIM_DIRECTORY
+    output:
+        samples_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/samples.txt",
+        flat_map_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt",
+        metadata_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt"  # Added {sim_number}
+
+    shell:
+        """
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_genome_vcfs.py \
+        --sampled_params_path {input.sampled_params_pkl} \
+        --experiment_config_filepath {params.CONFIG_FILEPATH} \
+        --sim_directory {params.SIM_DIRECTORY} \
+        --sim_number {wildcards.sim_number}
+        """
+
 # Rule: Checkpoint for obtain_feature
 checkpoint obtain_feature:
     input: 
         SFS = rules.run_simulation.output.sfs_file,
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl,
         experiment_config_filepath = CONFIG_FILEPATH
+
     output:
         # Use {wildcards.sim_number} within the rule scope
         software_inferences = "{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl"
@@ -313,4 +340,5 @@ rule train_and_predict:
 #         --inference_obj_path {params.inference_obj_path} \
 #         --experiment_directory {params.experiment_directory}
 #         """
+
 

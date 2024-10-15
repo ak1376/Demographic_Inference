@@ -7,10 +7,11 @@ from moments.Godambe import _get_godambe
 import nlopt
 import src.demographic_models as demographic_models
 from src.optimize import opt, ld_opt
+import ray
 
-
+@ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
-
+    ray.init(ignore_reinit_error=True)
     # start_time = time.time()
     ld_stats = moments.LD.Parsing.compute_ld_statistics(  # type: ignore
         vcf_file,
@@ -28,8 +29,6 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
 
 
 def compute_ld_stats_parallel(folderpath, demographic_model, num_reps, r_bins):
-    # start_time = time.time()
-
     flat_map_path = os.path.join(folderpath, "flat_map.txt")
     pop_file_path = os.path.join(folderpath, "samples.txt")
     vcf_files = [
@@ -37,33 +36,33 @@ def compute_ld_stats_parallel(folderpath, demographic_model, num_reps, r_bins):
         for rep_ii in range(num_reps)
     ]
 
-    # preparation_time = time.time()
-    # print(f"Preparation took {preparation_time - start_time:.2f} seconds")
-
-    # Create a list of remote function calls
+    # Launch the tasks in parallel using Ray
     futures = [
-        get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path)
+        get_LD_stats.remote(vcf_file, r_bins, flat_map_path, pop_file_path)
         for vcf_file in vcf_files
     ]
-    return futures
 
-def compute_ld_stats_sequential(flat_map_path, samples_path, metadata_path, r_bins):
-    # Start by defining paths
+    # Wait for all the tasks to complete and retrieve results
+    results = ray.get(futures)
+    return results
+
+# def compute_ld_stats_sequential(flat_map_path, samples_path, metadata_path, r_bins):
+#     # Start by defining paths
     
-    # List of VCF files
-    # Read the file and store each line (filepath) into a list
-    with open(metadata_path, 'r') as f:
-        vcf_files = [line.strip() for line in f]
+#     # List of VCF files
+#     # Read the file and store each line (filepath) into a list
+#     with open(metadata_path, 'r') as f:
+#         vcf_files = [line.strip() for line in f]
 
-    # List to store LD statistics results
-    ld_stats_list = []
+#     # List to store LD statistics results
+#     ld_stats_list = []
 
-    # Sequentially compute LD statistics for each VCF file
-    for vcf_file in vcf_files:
-        ld_stats = get_LD_stats(vcf_file, r_bins, flat_map_path, samples_path)
-        ld_stats_list.append(ld_stats)
+#     # Sequentially compute LD statistics for each VCF file
+#     for vcf_file in vcf_files:
+#         ld_stats = get_LD_stats(vcf_file, r_bins, flat_map_path, samples_path)
+#         ld_stats_list.append(ld_stats)
     
-    return ld_stats_list
+#     return ld_stats_list
 
 
 def run_inference_dadi(
@@ -133,14 +132,14 @@ def run_inference_dadi(
         opt_params = opt_params_dict_list_top_values[j]
         model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
         opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
-        
+        N_ref = opt_theta / (4 * mutation_rate * length)
+
         # Initialize opt_params_dict properly in all cases
         opt_params_dict = {}
 
         if demographic_model == "bottleneck_model":
-            N_ref = opt_theta / (4 * mutation_rate * length)
             opt_params_dict = {
-                # "N0": N_ref,
+                "N0": N_ref,
                 "Nb": opt_params[0] * N_ref,
                 "N_recover": opt_params[1] * N_ref,
                 "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
@@ -149,9 +148,11 @@ def run_inference_dadi(
 
         elif demographic_model == "split_isolation_model":
             opt_params_dict = {
-                "N1": opt_params[0],
-                "N2": opt_params[1],
-                "t_split": opt_params[2]
+                "Na": N_ref,
+                "N1": opt_params[0]*N_ref,
+                "N2": opt_params[1]*N_ref,
+                "t_split": opt_params[2]*2*N_ref,
+                "m": opt_params[3]*2*N_ref
             }
 
         else:
@@ -207,7 +208,8 @@ def run_inference_moments(
             upper_bound=upper_bound,
             log_opt=True, 
             algorithm=nlopt.LN_BOBYQA,
-            maxeval=10
+            maxeval=10,
+            verbose = 3
         ) # I don't want the log likelihood. 
 
         ll_list.append(ll)
@@ -256,7 +258,7 @@ def run_inference_moments(
         if demographic_model == "bottleneck_model":
 
             opt_params_dict = {
-                # "N0": N_ref,
+                "N0": N_ref,
                 "Nb": opt_params[0] * N_ref,
                 "N_recover": opt_params[1] * N_ref,
                 "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref, # type: ignore
@@ -266,9 +268,11 @@ def run_inference_moments(
 
         elif demographic_model == "split_isolation_model":
             opt_params_dict = {
-                "N1": opt_params[0],
-                "N2": opt_params[1],
-                "t_split": opt_params[2],
+                "Na": N_ref,
+                "N1": opt_params[0]*N_ref,
+                "N2": opt_params[1]*N_ref,
+                "t_split": opt_params[2]*2*N_ref,
+                "m": opt_params[3]*2*N_ref,
                 "upper_triangular_FIM": upper_triangular,
             }
 
@@ -301,7 +305,7 @@ def run_inference_momentsLD(
     print("parsing LD statistics")
 
     ld_stats = {}
-    results = compute_ld_stats_sequential(flat_map_path, samples_path, metadata_path, r_bins)
+    results = compute_ld_stats_parallel(flat_map_path, samples_path, metadata_path, r_bins)
 
     for i, result in enumerate(results):
         ld_stats[i] = result
@@ -325,25 +329,29 @@ def run_inference_momentsLD(
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
     
     # Define necessary arguments for the new opt function
-    p0 = p_guess  # Initial parameters guess
-    data = [mv["means"], mv["varcovs"]]  # Means and varcovs
-    model_func = demo_func  # Demographic model function
-    func_args = [r_bins]  # Pass r_bins as part of additional function arguments
-    ftol_abs = 1e-6  # You can specify or adjust these based on your use case
-    xtol_abs = 1e-6
-    maxeval = maxiter  # Use maxiter as max function evaluations   
+    # p0 = p_guess  # Initial parameters guess
+    # data = [mv["means"], mv["varcovs"]]  # Means and varcovs
+    # model_func = demo_func  # Demographic model function
+    # func_args = [r_bins]  # Pass r_bins as part of additional function arguments
+    # ftol_abs = 1e-6  # You can specify or adjust these based on your use case
+    # xtol_abs = 1e-6
+    # maxeval = maxiter  # Use maxiter as max function evaluations   
     
-    opt_params, LL = ld_opt(
-        p0=p0,
-        data=data,
-        model_func=model_func,
-        lower_bound=None,  # Add your actual lower bounds if applicable
-        upper_bound=None,  # Add your actual upper bounds if applicable
-        func_args=func_args,
-        ftol_abs=ftol_abs,
-        xtol_abs=xtol_abs,
-        maxeval=maxeval,
-        verbose=0
+    # opt_params, LL = ld_opt(
+    #     p0=p0,
+    #     data=data,
+    #     model_func=model_func,
+    #     lower_bound=None,  # Add your actual lower bounds if applicable
+    #     upper_bound=None,  # Add your actual upper bounds if applicable
+    #     func_args=func_args,
+    #     ftol_abs=ftol_abs,
+    #     xtol_abs=xtol_abs,
+    #     maxeval=maxeval,
+    #     verbose=0
+    # )
+
+    opt_params, LL = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
+    p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose = 3
     )
 
     opt_params_dict = {}
@@ -358,11 +366,17 @@ def run_inference_momentsLD(
         }
 
     elif demographic_model == "split_isolation_model":
-            opt_params_dict = {
-                "N1": opt_params[0],
-                "N2": opt_params[1],
-                "t_split": opt_params[2]
-            }
+        physical_units = moments.LD.Util.rescale_params( #type:ignore
+        opt_params, ["nu", "nu", "T", "Ne"]
+        )
+
+        print(physical_units)
+
+        opt_params_dict = {
+            "N1": physical_units[0],
+            "N2": physical_units[1],
+            "t_split": physical_units[2]
+        }
     
     print(f'Moments LD results: {opt_params_dict}')
 

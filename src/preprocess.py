@@ -76,7 +76,7 @@ class Processor:
 
 
     @staticmethod
-    def run_msprime_replicates(experiment_config, g, sim_number, folderpath):
+    def run_msprime_replicates(experiment_config, g, folderpath):
         '''
         folderpath: where the window VCF files will be stored. This will be SIM_DIRECTORY/sampled_genome_windows in the snakemake script.
         '''
