@@ -59,8 +59,8 @@ class Processor:
         self.recombination_rate = recombination_rate
         self.mutation_rate = mutation_rate
 
-        self.num_windows = self.experiment_config[
-            "num_windows"
+        self.num_reps = self.experiment_config[
+            "num_reps"
         ]  # This is just for momentsLD. Number of windows to split the genome into.
         self.window_length = self.experiment_config["window_length"]
         self.maxiter = self.experiment_config["maxiter"]
@@ -76,12 +76,13 @@ class Processor:
 
 
     @staticmethod
-    def run_msprime_replicates(experiment_config, g, folderpath):
-        '''
-        folderpath: where the window VCF files will be stored. This will be SIM_DIRECTORY/sampled_genome_windows in the snakemake script.
-        '''
-        # Set up the demography from demes
+    def run_msprime_replicates(sampled_params, demographic_model, experiment_config, folderpath):
+        g = demographic_model(sampled_params)
         demog = msprime.Demography.from_demes(g)
+
+        # Create directory for storing VCFs
+        output_folder = folderpath
+        os.makedirs(output_folder, exist_ok=True)
 
         # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
         samples = [
@@ -89,49 +90,91 @@ class Processor:
             for pop_name, sample_size in experiment_config['num_samples'].items()
         ]
 
-        # Simulate ancestry for multiple populations
-        ts = msprime.sim_ancestry(
-            samples=samples,
+        tree_sequences = msprime.sim_ancestry(
+            samples,
             demography=demog,
             sequence_length=experiment_config['genome_length'],
             recombination_rate=experiment_config['recombination_rate'],
+            num_replicates=experiment_config['num_reps'],
             random_seed=experiment_config['seed'],
         )
-        
-        # Simulate mutations over the ancestry tree sequence
-        ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'])
-
-        # Create directory for storing VCFs
-        output_folder = folderpath
-        os.makedirs(output_folder, exist_ok=True)
-
-        # Generate random windows
-        windows = [
-            generate_window(ts, experiment_config['window_length'], experiment_config['genome_length'])
-            for _ in range(experiment_config['num_windows'])
-        ]
 
         # List to store file paths of the generated VCFs
         vcf_filepaths = []
 
-        # Iterate over windows and write VCFs
-        for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
-            vcf_name = os.path.join(output_folder, f'window.{ii}.vcf')
+        for ii, ts in enumerate(tree_sequences):
+            ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'], random_seed=ii + 1)
+            vcf_name = os.path.join(output_folder, f'rep.{ii}.vcf')
             with open(vcf_name, "w+") as fout:
-                ts_window.write_vcf(fout, allow_position_zero=True)
-            
-            # Compress the VCF file
+                ts.write_vcf(fout, allow_position_zero=True)
             os.system(f"gzip {vcf_name}")
-            
+
             # Store the compressed VCF file path
             vcf_filepaths.append(f"{vcf_name}.gz")
-        
+
         # Write the metadata file with all VCF file paths
         metadata_file = os.path.join(output_folder, "metadata.txt")
         with open(metadata_file, "w+") as metafile:
             metafile.write("\n".join(vcf_filepaths))
 
         print(f"Metadata file written to {metadata_file}")
+    
+    # def run_msprime_replicates(experiment_config, g, folderpath):
+    #     '''
+    #     folderpath: where the window VCF files will be stored. This will be SIM_DIRECTORY/sampled_genome_windows in the snakemake script.
+    #     '''
+    #     # Set up the demography from demes
+    #     demog = msprime.Demography.from_demes(g)
+
+    #     # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
+    #     samples = [
+    #         msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
+    #         for pop_name, sample_size in experiment_config['num_samples'].items()
+    #     ]
+
+    #     # Simulate ancestry for multiple populations
+    #     ts = msprime.sim_ancestry(
+    #         samples=samples,
+    #         demography=demog,
+    #         sequence_length=experiment_config['genome_length'],
+    #         recombination_rate=experiment_config['recombination_rate'],
+    #         random_seed=experiment_config['seed'],
+    #     )
+        
+    #     # Simulate mutations over the ancestry tree sequence
+    #     ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'])
+
+    #     # Create directory for storing VCFs
+    #     output_folder = folderpath
+    #     os.makedirs(output_folder, exist_ok=True)
+
+    #     # Generate random windows
+    #     windows = [
+    #         generate_window(ts, experiment_config['window_length'], experiment_config['genome_length'])
+    #         for _ in range(experiment_config['num_windows'])
+    #     ]
+
+    #     # List to store file paths of the generated VCFs
+    #     vcf_filepaths = []
+
+    #     # Iterate over windows and write VCFs
+    #     for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
+    #         vcf_name = os.path.join(output_folder, f'window.{ii}.vcf')
+    #         with open(vcf_name, "w+") as fout:
+    #             ts_window.write_vcf(fout, allow_position_zero=True)
+            
+    #         # Compress the VCF file
+    #         os.system(f"gzip {vcf_name}")
+            
+    #         # Store the compressed VCF file path
+    #         vcf_filepaths.append(f"{vcf_name}.gz")
+        
+    #     # Write the metadata file with all VCF file paths
+    #     metadata_file = os.path.join(output_folder, "metadata.txt")
+    #     with open(metadata_file, "w+") as metafile:
+    #         metafile.write("\n".join(vcf_filepaths))
+
+    #     print(f"Metadata file written to {metadata_file}")
 
     @staticmethod
     def write_samples_and_rec_map(experiment_config, folderpath):

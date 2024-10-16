@@ -30,9 +30,9 @@ def main(experiment_config_file, sampled_params_path, sim_directory, sim_number)
         raise ValueError(f"Unsupported demographic model: {experiment_config['demographic_model']}")
 
     # Simulate process and save windows as VCF files
-    g = demographic_model(sampled_params)
     directory_for_windows = f"{sim_directory}/sampled_genome_windows/sim_{sim_number}"
-    Processor.run_msprime_replicates(experiment_config, g, directory_for_windows)
+
+    Processor.run_msprime_replicates(sampled_params=sampled_params, demographic_model=demographic_model,  experiment_config = experiment_config, folderpath=directory_for_windows)
     print("MSPRIME REPLICATES DONE!!!!!!")
     samples_file, flat_map_file = Processor.write_samples_and_rec_map(experiment_config, directory_for_windows)
     print("SAMPLES AND REC MAP WRITTEN!!!!!!")

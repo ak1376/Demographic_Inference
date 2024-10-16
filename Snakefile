@@ -137,6 +137,10 @@ rule genome_windows:
         flat_map_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt",
         metadata_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt"  # Added {sim_number}
 
+    # resources: 
+    #     threads = 66
+    #     # Two greater than the number of cores requested. Tradeoff between waiting for resources and speed. 
+
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_genome_vcfs.py \
@@ -176,7 +180,7 @@ def gather_software_inferences(wildcards):
     )
 
 # Rule to aggregate features after all simulations are complete
-rule aggregate_features:
+checkpoint aggregate_features:
     input:
         software_inferences = gather_software_inferences,
         experiment_config_filepath = CONFIG_FILEPATH  # No wildcard needed here

@@ -29,18 +29,6 @@ def bottleneck_model(sampled_params):
     return g
 
 def split_isolation_model_simulation(sampled_params):
-    """
-    This function defines a demographic model based on a split isolation model
-    with migration, using parameters passed in the `sampled_params` dictionary.
-
-    :param sampled_params: Dictionary containing demographic parameters
-                           - Na: Ancestral population size
-                           - N1: Size of population 1 after split
-                           - N2: Size of population 2 after split
-                           - m: Migration rate between populations 1 and 2
-                           - t_split: Time of the population split in generations
-    :return: A demography object resolved from the demes model
-    """
 
     # Unpack the sampled parameters
     Na, N1, N2, m, t_split = (
@@ -51,43 +39,12 @@ def split_isolation_model_simulation(sampled_params):
         sampled_params["t_split"],  # Time of the population split (in generations)
     )
 
-    # Initialize the builder
     b = demes.Builder()
-
-    # Add the ancestral population (deme "anc")
-    b.add_deme(
-        "ancestral",
-        epochs=[
-            dict(start_size=Na, end_time=t_split),  # Ancestral population size until the split
-        ],
-    )
-
-    # Add population 1 (deme "deme0") that splits from the ancestral population
-    b.add_deme(
-        "N1",  # Consistent with the naming in the comparison code
-        ancestors=["ancestral"],  # Inherits from the ancestral population
-        start_time=t_split,  # Time of the split
-        epochs=[
-            dict(start_size=N1),  # Population 1 size post-split
-        ],
-    )
-
-    # Add population 2 (deme "deme1") that also splits from the ancestral population
-    b.add_deme(
-        "N2",  # Consistent with the naming in the comparison code
-        ancestors=["ancestral"],  # Inherits from the ancestral population
-        start_time=t_split,  # Time of the split
-        epochs=[
-            dict(start_size=N2),  # Population 2 size post-split
-        ],
-    )
-
-    # Add migration between the two populations
+    b.add_deme("Na", epochs=[dict(start_size=Na, end_time=t_split)])
+    b.add_deme("N1", ancestors=["Na"], epochs=[dict(start_size=N1)])
+    b.add_deme("N2", ancestors=["Na"], epochs=[dict(start_size=N2)])
     b.add_migration(demes=["N1", "N2"], rate=m)
-
-    # Resolve and return the model
     g = b.resolve()
-
     return g
 
 def split_isolation_model_dadi(params, ns, pts):

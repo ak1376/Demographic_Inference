@@ -9,30 +9,36 @@ import src.demographic_models as demographic_models
 from src.optimize import opt, ld_opt
 import ray
 
+# Define your function with Ray's remote decorator
 @ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
     ray.init(ignore_reinit_error=True)
-    # start_time = time.time()
-    ld_stats = moments.LD.Parsing.compute_ld_statistics(  # type: ignore
+    ld_stats = moments.LD.Parsing.compute_ld_statistics( #type:ignore
         vcf_file,
         rec_map_file=flat_map_path,
         pop_file=pop_file_path,
-        pops=["N1", "N2"], #TODO: FIX LATER
+        pops=["N1", "N2"], # TODO: Change later
         r_bins=r_bins,
         report=False,
     )
-    # end_time = time.time()
-
-    # print(f"LD stats for {vcf_file} computed in {end_time - start_time} seconds")
 
     return ld_stats
 
+def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
 
-def compute_ld_stats_parallel(folderpath, demographic_model, num_reps, r_bins):
+    #     print("parsing LD statistics in parallel")
+    # # Submit tasks to Ray in parallel using .remote()
+    # futures = [get_LD_stats.remote(ii, r_bins) for ii in range(num_reps)]
+    # # Gather results with ray.get() to collect them once the tasks are finished
+    # ld_stats = ray.get(futures)
+    # # Optionally, you can convert the list of results into a dictionary with indices
+    # ld_stats_dict = {ii: result for ii, result in enumerate(ld_stats)}
+
+
     flat_map_path = os.path.join(folderpath, "flat_map.txt")
     pop_file_path = os.path.join(folderpath, "samples.txt")
     vcf_files = [
-        os.path.join(folderpath, f"{demographic_model}_window.{rep_ii}.vcf.gz")
+        os.path.join(folderpath, f"rep.{rep_ii}.vcf.gz")
         for rep_ii in range(num_reps)
     ]
 
@@ -292,9 +298,7 @@ def run_inference_moments(
     return model_list, opt_theta_list, opt_params_final_list, ll_list
 
 
-def run_inference_momentsLD(
-    flat_map_path, samples_path, metadata_path, p_guess, demographic_model, maxiter=20
-):
+def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
     """
     This should do the parameter inference for momentsLD
     index: unique simulation number
@@ -304,8 +308,9 @@ def run_inference_momentsLD(
 
     print("parsing LD statistics")
 
+
     ld_stats = {}
-    results = compute_ld_stats_parallel(flat_map_path, samples_path, metadata_path, r_bins)
+    results = compute_ld_stats_parallel(folderpath, num_reps, r_bins)
 
     for i, result in enumerate(results):
         ld_stats[i] = result
@@ -326,7 +331,15 @@ def run_inference_momentsLD(
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # Set up the initial guess
-    p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
+    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
+    opt_params, LL = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
+        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins,
+    )
+
+    physical_units = moments.LD.Util.rescale_params( # type: ignore
+        opt_params, ["nu", "nu", "T", "m", "Ne"]
+)
+    # p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
     
     # Define necessary arguments for the new opt function
     # p0 = p_guess  # Initial parameters guess
@@ -367,7 +380,7 @@ def run_inference_momentsLD(
 
     elif demographic_model == "split_isolation_model":
         physical_units = moments.LD.Util.rescale_params( #type:ignore
-        opt_params, ["nu", "nu", "T", "Ne"]
+            opt_params, ["nu", "nu", "T", "m", "Ne"]
         )
 
         print(physical_units)
@@ -375,7 +388,9 @@ def run_inference_momentsLD(
         opt_params_dict = {
             "N1": physical_units[0],
             "N2": physical_units[1],
-            "t_split": physical_units[2]
+            "t_split": physical_units[2],
+            "m": physical_units[3], 
+            'Na': physical_units[4]
         }
     
     print(f'Moments LD results: {opt_params_dict}')

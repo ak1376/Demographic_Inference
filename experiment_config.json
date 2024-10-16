@@ -3,24 +3,26 @@
         "t_split": 5000,
         "N1": 10000,
         "N2": 10000,
-        "Na": 20000
+        "Na": 20000, 
+        "m": 1e-4
     },
     "lower_bound_params": {
         "t_split": 100,
         "N1": 100,
         "N2": 100,
-        "Na": 100
+        "Na": 100, 
+        "m": 1e-8
     },
     "num_sims_pretrain": 2,
-    "num_sims_inference": 5,
+    "num_sims_inference": 1,
     "num_samples": {
-        "N1": 10,
-        "N2": 10
+        "N1": 20,
+        "N2": 20
     },
-    "dadi_analysis": true,
-    "moments_analysis": true,
+    "dadi_analysis": false,
+    "moments_analysis": false,
     "momentsLD_analysis": true,
-    "num_windows": 100,
+    "num_reps": 100,
     "window_length": 1000000.0,
     "maxiter": 100,
     "genome_length": 1000000.0,
@@ -44,7 +46,8 @@
     "optimization_initial_guess": [
         0.1,
         2,
-        0.075
+        0.075,
+        2
     ],
     "parameters_to_estimate": [
         "N1",
@@ -62,7 +65,7 @@
         null,
         null,
         null,
-        1e-5
+        1e-4
     ],
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
