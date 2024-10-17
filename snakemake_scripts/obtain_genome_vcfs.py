@@ -19,22 +19,12 @@ def main(experiment_config_file, sampled_params_path, sim_directory, sim_number)
     with open(experiment_config_file, 'r') as f:
         experiment_config = json.load(f)
 
-
-    if experiment_config["demographic_model"] == "bottleneck_model":
-        demographic_model = demographic_models.bottleneck_model
-
-    elif experiment_config["demographic_model"] == "split_isolation_model":
-        demographic_model = demographic_models.split_isolation_model_simulation
-
-    else:
-        raise ValueError(f"Unsupported demographic model: {experiment_config['demographic_model']}")
-
     # Simulate process and save windows as VCF files
     directory_for_windows = f"{sim_directory}/sampled_genome_windows/sim_{sim_number}"
 
-    Processor.run_msprime_replicates(sampled_params=sampled_params, demographic_model=demographic_model,  experiment_config = experiment_config, folderpath=directory_for_windows)
+    Processor.run_msprime_replicates(sampled_params=sampled_params, experiment_config = experiment_config, folderpath=directory_for_windows)
     print("MSPRIME REPLICATES DONE!!!!!!")
-    samples_file, flat_map_file = Processor.write_samples_and_rec_map(experiment_config, directory_for_windows)
+    Processor.write_samples_and_rec_map(experiment_config, directory_for_windows)
     print("SAMPLES AND REC MAP WRITTEN!!!!!!")
 
 if __name__ == "__main__":

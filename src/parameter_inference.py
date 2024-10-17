@@ -214,8 +214,7 @@ def run_inference_moments(
             upper_bound=upper_bound,
             log_opt=True, 
             algorithm=nlopt.LN_BOBYQA,
-            maxeval=10,
-            verbose = 3
+            maxeval=10
         ) # I don't want the log likelihood. 
 
         ll_list.append(ll)
@@ -317,8 +316,8 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
 
     # print("computing mean and varcov matrix from LD statistics sums")
     mv = moments.LD.Parsing.bootstrap_data(ld_stats)  # type: ignore
-    print("SHAPE OF THE COVARIANCE MATRIX")
-    print(mv["varcovs"][-1].shape)
+    # print("SHAPE OF THE COVARIANCE MATRIX")
+    # print(mv["varcovs"][-1].shape)
     # mv["varcovs"][-1].shape = (1, 1)
 
     if demographic_model == "bottleneck_model":
@@ -333,7 +332,7 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
     # Set up the initial guess
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
     opt_params, LL = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
-        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins,
+        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, maxiter = 1000, verbose = 3
     )
 
     physical_units = moments.LD.Util.rescale_params( # type: ignore
@@ -392,7 +391,14 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
             "m": physical_units[3], 
             'Na': physical_units[4]
         }
+
+        print("best fit parameters:")
+        print(f"  N(deme0)         :  {physical_units[0]:.1f}")
+        print(f"  N(deme1)         :  {physical_units[1]:.1f}")
+        print(f"  Div. time (gen)  :  {physical_units[2]:.1f}")
+        print(f"  Migration rate   :  {physical_units[3]:.6f}")
+        print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
     
-    print(f'Moments LD results: {opt_params_dict}')
+    # print(f'Moments LD results: {opt_params_dict}')
 
     return opt_params_dict

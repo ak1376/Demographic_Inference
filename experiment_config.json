@@ -10,7 +10,7 @@
         "t_split": 100,
         "N1": 100,
         "N2": 100,
-        "Na": 100, 
+        "Na": 10000, 
         "m": 1e-8
     },
     "num_sims_pretrain": 2,
@@ -20,7 +20,7 @@
         "N2": 20
     },
     "dadi_analysis": false,
-    "moments_analysis": false,
+    "moments_analysis": true,
     "momentsLD_analysis": true,
     "num_reps": 100,
     "window_length": 1000000.0,
