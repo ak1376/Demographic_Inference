@@ -16,6 +16,7 @@ import json
 def postprocessing(experiment_config, preprocessing_results_obj, training_features,training_targets, validation_features, validation_targets):
 
     # Load in the training features, training targets, validation features, and validation targets
+
     training_features = np.load(training_features)
     validation_features = np.load(validation_features)
     training_targets = np.load(training_targets)
@@ -41,14 +42,19 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
 
     targets_dict = {
         'training': training_targets,
-        'validation': validation_targets
+        'validation': validation_targets,
+        'parameter_names': preprocessing_results_obj['parameter_names']
     }
 
     for stage in ['training', 'validation']:
-        num_sims, num_reps, num_analyses, num_params = preprocessing_results_obj[stage]['predictions'].shape
         
         features = features_dict[stage]
         targets = targets_dict[stage]
+
+        print("=====================================================================================================")
+        print(f'Stage: {stage}, Maximum Target Value: {np.max(targets)}, Minimum Target Value: {np.min(targets)}')
+        print(f'Shape of Targets: {targets.shape}')
+        print("=====================================================================================================")
 
         if experiment_config['remove_outliers'] == True:
             # Remove outliers
@@ -80,10 +86,10 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
             print("===> Normalizing the data.")
             
             # Extract upper bound values based on the keys in 'parameters_to_estimate'
-            upper_bound_values = np.array([experiment_config['upper_bound_params'][key] for key in experiment_config['parameters_to_estimate']])
+            upper_bound_values = np.array([experiment_config['upper_bound_params'][key] for key in experiment_config['parameter_names']])
 
             # Extract lower bound values based on the keys in 'parameters_to_estimate'
-            lower_bound_values = np.array([experiment_config['lower_bound_params'][key] for key in experiment_config['parameters_to_estimate']])
+            lower_bound_values = np.array([experiment_config['lower_bound_params'][key] for key in experiment_config['parameter_names']])
 
             # Calculate mean and standard deviation vectors
             mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
@@ -91,6 +97,9 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
 
             # Normalize the targets
             normalized_targets = (targets - mean_vector) / (std_vector)
+            print(f'Targets shape: {normalized_targets.shape}')
+            print(f'Maximum value of normalized targets: {np.max(normalized_targets)}')
+            print(f'Minimum value of normalized targets: {np.min(normalized_targets)}')
 
             # Check for zero values in the normalized targets
             zero_target_indices = np.where(normalized_targets == 0)
@@ -125,14 +134,16 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
                 print("No zero values found in the normalized features.")  
 
 
-        targets = targets.reshape(targets.shape[0], -1)
+            targets = targets.reshape(targets.shape[0], -1)
 
         postprocessing_dict[stage] = {
             "normalization": experiment_config['normalization'],
             'predictions': features,
             "normalized_predictions": normalized_features,
-            'targets': targets
+            'targets': targets,
         }
+
+        postprocessing_dict['parameter_names'] = targets_dict['parameter_names']
     
     return postprocessing_dict
 

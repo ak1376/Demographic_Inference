@@ -94,14 +94,8 @@ class Processor:
         output_folder = folderpath
         os.makedirs(output_folder, exist_ok=True)
 
-        # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
-        samples = [
-            msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
-            for pop_name, sample_size in experiment_config['num_samples'].items()
-        ]
-
         tree_sequences = msprime.sim_ancestry(
-            samples,
+            samples = experiment_config['num_samples'],
             demography=demog,
             sequence_length=experiment_config['genome_length'],
             recombination_rate=experiment_config['recombination_rate'],

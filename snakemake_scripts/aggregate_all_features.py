@@ -43,7 +43,7 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
         ll_data = []
         
         # Step 2: Dynamically extract and append data for each analysis type
-        for analysis_type in ['dadi_analysis', 'moments_analysis', 'momentsLD_analysis']:
+        for analysis_type in ['dadi_analysis', 'moments_analysis']:
             if processor.experiment_config.get(analysis_type):
                 analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # e.g., 'opt_params_dadi'
 
@@ -62,7 +62,7 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
                     
                     for index in np.arange(len(result[analysis_key])):  # Iterate over the demographic parameters
                         param_values = list(result[analysis_key][index].values())
-                        target_values = [result['simulated_params'][key] for key in experiment_config['parameters_to_estimate']]
+                        target_values = [result['simulated_params'][key] for key in result['simulated_params']]
                     
                         if analysis_type == 'moments_analysis' and processor.experiment_config.get('use_FIM', True):
                             # Store upper triangular FIM separately
@@ -78,43 +78,74 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
                     ll_values_data.append(ll_values)
 
                 # Append collected data to the lists
-                analysis_data.append(analysis_type_data)
+                analysis_data.append(analysis_type_data) # will store all replicates and all simulations' inferred parameters
                 targets_data.append(targets_type_data)
 
         # Step 3: Convert data into NumPy arrays
+
         analysis_arrays = np.array(analysis_data)
         targets_arrays = np.array(targets_data)
-        print(targets_arrays.shape)
-        print(analysis_arrays.shape)
+
+        # Now process momentsLD if it exists
+
+        if processor.experiment_config.get('momentsLD_analysis'):
+            print('Processing momentsLD')
+            analysis_data_momentsLD = []
+
+            software_inferences_list = [software_inferences_file_list[i] for i in indices]
+
+            for result_file in software_inferences_list:
+                with open(result_file, "rb") as f:
+                    result = pickle.load(f)
+
+                for index in np.arange(len(result['opt_params_momentsLD'])):
+                    param_values = list(result['opt_params_momentsLD'][index].values())
+
+                    analysis_data_momentsLD.append(param_values)
+
+            analysis_arrays_momentsLD = np.array(analysis_data_momentsLD)
+
+
 
         # Determine array dimensions
-        num_analyses = processor.experiment_config['dadi_analysis'] + processor.experiment_config['moments_analysis'] + processor.experiment_config['momentsLD_analysis']
+        num_analyses = processor.experiment_config['dadi_analysis'] + processor.experiment_config['moments_analysis']
         num_sims = len(software_inferences_list)
         num_reps = len(analysis_data[0]) // num_sims
+        # num_params = len(processor.experiment_config['parameter_names'])
         num_params = len(processor.experiment_config['parameters_to_estimate'])
 
         # Reshape arrays to the desired format
         analysis_arrays = analysis_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
         targets_arrays = targets_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
 
-        # Transpose arrays to match the desired output shape
+        # # Transpose arrays to match the desired output shape
         features = np.transpose(analysis_arrays, (1, 2, 0, 3))
         targets = np.transpose(targets_arrays, (1, 2, 0, 3))
 
         # Handle upper triangular data if it exists
         if upper_triangular_data:
-            upper_triangular_array = np.array(upper_triangular_data).reshape((1, num_sims, num_reps, upper_triangular_data[0].shape[0]))
-            upper_triangular_array = np.transpose(upper_triangular_array, (1, 2, 0, 3))
+            upper_triangular_array = np.array(upper_triangular_data)
+            # upper_triangular_array = np.array(upper_triangular_data).reshape((1, num_sims, num_reps, upper_triangular_data[0].shape[0]))
+            # upper_triangular_array = np.transpose(upper_triangular_array, (1, 2, 0, 3))
         else:
             upper_triangular_array = None
 
         # Store features and targets in the preprocessing results object
+        preprocessing_results_obj['parameter_names'] = list(result['simulated_params'].keys()) #type:ignore
         preprocessing_results_obj[stage]["predictions"] = features
         preprocessing_results_obj[stage]["targets"] = targets
         preprocessing_results_obj[stage]["upper_triangular_FIM"] = upper_triangular_array
 
+        if processor.experiment_config.get('momentsLD_analysis'):
+            preprocessing_results_obj[stage]['momentsLD_predictions'] = analysis_arrays_momentsLD
+
+
         # Reshape features for saving
-        features = features.reshape(features.shape[0], -1)
+
+        if processor.experiment_config.get('momentsLD_analysis'):
+            features = np.concatenate((features.reshape(features.shape[0], -1), analysis_arrays_momentsLD), axis=1)
+        else:
+            features = features.reshape(features.shape[0], -1)
 
         # Concatenate features with FIM data if applicable
         if experiment_config['use_FIM']:
@@ -126,6 +157,7 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
 
         # Save the features and targets
         np.save(f"{sim_directory}/{stage}_features.npy", all_features)
+        print(targets.shape)
         targets = targets[:, 0, 0, :]  # Extract ground truth values for the first replicate
         np.save(f"{sim_directory}/{stage}_targets.npy", targets)
 

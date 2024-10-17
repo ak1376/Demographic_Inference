@@ -58,8 +58,8 @@ rule all:
                 sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt",
                 sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        # expand("{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", 
+        #        sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         # Outputs from run_simulation
         # f"{SIM_DIRECTORY}/simulation_results/metadata.txt",
         # Outputs from create_experiment
@@ -74,9 +74,9 @@ rule all:
         f"{SIM_DIRECTORY}/validation_targets.npy",
         f'{SIM_DIRECTORY}/postprocessing_results.pkl',
         f"{SIM_DIRECTORY}/features_and_targets.pkl",
-        # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
-        # f"{MODEL_DIRECTORY}/snn_results.pkl",
-        # f"{MODEL_DIRECTORY}/snn_model.pth"
+        f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
+        f"{MODEL_DIRECTORY}/snn_results.pkl",
+        f"{MODEL_DIRECTORY}/snn_model.pth"
         # Outputs from model training (add these when you have corresponding rules)
         # f"{MODEL_DIRECTORY}/model_config.json",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",
@@ -124,35 +124,31 @@ rule run_simulation:
         --sim_number {wildcards.sim_number}
         """
 
+
 # Rule: create the windowed genome trees / vcf files
 
 rule genome_windows:
     input:
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
-    params:
-        CONFIG_FILEPATH = CONFIG_FILEPATH,
-        SIM_DIRECTORY = SIM_DIRECTORY
     output:
         samples_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/samples.txt",
         flat_map_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt",
-        metadata_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt"  # Added {sim_number}
-
-    # resources: 
-    #     threads = 66
-    #     # Two greater than the number of cores requested. Tradeoff between waiting for resources and speed. 
-
+        metadata_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_genome_vcfs.py \
         --sampled_params_path {input.sampled_params_pkl} \
-        --experiment_config_filepath {params.CONFIG_FILEPATH} \
-        --sim_directory {params.SIM_DIRECTORY} \
+        --experiment_config_filepath {CONFIG_FILEPATH} \
+        --sim_directory {SIM_DIRECTORY} \
         --sim_number {wildcards.sim_number}
         """
+
+
 
 # Rule: Checkpoint for obtain_feature
 checkpoint obtain_feature:
     input: 
+        flat_map_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt",
         SFS = rules.run_simulation.output.sfs_file,
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl,
         experiment_config_filepath = CONFIG_FILEPATH
@@ -180,7 +176,8 @@ def gather_software_inferences(wildcards):
     )
 
 # Rule to aggregate features after all simulations are complete
-checkpoint aggregate_features:
+
+rule aggregate_features:
     input:
         software_inferences = gather_software_inferences,
         experiment_config_filepath = CONFIG_FILEPATH  # No wildcard needed here

@@ -28,6 +28,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
 
+    # It's strange because we also want to optimize the ancestral size but indirectly through theta. Therefore, the ancestral population size will not be an element in the upper or lower bounds
+    
     upper_bound = [b if b is not None else None for b in experiment_config['upper_bound_optimization']]
     lower_bound = [b if b is not None else None for b in experiment_config['lower_bound_optimization']]
 
@@ -116,17 +118,23 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
 
         p_guess = experiment_config['optimization_initial_guess'].copy()
         
-        p_guess.extend([10000])
+        p_guess.extend([10000]) #TODO: Need to change this to not be a hardcoded value. 
         
         folderpath = f'{sim_directory}/sampled_genome_windows/sim_{sim_number}'
 
-        opt_params_momentsLD = run_inference_momentsLD(folderpath=folderpath,
+        opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(folderpath=folderpath,
           demographic_model=experiment_config["demographic_model"],
           num_reps = experiment_config["num_reps"], 
           p_guess = p_guess
         )
 
-        momentsLD_results = {"opt_params_momentsLD": opt_params_momentsLD}
+        momentsLD_results = {
+            "opt_params_momentsLD": opt_params_momentsLD,
+            "ll_all_replicates_momentsLD": ll_list_momentsLD
+            }
+        
+        print(momentsLD_results.keys())
+        
         mega_result_dict.update(momentsLD_results)
 
     # Save the results in a pickle file

@@ -53,8 +53,22 @@ def main(
         model_config,
         color_shades,
         main_colors,
-        param_names=model_config["neural_net_hyperparameters"]["parameter_names"],
+        param_names=features["parameter_names"],
     )
+
+    # print(f'Shape of the tensors')
+    # print(f'Training features: {features["training"]["features"].shape}')
+    # print(f'Training targets: {features["training"]["targets"].shape}')
+    # print(f'Validation features: {features["validation"]["features"].shape}')
+    # print(f'Validation targets: {features["validation"]["targets"].shape}')
+
+    print(f'Max Values')
+    print(f'Training features: {features["training"]["features"].max()}')
+    print(f'Training targets: {features["training"]["targets"].max()}')
+    print(f'Validation features: {features["validation"]["features"].max()}')
+    print(f'Validation targets: {features["validation"]["targets"].max()}')
+
+
 
     snn_model, train_losses, val_losses = trainer.train(
         model = mdl,

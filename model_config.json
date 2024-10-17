@@ -1,8 +1,8 @@
 {
     "neural_net_hyperparameters": {
-        "input_size": 30,
+        "input_size": 10,
         "hidden_size": 1000,
-        "output_size": 3,
+        "output_size": 5,
         "num_epochs": 500,
         "learning_rate": 3e-4,
         "num_layers": 3,
