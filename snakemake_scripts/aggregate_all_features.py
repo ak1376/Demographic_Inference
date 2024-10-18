@@ -62,6 +62,8 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
                     
                     for index in np.arange(len(result[analysis_key])):  # Iterate over the demographic parameters
                         param_values = list(result[analysis_key][index].values())
+                        for key in result['simulated_params']:
+                            print(key)
                         target_values = [result['simulated_params'][key] for key in result['simulated_params']]
                     
                         if analysis_type == 'moments_analysis' and processor.experiment_config.get('use_FIM', True):

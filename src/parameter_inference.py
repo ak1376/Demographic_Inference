@@ -309,6 +309,9 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
 
 
     ld_stats = {}
+    ll_list = []
+    opt_params_dict_list = []
+
     results = compute_ld_stats_parallel(folderpath, num_reps, r_bins)
 
     for i, result in enumerate(results):
@@ -331,13 +334,7 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
 
     # Set up the initial guess
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
-    opt_params, LL = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
-        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, maxiter = 1000, verbose = 3
-    )
 
-    physical_units = moments.LD.Util.rescale_params( # type: ignore
-        opt_params, ["nu", "nu", "T", "m", "Ne"]
-)
     # p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
     
     # Define necessary arguments for the new opt function
@@ -362,9 +359,14 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
     #     verbose=0
     # )
 
-    opt_params, LL = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
-    p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose = 3
+    opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
+    p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins
     )
+
+    physical_units = moments.LD.Util.rescale_params( # type: ignore
+        opt_params, ["nu", "nu", "T", "m", "Ne"]
+    )
+    ll_list.append(ll)
 
     opt_params_dict = {}
     if demographic_model == "bottleneck_model":
@@ -398,7 +400,10 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
         print(f"  Div. time (gen)  :  {physical_units[2]:.1f}")
         print(f"  Migration rate   :  {physical_units[3]:.6f}")
         print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
+
+        opt_params_dict_list.append(opt_params_dict)
+
     
     # print(f'Moments LD results: {opt_params_dict}')
 
-    return opt_params_dict
+    return opt_params_dict_list, ll_list 

@@ -132,9 +132,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             "opt_params_momentsLD": opt_params_momentsLD,
             "ll_all_replicates_momentsLD": ll_list_momentsLD
             }
-        
-        print(momentsLD_results.keys())
-        
+                
         mega_result_dict.update(momentsLD_results)
 
     # Save the results in a pickle file
