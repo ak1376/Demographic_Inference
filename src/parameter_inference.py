@@ -12,7 +12,6 @@ import ray
 # Define your function with Ray's remote decorator
 @ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
-    ray.init(ignore_reinit_error=True)
     ld_stats = moments.LD.Parsing.compute_ld_statistics( #type:ignore
         vcf_file,
         rec_map_file=flat_map_path,
@@ -120,6 +119,7 @@ def run_inference_dadi(
             upper_bound=upper_bound,
             algorithm=nlopt.LN_BOBYQA,
             maxeval=10,
+            verbose=3
         )
 
         ll_list.append(ll_value)

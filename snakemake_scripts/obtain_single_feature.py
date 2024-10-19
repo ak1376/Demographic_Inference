@@ -1,13 +1,10 @@
 # obtain_features.py
 
-import numpy as np
 import pickle
-from src.preprocess import Processor
 import json
-import src.demographic_models as demographic_models
 from src.parameter_inference import run_inference_dadi, run_inference_moments, run_inference_momentsLD
 import argparse
-import os
+import ray
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -70,7 +67,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
                 p0= experiment_config['optimization_initial_guess'],
                 lower_bound= lower_bound,
                 upper_bound= upper_bound,
-                num_samples=100,
+                num_samples=20,
                 demographic_model=experiment_config['demographic_model'],
                 mutation_rate=experiment_config['mutation_rate'],
                 length=experiment_config['genome_length'],
@@ -140,8 +137,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
         pickle.dump(mega_result_dict, f)
 
 if __name__ == "__main__":
+    ray.init(ignore_reinit_error=True)
     parser = argparse.ArgumentParser()
-
     parser.add_argument("--sfs_file", type=str, required=True)
     parser.add_argument("--sampled_params_pkl", type=str, required=True)
     parser.add_argument("--experiment_config_filepath", type=str, required=True)

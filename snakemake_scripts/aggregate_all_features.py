@@ -1,8 +1,8 @@
 import argparse
-from src.preprocess import Processor
 import pickle
 import numpy as np
 import json
+import pandas as pd
 
 
 def main(experiment_config_file, sim_directory, software_inferences_file_list):
@@ -12,14 +12,6 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
     # Load the experiment configuration
     with open(experiment_config_file, "r") as f:
         experiment_config = json.load(f)
-        
-    # Initialize processor
-    processor = Processor(
-        experiment_config,
-        experiment_directory=sim_directory,
-        recombination_rate=experiment_config["recombination_rate"],
-        mutation_rate=experiment_config["mutation_rate"],
-    )
 
     # Split the data into training and validation sets
     all_indices = np.arange(experiment_config["num_sims_pretrain"])
@@ -36,136 +28,73 @@ def main(experiment_config_file, sim_directory, software_inferences_file_list):
         ("training", training_indices),
         ("validation", validation_indices)
     ]:
-        # Step 1: Initialize lists to collect analysis data
-        analysis_data = []
-        upper_triangular_data = []
-        targets_data = []
-        ll_data = []
         
+        # Step 1: Initialize lists to hold simulation data
+        all_simulations_data = []   # Inferred parameters
+        all_targets_data = []       # Simulated parameters (targets)
+
         # Step 2: Dynamically extract and append data for each analysis type
-        for analysis_type in ['dadi_analysis', 'moments_analysis']:
-            if processor.experiment_config.get(analysis_type):
-                analysis_key = 'opt_params_' + analysis_type.split('_')[0]  # e.g., 'opt_params_dadi'
+        for sim_num, idx in enumerate(indices):
+            sim_data = {}  # Dictionary to hold inferred parameters for each simulation
+            target_data = {}  # Dictionary to hold target parameters for each simulation
 
-                analysis_type_data = []
-                targets_type_data = []
-                ll_values_data = []
+            result_file = software_inferences_file_list[idx]
+            with open(result_file, "rb") as f:
+                result = pickle.load(f)
 
-                # Filter software inference files for the current stage
-                software_inferences_list = [software_inferences_file_list[i] for i in indices]
+            # Collect moments_analysis data
+            if experiment_config['moments_analysis']:
+                for replicate, params in enumerate(result['opt_params_moments']):
+                    for key, value in params.items():
+                        sim_data[f'Moments_rep{replicate+1}_{key}'] = value
 
-                for result_file in software_inferences_list:
-                    with open(result_file, "rb") as f:
-                        result = pickle.load(f)
+            # Collect momentsLD_analysis data
+            if experiment_config['momentsLD_analysis']:
+                for key, value in result['opt_params_momentsLD'][0].items():
+                    sim_data[f'MomentsLD_{key}'] = value
 
-                    ll_values = result["ll_all_replicates_" + analysis_type.split('_')[0]]
-                    
-                    for index in np.arange(len(result[analysis_key])):  # Iterate over the demographic parameters
-                        param_values = list(result[analysis_key][index].values())
-                        for key in result['simulated_params']:
-                            print(key)
-                        target_values = [result['simulated_params'][key] for key in result['simulated_params']]
-                    
-                        if analysis_type == 'moments_analysis' and processor.experiment_config.get('use_FIM', True):
-                            # Store upper triangular FIM separately
-                            upper_triangular = result['opt_params_moments'][index].get('upper_triangular_FIM', None)
-                            if upper_triangular is not None:
-                                upper_triangular_data.append(upper_triangular)
-                                param_values = [value for value in param_values if not isinstance(value, np.ndarray)]
+            # Collect dadi_analysis data
+            if experiment_config['dadi_analysis']:
+                for replicate, params in enumerate(result['opt_params_dadi']):
+                    for key, value in params.items():
+                        sim_data[f'Dadi_rep{replicate+1}_{key}'] = value
 
-                        # Collect analysis and target values
-                        analysis_type_data.append(param_values)
-                        targets_type_data.append(target_values)
+            # Collect simulated_params (targets)
+            for key, value in result['simulated_params'].items():
+                target_data[f'simulated_params_{key}'] = value
 
-                    ll_values_data.append(ll_values)
+            # If FIM data exists and use_FIM is True, add each FIM element as a separate column
+            if experiment_config.get('use_FIM', False) and 'upper_triangular_FIM' in result:
+                upper_triangular = result['upper_triangular_FIM']
+                upper_triangular_flat = upper_triangular.flatten()  # Flatten FIM to 1D array
+                # Add each element of the FIM as a separate column
+                for i, value in enumerate(upper_triangular_flat):
+                    sim_data[f'upper_triangular_FIM_dim{i+1}'] = value
 
-                # Append collected data to the lists
-                analysis_data.append(analysis_type_data) # will store all replicates and all simulations' inferred parameters
-                targets_data.append(targets_type_data)
+            # Append the inferred parameters and targets to the respective lists
+            all_simulations_data.append(sim_data)
+            all_targets_data.append(target_data)
 
-        # Step 3: Convert data into NumPy arrays
+        # Step 3: Create DataFrames from the simulation data
+        features_df = pd.DataFrame(all_simulations_data, index=[f'Sim_{i}' for i in range(len(indices))])
+        targets_df = pd.DataFrame(all_targets_data, index=[f'Sim_{i}' for i in range(len(indices))])
 
-        analysis_arrays = np.array(analysis_data)
-        targets_arrays = np.array(targets_data)
+        # Store the DataFrames in the preprocessing object for later use
+        preprocessing_results_obj[stage]["predictions"] = features_df
+        preprocessing_results_obj[stage]["targets"] = targets_df
 
-        # Now process momentsLD if it exists
+        # Save DataFrames for each stage (training or validation)
+        features_df.to_csv(f"{sim_directory}/{stage}_features.csv", index=True)
+        targets_df.to_csv(f"{sim_directory}/{stage}_targets.csv", index=True)
 
-        if processor.experiment_config.get('momentsLD_analysis'):
-            print('Processing momentsLD')
-            analysis_data_momentsLD = []
+        # Save the DataFrames as .npy files for further processing
+        np.save(f"{sim_directory}/{stage}_features.npy", features_df.values)
+        np.save(f"{sim_directory}/{stage}_targets.npy", targets_df.values)
 
-            software_inferences_list = [software_inferences_file_list[i] for i in indices]
-
-            for result_file in software_inferences_list:
-                with open(result_file, "rb") as f:
-                    result = pickle.load(f)
-
-                for index in np.arange(len(result['opt_params_momentsLD'])):
-                    param_values = list(result['opt_params_momentsLD'][index].values())
-
-                    analysis_data_momentsLD.append(param_values)
-
-            analysis_arrays_momentsLD = np.array(analysis_data_momentsLD)
-
-
-
-        # Determine array dimensions
-        num_analyses = processor.experiment_config['dadi_analysis'] + processor.experiment_config['moments_analysis']
-        num_sims = len(software_inferences_list)
-        num_reps = len(analysis_data[0]) // num_sims
-        # num_params = len(processor.experiment_config['parameter_names'])
-        num_params = len(processor.experiment_config['parameters_to_estimate'])
-
-        # Reshape arrays to the desired format
-        analysis_arrays = analysis_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
-        targets_arrays = targets_arrays.reshape((num_analyses, num_sims, num_reps, num_params))
-
-        # # Transpose arrays to match the desired output shape
-        features = np.transpose(analysis_arrays, (1, 2, 0, 3))
-        targets = np.transpose(targets_arrays, (1, 2, 0, 3))
-
-        # Handle upper triangular data if it exists
-        if upper_triangular_data:
-            upper_triangular_array = np.array(upper_triangular_data)
-            # upper_triangular_array = np.array(upper_triangular_data).reshape((1, num_sims, num_reps, upper_triangular_data[0].shape[0]))
-            # upper_triangular_array = np.transpose(upper_triangular_array, (1, 2, 0, 3))
-        else:
-            upper_triangular_array = None
-
-        # Store features and targets in the preprocessing results object
-        preprocessing_results_obj['parameter_names'] = list(result['simulated_params'].keys()) #type:ignore
-        preprocessing_results_obj[stage]["predictions"] = features
-        preprocessing_results_obj[stage]["targets"] = targets
-        preprocessing_results_obj[stage]["upper_triangular_FIM"] = upper_triangular_array
-
-        if processor.experiment_config.get('momentsLD_analysis'):
-            preprocessing_results_obj[stage]['momentsLD_predictions'] = analysis_arrays_momentsLD
-
-
-        # Reshape features for saving
-
-        if processor.experiment_config.get('momentsLD_analysis'):
-            features = np.concatenate((features.reshape(features.shape[0], -1), analysis_arrays_momentsLD), axis=1)
-        else:
-            features = features.reshape(features.shape[0], -1)
-
-        # Concatenate features with FIM data if applicable
-        if experiment_config['use_FIM']:
-            upper_triangle_features = upper_triangular_array.reshape(upper_triangular_array.shape[0], -1) #type:ignore 
-            preprocessing_results_obj[stage]["upper_triangular_FIM_reshape"] = upper_triangle_features
-            all_features = np.concatenate((features, upper_triangle_features), axis=1)
-        else:
-            all_features = features
-
-        # Save the features and targets
-        np.save(f"{sim_directory}/{stage}_features.npy", all_features)
-        print(targets.shape)
-        targets = targets[:, 0, 0, :]  # Extract ground truth values for the first replicate
-        np.save(f"{sim_directory}/{stage}_targets.npy", targets)
-
-    # Save the preprocessing results object
+    # Save the preprocessing results object (optional)
     with open(f"{sim_directory}/preprocessing_results_obj.pkl", "wb") as file:
         pickle.dump(preprocessing_results_obj, file)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

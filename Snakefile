@@ -20,7 +20,7 @@ with open(MODEL_CONFIG_FILEPATH, 'r') as f:
 CWD = os.getcwd()
 
 # Use double quotes for the dictionary keys inside the f-string
-EXPERIMENT_DIRECTORY = f'{experiment_config['demographic_model']}_seed_{experiment_config['seed']}'
+EXPERIMENT_DIRECTORY = f'{experiment_config['demographic_model']}_dadi_analysis_{experiment_config['dadi_analysis']}_moments_analysis_{experiment_config['moments_analysis']}_momentsLD_analysis_{experiment_config['momentsLD_analysis']}_seed_{experiment_config['seed']}'
 EXPERIMENT_NAME = f'sims_pretrain_{experiment_config["num_sims_pretrain"]}_sims_inference_{experiment_config["num_sims_inference"]}_seed_{experiment_config["seed"]}_num_replicates_{experiment_config["k"]}_top_values_{experiment_config["top_values_k"]}'
 SIM_DIRECTORY = f"{EXPERIMENT_DIRECTORY}/sims/{EXPERIMENT_NAME}"
 
@@ -68,10 +68,10 @@ rule all:
         f"{SIM_DIRECTORY}/color_shades.pkl",
         f"{SIM_DIRECTORY}/main_colors.pkl",
         f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
-        # f"{SIM_DIRECTORY}/training_features.npy",
-        # f"{SIM_DIRECTORY}/training_targets.npy",
-        # f"{SIM_DIRECTORY}/validation_features.npy",
-        # f"{SIM_DIRECTORY}/validation_targets.npy",
+        f"{SIM_DIRECTORY}/training_features.npy",
+        f"{SIM_DIRECTORY}/training_targets.npy",
+        f"{SIM_DIRECTORY}/validation_features.npy",
+        f"{SIM_DIRECTORY}/validation_targets.npy",
         # f'{SIM_DIRECTORY}/postprocessing_results.pkl',
         # f"{SIM_DIRECTORY}/features_and_targets.pkl",
         # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
@@ -206,7 +206,6 @@ rule aggregate_features:
 rule postprocessing:
     input:
         experiment_config_filepath = CONFIG_FILEPATH,
-        preprocessing_results_obj_filepath = rules.aggregate_features.output.preprocessing_results,
         training_features_filepath = rules.aggregate_features.output.training_features,
         validation_features_filepath = rules.aggregate_features.output.validation_features,
         training_targets_filepath = rules.aggregate_features.output.training_targets,
@@ -219,7 +218,6 @@ rule postprocessing:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/postprocessing.py \
         --config_file {input.experiment_config_filepath} \
-        --preprocessing_results_obj_filepath {input.preprocessing_results_obj_filepath} \
         --training_features_filepath {input.training_features_filepath} \
         --validation_features_filepath {input.validation_features_filepath} \
         --training_targets_filepath {input.training_targets_filepath} \

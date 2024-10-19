@@ -13,7 +13,7 @@
         "Na": 10000, 
         "m": 1e-8
     },
-    "num_sims_pretrain": 20,
+    "num_sims_pretrain": 10,
     "num_sims_inference": 1,
     "num_samples": {
         "N1": 20,
@@ -31,9 +31,9 @@
     "seed": 42,
     "normalization": true,
     "remove_outliers": true,
-    "use_FIM": false,
-    "k": 2,
-    "top_values_k": 1,
+    "use_FIM": true,
+    "k": 3,
+    "top_values_k": 2,
     "training_percentage": 0.8,
     "demographic_model": "split_isolation_model",
     "parameter_names": [
@@ -47,7 +47,7 @@
         0.01,
         0.8,
         0.075,
-        0.01
+        0.05
     ],
     "parameters_to_estimate": [
         "N1",

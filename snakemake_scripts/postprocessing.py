@@ -13,7 +13,7 @@ from scipy.stats import zscore
 import json
 
 
-def postprocessing(experiment_config, preprocessing_results_obj, training_features,training_targets, validation_features, validation_targets):
+def postprocessing(experiment_config, training_features, training_targets, validation_features, validation_targets):
 
     # Load in the training features, training targets, validation features, and validation targets
 
@@ -25,9 +25,6 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
     # Load in the experiment config json 
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
-
-    with open(preprocessing_results_obj, "rb") as file:
-        preprocessing_results_obj = pickle.load(file)
 
 
     # Postprocessing dict has the features in a way that we can directly input into the ML model
@@ -43,7 +40,6 @@ def postprocessing(experiment_config, preprocessing_results_obj, training_featur
     targets_dict = {
         'training': training_targets,
         'validation': validation_targets,
-        'parameter_names': preprocessing_results_obj['parameter_names']
     }
 
     for stage in ['training', 'validation']:
@@ -153,7 +149,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--config_file", type=str, required=True)
-    parser.add_argument("--preprocessing_results_obj_filepath", type=str, required=True)
     parser.add_argument("--training_features_filepath", type=str, required=True)
     parser.add_argument("--validation_features_filepath", type=str, required=True)
     parser.add_argument("--training_targets_filepath", type=str, required=True)
@@ -162,7 +157,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    postprocessing_dict = postprocessing(args.config_file, args.preprocessing_results_obj_filepath, args.training_features_filepath, args.training_targets_filepath, args.validation_features_filepath, args.validation_targets_filepath)
+    postprocessing_dict = postprocessing(args.config_file, args.training_features_filepath, args.training_targets_filepath, args.validation_features_filepath, args.validation_targets_filepath)
     # Save the postprocessing dict
     with open(f'{args.sim_directory}/postprocessing_results.pkl', "wb") as f:
         pickle.dump(postprocessing_dict, f)
