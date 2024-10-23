@@ -59,8 +59,8 @@ class Processor:
         self.recombination_rate = recombination_rate
         self.mutation_rate = mutation_rate
 
-        self.num_reps = self.experiment_config[
-            "num_reps"
+        self.num_windows = self.experiment_config[
+            "num_windows"
         ]  # This is just for momentsLD. Number of windows to split the genome into.
         self.window_length = self.experiment_config["window_length"]
         self.maxiter = self.experiment_config["maxiter"]
@@ -94,28 +94,39 @@ class Processor:
         output_folder = folderpath
         os.makedirs(output_folder, exist_ok=True)
 
-        tree_sequences = msprime.sim_ancestry(
-            samples = experiment_config['num_samples'],
+        # Simulate ancestry for multiple populations
+        ts = msprime.sim_ancestry(
+            samples=experiment_config['num_samples'],
             demography=demog,
             sequence_length=experiment_config['genome_length'],
             recombination_rate=experiment_config['recombination_rate'],
-            num_replicates=experiment_config['num_reps'],
             random_seed=experiment_config['seed'],
         )
+
+        # Simulate mutations over the ancestry tree sequence
+        ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'])
+
+        # Generate random windows
+        windows = [
+            generate_window(ts, experiment_config['window_length'], experiment_config['genome_length'])
+            for _ in range(experiment_config['num_windows'])
+        ]
 
         # List to store file paths of the generated VCFs
         vcf_filepaths = []
 
-        for ii, ts in enumerate(tree_sequences):
-            ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'], random_seed=ii + 1)
-            vcf_name = os.path.join(output_folder, f'rep.{ii}.vcf')
+        # Iterate over windows and write VCFs
+        for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
+            vcf_name = os.path.join(output_folder, f'window.{ii}.vcf')
             with open(vcf_name, "w+") as fout:
-                ts.write_vcf(fout, allow_position_zero=True)
+                ts_window.write_vcf(fout, allow_position_zero=True)
+            
+            # Compress the VCF file
             os.system(f"gzip {vcf_name}")
-
+            
             # Store the compressed VCF file path
             vcf_filepaths.append(f"{vcf_name}.gz")
-
+        
         # Write the metadata file with all VCF file paths
         metadata_file = os.path.join(output_folder, "metadata.txt")
         with open(metadata_file, "w+") as metafile:

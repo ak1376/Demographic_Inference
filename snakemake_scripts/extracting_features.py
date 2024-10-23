@@ -10,7 +10,6 @@ def getting_the_features(postprocessing_results_filepath, sim_directory):
     features = {
         "training": {"features": postprocessing_results_obj['training']['predictions'], "targets": postprocessing_results_obj['training']['targets']},
         "validation": {"features": postprocessing_results_obj['validation']['predictions'], "targets": postprocessing_results_obj['validation']['targets']},
-        "parameter_names": postprocessing_results_obj['parameter_names']
     }
 
     print(f'Training features shape: {features["training"]["features"].shape}')
@@ -19,7 +18,6 @@ def getting_the_features(postprocessing_results_filepath, sim_directory):
     print(f'Training targets shape: {features["training"]["targets"].shape}')
     print(f'Validation targets shape: {features["validation"]["targets"].shape}')
 
-    print(f'Parameter names: {features["parameter_names"]}')
 
     # Now save the dictionary as a pickle
     with open(f"{sim_directory}/features_and_targets.pkl", "wb") as file:

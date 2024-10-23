@@ -6,11 +6,9 @@ import time
 from moments.Godambe import _get_godambe
 import nlopt
 import src.demographic_models as demographic_models
-from src.optimize import opt, ld_opt
-import ray
+from src.optimize import opt
 
 # Define your function with Ray's remote decorator
-@ray.remote
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
     ld_stats = moments.LD.Parsing.compute_ld_statistics( #type:ignore
         vcf_file,
@@ -23,52 +21,63 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
 
     return ld_stats
 
-def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
+# def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
 
-    #     print("parsing LD statistics in parallel")
-    # # Submit tasks to Ray in parallel using .remote()
-    # futures = [get_LD_stats.remote(ii, r_bins) for ii in range(num_reps)]
-    # # Gather results with ray.get() to collect them once the tasks are finished
-    # ld_stats = ray.get(futures)
-    # # Optionally, you can convert the list of results into a dictionary with indices
-    # ld_stats_dict = {ii: result for ii, result in enumerate(ld_stats)}
+#     #     print("parsing LD statistics in parallel")
+#     # # Submit tasks to Ray in parallel using .remote()
+#     # futures = [get_LD_stats.remote(ii, r_bins) for ii in range(num_reps)]
+#     # # Gather results with ray.get() to collect them once the tasks are finished
+#     # ld_stats = ray.get(futures)
+#     # # Optionally, you can convert the list of results into a dictionary with indices
+#     # ld_stats_dict = {ii: result for ii, result in enumerate(ld_stats)}
 
 
-    flat_map_path = os.path.join(folderpath, "flat_map.txt")
-    pop_file_path = os.path.join(folderpath, "samples.txt")
-    vcf_files = [
-        os.path.join(folderpath, f"rep.{rep_ii}.vcf.gz")
-        for rep_ii in range(num_reps)
-    ]
+#     flat_map_path = os.path.join(folderpath, "flat_map.txt")
+#     pop_file_path = os.path.join(folderpath, "samples.txt")
+#     vcf_files = [
+#         os.path.join(folderpath, f"rep.{rep_ii}.vcf.gz")
+#         for rep_ii in range(num_reps)
+#     ]
 
-    # Launch the tasks in parallel using Ray
-    futures = [
-        get_LD_stats.remote(vcf_file, r_bins, flat_map_path, pop_file_path)
-        for vcf_file in vcf_files
-    ]
+#     # Launch the tasks in parallel using Ray
+#     futures = [
+#         get_LD_stats.remote(vcf_file, r_bins, flat_map_path, pop_file_path)
+#         for vcf_file in vcf_files
+#     ]
 
-    # Wait for all the tasks to complete and retrieve results
-    results = ray.get(futures)
-    return results
+#     # Wait for all the tasks to complete and retrieve results
+#     results = ray.get(futures)
+#     return results
 
-# def compute_ld_stats_sequential(flat_map_path, samples_path, metadata_path, r_bins):
-#     # Start by defining paths
+def compute_ld_stats_sequential(flat_map_path, pop_file_path, metadata_path, r_bins):
+    print("=== Computing LD statistics sequentially ===")
+    # Debugging: Print the path to check if it's correct
+    print(f"Looking for metadata file at: {metadata_path}")
+
+    # Check if the file exists before trying to open it
+    if not os.path.exists(metadata_path):
+        print(f"Error: Metadata file not found at {metadata_path}")
+    else:
+        print(f"Metadata file found at {metadata_path}, proceeding to open it...")
+
+        # Try opening the file and read its contents
+        try:
+            with open(metadata_path, 'r') as f:
+                vcf_files = [line.strip() for line in f]
+            
+        
+        except Exception as e:
+            print(f"Error while reading metadata file: {str(e)}")
+
+    # List to store LD statistics results
+    ld_stats_list = []
+
+    # Sequentially compute LD statistics for each VCF file
+    for vcf_file in vcf_files:
+        ld_stats = get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path)
+        ld_stats_list.append(ld_stats)
     
-#     # List of VCF files
-#     # Read the file and store each line (filepath) into a list
-#     with open(metadata_path, 'r') as f:
-#         vcf_files = [line.strip() for line in f]
-
-#     # List to store LD statistics results
-#     ld_stats_list = []
-
-#     # Sequentially compute LD statistics for each VCF file
-#     for vcf_file in vcf_files:
-#         ld_stats = get_LD_stats(vcf_file, r_bins, flat_map_path, samples_path)
-#         ld_stats_list.append(ld_stats)
-    
-#     return ld_stats_list
-
+    return ld_stats_list
 
 def run_inference_dadi(
     sfs,
@@ -118,8 +127,7 @@ def run_inference_dadi(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
             algorithm=nlopt.LN_BOBYQA,
-            maxeval=10,
-            verbose=3
+            maxeval=10
         )
 
         ll_list.append(ll_value)
@@ -278,7 +286,7 @@ def run_inference_moments(
                 "N2": opt_params[1]*N_ref,
                 "t_split": opt_params[2]*2*N_ref,
                 "m": opt_params[3]*2*N_ref,
-                "upper_triangular_FIM": upper_triangular,
+                "upper_triangular_FIM": upper_triangular
             }
 
         else:
@@ -297,7 +305,7 @@ def run_inference_moments(
     return model_list, opt_theta_list, opt_params_final_list, ll_list
 
 
-def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
+def run_inference_momentsLD(flat_map_path, pop_file_path, metadata_path, demographic_model, p_guess):
     """
     This should do the parameter inference for momentsLD
     index: unique simulation number
@@ -312,7 +320,7 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
     ll_list = []
     opt_params_dict_list = []
 
-    results = compute_ld_stats_parallel(folderpath, num_reps, r_bins)
+    results = compute_ld_stats_sequential(flat_map_path, pop_file_path, metadata_path, r_bins)
 
     for i, result in enumerate(results):
         ld_stats[i] = result
@@ -332,8 +340,8 @@ def run_inference_momentsLD(folderpath, demographic_model, p_guess, num_reps):
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    # Set up the initial guess
-    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
+    # # Set up the initial guess
+    # p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
 
     # p_guess = moments.LD.Util.perturb_params(p_guess, fold=1)  # type: ignore
     

@@ -2,9 +2,8 @@
 
 import pickle
 import json
-from src.parameter_inference import run_inference_dadi, run_inference_moments, run_inference_momentsLD
+from src.parameter_inference import run_inference_dadi, run_inference_moments
 import argparse
-import ray
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -111,33 +110,44 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
         }
         mega_result_dict.update(moments_results)
 
-    if experiment_config["momentsLD_analysis"]:
+    # if experiment_config["momentsLD_analysis"]:
 
-        p_guess = experiment_config['optimization_initial_guess'].copy()
-        
-        p_guess.extend([10000]) #TODO: Need to change this to not be a hardcoded value. 
-        
-        folderpath = f'{sim_directory}/sampled_genome_windows/sim_{sim_number}'
-
-        opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(folderpath=folderpath,
-          demographic_model=experiment_config["demographic_model"],
-          num_reps = experiment_config["num_reps"], 
-          p_guess = p_guess
-        )
-
-        momentsLD_results = {
-            "opt_params_momentsLD": opt_params_momentsLD,
-            "ll_all_replicates_momentsLD": ll_list_momentsLD
-            }
+    #     p_guess = experiment_config['optimization_initial_guess'].copy()
                 
-        mega_result_dict.update(momentsLD_results)
+    #     # Set up the initial guess
+    #     p_guess.extend([10000]) #TODO: Need to change this to not be a hardcoded value. 
+    #     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
+        
+    #     folderpath = f'{sim_directory}/sampled_genome_windows/sim_{sim_number}'
+
+    #     try:
+
+    #         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(folderpath=folderpath,
+    #         demographic_model=experiment_config["demographic_model"],
+    #         num_reps = experiment_config["num_reps"], 
+    #         p_guess = p_guess
+    #         )
+    #     except np.linalg.LinAlgError as e:
+    #         p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
+            
+    #         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(folderpath=folderpath,
+    #         demographic_model=experiment_config["demographic_model"],
+    #         num_reps = experiment_config["num_reps"], 
+    #         p_guess = p_guess
+    #         )
+
+    #     momentsLD_results = {
+    #         "opt_params_momentsLD": opt_params_momentsLD,
+    #         "ll_all_replicates_momentsLD": ll_list_momentsLD
+    #         }
+                
+    #     mega_result_dict.update(momentsLD_results)
 
     # Save the results in a pickle file
     with open(f"{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", "wb") as f:
         pickle.dump(mega_result_dict, f)
 
 if __name__ == "__main__":
-    ray.init(ignore_reinit_error=True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--sfs_file", type=str, required=True)
     parser.add_argument("--sampled_params_pkl", type=str, required=True)

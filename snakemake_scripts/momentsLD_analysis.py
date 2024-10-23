@@ -1,0 +1,102 @@
+import pickle
+import json
+from src.parameter_inference import run_inference_momentsLD
+import argparse
+import ray
+import numpy as np
+import moments
+
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
+# I want to load in the
+
+
+def obtain_feature(flat_map_path, pop_file_path, metadata_path, sampled_params, experiment_config, sim_directory, sim_number):
+
+    # Load in the experiment config
+    with open(experiment_config, "r") as f:
+        experiment_config = json.load(f)
+
+    # Load in the sampled params
+    with open(sampled_params, "rb") as f:
+        sampled_params = pickle.load(f)
+
+    mega_result_dict = (
+        {}
+    )  # This will store all the results (downstream postprocessing) later
+
+    mega_result_dict = {"simulated_params": sampled_params}
+
+    p_guess = experiment_config["optimization_initial_guess"].copy()
+
+    # Set up the initial guess
+    p_guess.extend([10000])  # TODO: Need to change this to not be a hardcoded value.
+    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)  # type: ignore
+
+    folderpath = f"{sim_directory}/sampled_genome_windows/sim_{sim_number}"
+
+    try:
+
+        opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
+            flat_map_path=flat_map_path,
+            pop_file_path=pop_file_path,
+            metadata_path=metadata_path,
+            demographic_model=experiment_config["demographic_model"],
+            p_guess=p_guess
+        )
+
+    except np.linalg.LinAlgError as e:
+        p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)  # type: ignore
+        opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
+            flat_map_path=flat_map_path,
+            pop_file_path=pop_file_path,
+            metadata_path=metadata_path,
+            demographic_model=experiment_config["demographic_model"],
+            p_guess=p_guess
+        )
+
+    momentsLD_results = {
+        "opt_params_momentsLD": opt_params_momentsLD,
+        "ll_all_replicates_momentsLD": ll_list_momentsLD,
+    }
+
+    mega_result_dict.update(momentsLD_results)
+    # Save the results in a pickle file
+
+    with open(
+        f"{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl",
+        "wb",
+    ) as f:
+        pickle.dump(mega_result_dict, f)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--flat_map_path", type=str, required=True)
+    parser.add_argument("--pop_file_path", type=str, required=True)
+    parser.add_argument("--metadata_path", type=str, required=True)
+    parser.add_argument("--sampled_params_pkl", type=str, required=True)
+    parser.add_argument("--experiment_config_filepath", type=str, required=True)
+    parser.add_argument("--sim_directory", type=str, required=True)
+    parser.add_argument("--sim_number", type=int, required=True)
+    args = parser.parse_args()
+
+    obtain_feature(
+        flat_map_path=args.flat_map_path,
+        pop_file_path=args.pop_file_path,
+        metadata_path=args.metadata_path,
+        sampled_params=args.sampled_params_pkl,
+        experiment_config=args.experiment_config_filepath,
+        sim_directory=args.sim_directory,
+        sim_number=args.sim_number,
+    )

@@ -53,7 +53,7 @@ def main(
         model_config,
         color_shades,
         main_colors,
-        param_names=features["parameter_names"],
+        param_names=model_config['neural_net_hyperparameters']["parameter_names"],
     )
 
     # print(f'Shape of the tensors')

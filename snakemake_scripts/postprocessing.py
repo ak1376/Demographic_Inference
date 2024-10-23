@@ -138,8 +138,6 @@ def postprocessing(experiment_config, training_features, training_targets, valid
             "normalized_predictions": normalized_features,
             'targets': targets,
         }
-
-        postprocessing_dict['parameter_names'] = targets_dict['parameter_names']
     
     return postprocessing_dict
 

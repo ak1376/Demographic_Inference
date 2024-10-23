@@ -32,7 +32,7 @@ def linear_evaluation(features_and_targets_filepath, model_directory, experiment
         validation_predictions
     )
 
-    linear_mdl_obj["param_names"] = features_and_targets['parameter_names']
+    linear_mdl_obj["param_names"] = experiment_config['parameter_names']
 
     # Now calculate the linear model error
 
