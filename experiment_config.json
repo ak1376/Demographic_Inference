@@ -68,7 +68,7 @@
         null,
         0.8
     ],
-    "vcf_filepath": "/home/akapoor/kernlab/GHIST-split-isolation.vcf.gz",
-    "txt_filepath": "/home/akapoor/kernlab/wisent.txt",
+    "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
+    "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
     "popname": "wisent"
 }

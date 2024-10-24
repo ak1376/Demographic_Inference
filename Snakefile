@@ -6,9 +6,9 @@ import json
 # experiment_config = config["experiment"]
 # model_config = config["model"]
 
-CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
-MODEL_CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config.json'
-MODEL_CONFIG_XGBOOST_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config_xgb.json'
+CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
+MODEL_CONFIG_FILEPATH = '/sietch_colab/akapoor//Demographic_Inference/model_config.json'
+MODEL_CONFIG_XGBOOST_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config_xgb.json'
 
 with open(CONFIG_FILEPATH, 'r') as f:
    experiment_config = json.load(f)
@@ -59,7 +59,8 @@ rule all:
         expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt",
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain']), window_number=range(0, experiment_config['num_windows'])),
+               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain']),
+                window_number=range(0, experiment_config['num_windows'])),
         expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl",
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl",
