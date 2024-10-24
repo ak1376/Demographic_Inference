@@ -6,9 +6,9 @@ import json
 # experiment_config = config["experiment"]
 # model_config = config["model"]
 
-CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
-MODEL_CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config.json'
-MODEL_CONFIG_XGBOOST_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config_xgb.json'
+CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
+MODEL_CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config.json'
+MODEL_CONFIG_XGBOOST_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config_xgb.json'
 
 with open(CONFIG_FILEPATH, 'r') as f:
    experiment_config = json.load(f)
@@ -59,10 +59,10 @@ rule all:
         expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt",
                sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         # Software and momentsLD inferences (these should run after the simulations)
-        expand("{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        # expand("{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", 
+        #        sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        # expand("{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl", 
+        #        sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
         f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
         f"{SIM_DIRECTORY}/training_features.npy",
         f"{SIM_DIRECTORY}/training_targets.npy",
@@ -176,6 +176,7 @@ checkpoint obtain_MomentsLD_feature:
         --sim_number {wildcards.sim_number}
         """
 
+# Rule to gather both software_inferences and momentsLD_inferences
 def gather_all_inferences(wildcards):
     software_inferences = expand(
         f"{SIM_DIRECTORY}/simulation_results/software_inferences_sim_{{sim_number}}.pkl",
@@ -186,11 +187,10 @@ def gather_all_inferences(wildcards):
         f"{SIM_DIRECTORY}/simulation_results/momentsLD_inferences_sim_{{sim_number}}.pkl",
         sim_number=range(0, experiment_config['num_sims_pretrain'])
     )
-    
-    # Debugging: print the paths to verify
-    print(f"Software Inferences: {software_inferences}")
-    print(f"MomentsLD Inferences: {momentsLD_inferences}")
-    
+
+    print(f'Total Length (software inferences + momentsLD inferences): {len(software_inferences)} + {len(momentsLD_inferences)}')
+
+    # Combine the two lists of file paths and return
     return software_inferences + momentsLD_inferences
 
 
@@ -218,6 +218,7 @@ rule aggregate_features:
             {params.SIM_DIRECTORY} \
             {' '.join(inferences_file_list)}
         """)
+
 
 rule postprocessing:
     input:

@@ -368,7 +368,7 @@ def run_inference_momentsLD(flat_map_path, pop_file_path, metadata_path, demogra
     # )
 
     opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
-    p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins
+    p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose = 3
     )
 
     physical_units = moments.LD.Util.rescale_params( # type: ignore

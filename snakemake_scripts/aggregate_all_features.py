@@ -8,6 +8,7 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
     '''
     Aggregates the software and momentsLD inferences for each simulation, ensuring training and validation data are kept separate.
     '''
+    
     # Load the experiment configuration
     with open(experiment_config_file, "r") as f:
         experiment_config = json.load(f)
@@ -21,6 +22,12 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
     preprocessing_results_obj = {
         stage: {} for stage in ["training", "validation"]
     }
+
+    # Split the inference file list into software and momentsLD inferences
+    # Assuming that the first half is software_inferences and the second half is momentsLD_inferences
+    num_sims = experiment_config["num_sims_pretrain"]
+    software_inferences = inferences_file_list[:num_sims]
+    momentsLD_inferences = inferences_file_list[num_sims:]
 
     # Separate loop to process each stage (training/validation)
     for stage, indices in [
@@ -37,22 +44,25 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
             sim_data = {}  # Dictionary to hold inferred parameters for each simulation
             target_data = {}  # Dictionary to hold target parameters for each simulation
 
-            inference_file = inferences_file_list[idx]
-            print(f"Processing inference file: {inference_file}")
+            # Access software and momentsLD inference files by simulation number (idx)
+            software_inference_file = software_inferences[idx]
+            momentsLD_inference_file = momentsLD_inferences[idx]
 
-            # Handle loading of inferences
-            with open(inference_file, "rb") as f:
-                result = pickle.load(f)
+            # Handle loading of software inferences
+            with open(software_inference_file, "rb") as f:
+                software_result = pickle.load(f)
 
-            print(result.keys())  # Debugging step to check the keys in the result
+            # Handle loading of momentsLD inferences
+            with open(momentsLD_inference_file, "rb") as f:
+                momentsLD_result = pickle.load(f)
 
-            # Collect moments_analysis data
+            # Collect moments_analysis data from software inferences
             if experiment_config['moments_analysis']:
-                for replicate, params in enumerate(result.get('opt_params_moments', [])):
+                for replicate, params in enumerate(software_result.get('opt_params_moments', [])):
                     for key, value in params.items():
                         if key != 'upper_triangular_FIM':
                             sim_data[f'Moments_rep{replicate+1}_{key}'] = value
-                    
+
                     # Handle upper triangular matrix for FIM
                     if experiment_config['use_FIM'] and 'upper_triangular_FIM' in params:
                         upper_triangular = params['upper_triangular_FIM']
@@ -60,23 +70,20 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
                         for idx, fim_value in enumerate(flat_fim):
                             sim_data[f'Moments_rep{replicate+1}_FIM_element_{idx}'] = fim_value
 
-            # Collect momentsLD_analysis data
-            if experiment_config['momentsLD_analysis']:
-                if 'opt_params_momentsLD' in result and result['opt_params_momentsLD']:
-                    print(f"Found momentsLD params for sim {idx}")  # Debugging output
-                    for key, value in result['opt_params_momentsLD'][0].items():
-                        sim_data[f'MomentsLD_{key}'] = value
-                else:
-                    print(f"No momentsLD params found for sim {idx}")  # Debugging output
-
-            # Collect dadi_analysis data
+            # Collect dadi_analysis data from software inferences
             if experiment_config['dadi_analysis']:
-                for replicate, params in enumerate(result.get('opt_params_dadi', [])):
+                for replicate, params in enumerate(software_result.get('opt_params_dadi', [])):
                     for key, value in params.items():
                         sim_data[f'Dadi_rep{replicate+1}_{key}'] = value
 
-            # Collect simulated_params (targets)
-            for key, value in result.get('simulated_params', {}).items():
+            # Collect momentsLD_analysis data from momentsLD inferences
+            if experiment_config['momentsLD_analysis']:
+                if 'opt_params_momentsLD' in momentsLD_result and momentsLD_result['opt_params_momentsLD']:
+                    for key, value in momentsLD_result['opt_params_momentsLD'][0].items():
+                        sim_data[f'MomentsLD_{key}'] = value
+
+            # Collect simulated_params (targets) from software inferences (or momentsLD, depending on where you store them)
+            for key, value in software_result.get('simulated_params', {}).items():
                 target_data[f'simulated_params_{key}'] = value
 
             # Append the inferred parameters and targets to the respective lists
