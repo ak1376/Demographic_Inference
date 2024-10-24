@@ -7,6 +7,7 @@ import src.demographic_models as demographic_models
 
 
 def main(experiment_config, sim_directory, sim_number):
+    print(f"SIM DIRECTORY: {sim_directory}")
 
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
