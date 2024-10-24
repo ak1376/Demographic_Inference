@@ -18,10 +18,10 @@ def str2bool(v):
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
-# I want to load in the
+# I want to load in the combined moments ld pickle files for each simulation
 
 
-def obtain_feature(flat_map_path, pop_file_path, metadata_path, sampled_params, experiment_config, sim_directory, sim_number):
+def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experiment_config, sim_number):
 
     # Load in the experiment config
     with open(experiment_config, "r") as f:
@@ -30,6 +30,10 @@ def obtain_feature(flat_map_path, pop_file_path, metadata_path, sampled_params, 
     # Load in the sampled params
     with open(sampled_params, "rb") as f:
         sampled_params = pickle.load(f)
+
+    # Load in the combined moments ld stats
+    with open(combined_ld_stats_path, "rb") as f:
+        combined_ld_stats = pickle.load(f)
 
     mega_result_dict = (
         {}
@@ -43,14 +47,11 @@ def obtain_feature(flat_map_path, pop_file_path, metadata_path, sampled_params, 
     p_guess.extend([10000])  # TODO: Need to change this to not be a hardcoded value.
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)  # type: ignore
 
-    folderpath = f"{sim_directory}/sampled_genome_windows/sim_{sim_number}"
 
     try:
 
         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
-            flat_map_path=flat_map_path,
-            pop_file_path=pop_file_path,
-            metadata_path=metadata_path,
+            ld_stats=combined_ld_stats,
             demographic_model=experiment_config["demographic_model"],
             p_guess=p_guess
         )
@@ -58,9 +59,7 @@ def obtain_feature(flat_map_path, pop_file_path, metadata_path, sampled_params, 
     except np.linalg.LinAlgError as e:
         p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)  # type: ignore
         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
-            flat_map_path=flat_map_path,
-            pop_file_path=pop_file_path,
-            metadata_path=metadata_path,
+            ld_stats=combined_ld_stats,
             demographic_model=experiment_config["demographic_model"],
             p_guess=p_guess
         )
@@ -82,9 +81,7 @@ def obtain_feature(flat_map_path, pop_file_path, metadata_path, sampled_params, 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--flat_map_path", type=str, required=True)
-    parser.add_argument("--pop_file_path", type=str, required=True)
-    parser.add_argument("--metadata_path", type=str, required=True)
+    parser.add_argument("--combined_ld_stats_path", type=str, required=True)
     parser.add_argument("--sampled_params_pkl", type=str, required=True)
     parser.add_argument("--experiment_config_filepath", type=str, required=True)
     parser.add_argument("--sim_directory", type=str, required=True)
@@ -92,11 +89,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     obtain_feature(
-        flat_map_path=args.flat_map_path,
-        pop_file_path=args.pop_file_path,
-        metadata_path=args.metadata_path,
+        combined_ld_stats_path=args.combined_ld_stats_path,
         sampled_params=args.sampled_params_pkl,
         experiment_config=args.experiment_config_filepath,
         sim_directory=args.sim_directory,
-        sim_number=args.sim_number,
+        sim_number=args.sim_number
     )

@@ -305,27 +305,21 @@ def run_inference_moments(
     return model_list, opt_theta_list, opt_params_final_list, ll_list
 
 
-def run_inference_momentsLD(flat_map_path, pop_file_path, metadata_path, demographic_model, p_guess):
+def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
     """
     This should do the parameter inference for momentsLD
     index: unique simulation number
     """
 
     r_bins = np.array([0, 1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3])
-
-    print("parsing LD statistics")
-
-
-    ld_stats = {}
     ll_list = []
     opt_params_dict_list = []
 
-    results = compute_ld_stats_sequential(flat_map_path, pop_file_path, metadata_path, r_bins)
-
-    for i, result in enumerate(results):
-        ld_stats[i] = result
+    print("====================================================")
+    print(ld_stats.keys())
 
     # print("computing mean and varcov matrix from LD statistics sums")
+    # i could also job array this but let's see. 
     mv = moments.LD.Parsing.bootstrap_data(ld_stats)  # type: ignore
     # print("SHAPE OF THE COVARIANCE MATRIX")
     # print(mv["varcovs"][-1].shape)
@@ -410,8 +404,5 @@ def run_inference_momentsLD(flat_map_path, pop_file_path, metadata_path, demogra
         print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
 
         opt_params_dict_list.append(opt_params_dict)
-
-    
-    # print(f'Moments LD results: {opt_params_dict}')
 
     return opt_params_dict_list, ll_list 
