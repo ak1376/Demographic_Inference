@@ -10,3 +10,5 @@ e
 /archived/
 /src/__pycache__/
 /split_isolation_model_*/
+logs/
+slurm*
