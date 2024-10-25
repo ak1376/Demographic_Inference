@@ -6,9 +6,9 @@ import json
 # experiment_config = config["experiment"]
 # model_config = config["model"]
 
-CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
-MODEL_CONFIG_FILEPATH = '/sietch_colab/akapoor//Demographic_Inference/model_config.json'
-MODEL_CONFIG_XGBOOST_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config_xgb.json'
+CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
+MODEL_CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config.json'
+MODEL_CONFIG_XGBOOST_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config_xgb.json'
 
 with open(CONFIG_FILEPATH, 'r') as f:
    experiment_config = json.load(f)
@@ -160,7 +160,7 @@ checkpoint calculate_LD_stats:
         echo "Extracting VCF file for window number {wildcards.window_number}"
         vcf_filepath=$(sed -n "$(( {wildcards.window_number} + 1 ))p" {input.metadata_file})
         echo "Processing VCF file: $vcf_filepath"
-        PYTHONPATH=/sietch_colab/akapoor/Demographic_Inference python {CWD}/snakemake_scripts/ld_stats.py \
+         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/ld_stats.py \
             --vcf_filepath "$vcf_filepath" \
             --pop_file_path {input.pop_file_path} \
             --flat_map_file {input.flat_map_file} \
