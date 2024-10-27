@@ -44,7 +44,7 @@ echo $SIM_DIRECTORY
 
 # Run Snakemake to complete the remaining rules
 snakemake \
-    --cores 4 \
+    --nolock \
     "${SIM_DIRECTORY}/preprocessing_results_obj.pkl" \
     "${SIM_DIRECTORY}/training_features.npy" \
     "${SIM_DIRECTORY}/training_targets.npy" \

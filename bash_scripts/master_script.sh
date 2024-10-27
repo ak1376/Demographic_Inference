@@ -63,16 +63,20 @@ echo "Simulation job submitted with ID: $simulation_job_id"
 
 # Step 3: Run momentsLD_inference.sh after running_simulation.sh completes
 echo "Submitting momentsLD_inference.sh job..."
-echo "Path: /projects/kernlab/akapoor/Demographic_Inference/bash_scripts/momentsLD_inferences.sh"
-
 momentsLD_job=$(sbatch --dependency=afterok:$simulation_job_id /projects/kernlab/akapoor/Demographic_Inference/bash_scripts/momentsLD_inferences.sh)
 momentsLD_job_id=$(echo $momentsLD_job | awk '{print $4}')
 echo "MomentsLD job submitted with ID: $momentsLD_job_id"
 
-# Wait for job completion
-scontrol show jobid $momentsLD_job_id
+# Step 4: Run remaining_rules.sh after momentsLD_inference.sh completes
+echo "Submitting remaining_rules.sh job..."
+remaining_rules_job=$(sbatch --dependency=afterok:$momentsLD_job_id /projects/kernlab/akapoor/Demographic_Inference/bash_scripts/remaining_rules.sh)
+remaining_rules_job_id=$(echo $remaining_rules_job | awk '{print $4}')
+echo "Remaining rules job submitted with ID: $remaining_rules_job_id"
 
-# Snakemake commands to be run sequentially
+# Wait for all jobs to complete
+scontrol show jobid $remaining_rules_job_id
+
+# Snakemake commands to be run sequentially within each script
 run_snakemake "snakemake --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER window_number=$WINDOW_NUMBER --rerun-incomplete '${SIM_DIRECTORY}/sampled_genome_windows/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl'" \
               "Calculating LD stats for sim_number $SIM_NUMBER and window_number $WINDOW_NUMBER"
 
