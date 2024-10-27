@@ -1,4 +1,17 @@
 #!/bin/bash
+#SBATCH --job-name=demographic_inference_job   # Job name
+#SBATCH --output=logs/demographic_inference_%j.out   # Standard output log file (%j = job ID)
+#SBATCH --error=logs/demographic_inference_%j.err    # Standard error log file (%j = job ID)
+#SBATCH --time=24:00:00                  # Time limit, adjust as necessary
+#SBATCH --cpus-per-task=4                # Adjust based on the number of cores needed
+#SBATCH --mem=16G                        # Adjust memory per task
+#SBATCH --partition=kern                 # Specify the partition to submit the job
+#SBATCH --account=kernlab                # Specify the account to use
+#SBATCH --requeue                        # Requeue on preemption if applicable
+
+# Load any necessary modules or activate environments here
+# Example: module load jq or activate your environment with conda
+# module load jq
 
 # Set the simulation directory and experiment configuration path
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'

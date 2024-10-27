@@ -1,19 +1,20 @@
 #!/bin/bash
 #SBATCH --job-name=momentsLD_job_array        # Job name
-#SBATCH --array=0-2000     # Adjust the job array size based on total number of jobs
-#SBATCH --output=logs/job_%A_%a.out     # Standard output log file
-#SBATCH --error=logs/job_%A_%a.err      # Standard error log file
-#SBATCH --time=6:00:00                 # Time limit
-#SBATCH --cpus-per-task=8               # Number of CPU cores per task
-#SBATCH --mem=32G                        # Memory per task
-#SBATCH --partition=kern,preempt,kerngpu # Partitions to submit the job to
-#SBATCH --account=kernlab               # Account to use
-#SBATCH --requeue                       # Requeue on preemption
+#SBATCH --array=0-500                        # Adjust the job array size based on total number of jobs
+#SBATCH --output=logs/job_%A_%a.out           # Standard output log file
+#SBATCH --error=logs/job_%A_%a.err            # Standard error log file
+#SBATCH --time=6:00:00                        # Time limit
+#SBATCH --cpus-per-task=8                     # Number of CPU cores per task
+#SBATCH --mem=32G                             # Memory per task
+#SBATCH --partition=kern,preempt,kerngpu      # Partitions to submit the job to
+#SBATCH --account=kernlab                     # Account to use
+#SBATCH --requeue                             # Requeue on preemption
 
 # Only measure the time for the full execution of the entire job array
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     # Start timing at the beginning of the first job array task
     overall_start_time=$(date +%s)
+    echo "Overall start time: $overall_start_time"
 fi
 
 # Set up the simulation directory and other variables from the experiment config file
@@ -62,6 +63,7 @@ echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER"
 
 # Run the Snakemake rule for calculating LD stats for the current simulation and window
 snakemake \
+    --nolock \
     --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER window_number=$WINDOW_NUMBER \
     --rerun-incomplete \
     "${SIM_DIRECTORY}/sampled_genome_windows/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl"
@@ -72,24 +74,41 @@ if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
 
     # Gather LD stats after all windows for this simulation are processed
     snakemake \
-        --unlock \
+        --nolock \
         --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
         --rerun-incomplete \
         "${SIM_DIRECTORY}/sampled_genome_windows/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl"
 
+    # Check for errors in the snakemake command
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to gather combined LD stats for sim_number ${SIM_NUMBER}"
+        exit 1
+    fi
+
     # Run the MomentsLD analysis once LD stats have been gathered
     snakemake \
-        --unlock \
+        --nolock \
         --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
         --rerun-incomplete \
         "${SIM_DIRECTORY}/simulation_results/momentsLD_inferences_sim_${SIM_NUMBER}.pkl"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: MomentsLD analysis failed for sim_number ${SIM_NUMBER}"
+        exit 1
+    fi
 fi
 
 # If this is the last task in the array, calculate the total time for all jobs
 if [ "$SLURM_ARRAY_TASK_ID" -eq $((TOTAL_TASKS - 1)) ]; then
     # End timing at the end of the last job array task
     overall_end_time=$(date +%s)
+    echo "Overall end time: $overall_end_time"
+
     # Calculate and print the overall elapsed time
-    overall_elapsed_time=$(($overall_end_time - $overall_start_time))
-    echo "Total time taken for the entire job array: $overall_elapsed_time seconds"
+    if [ -n "$overall_start_time" ] && [ -n "$overall_end_time" ]; then
+        overall_elapsed_time=$((overall_end_time - overall_start_time))
+        echo "Total time taken for the entire job array: $overall_elapsed_time seconds"
+    else
+        echo "Timing error: overall_start_time or overall_end_time is not set."
+    fi
 fi
