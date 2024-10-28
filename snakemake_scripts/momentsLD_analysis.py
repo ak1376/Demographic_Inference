@@ -73,7 +73,7 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
     # Save the results in a pickle file
 
     with open(
-        f"{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl",
+        f"{sim_directory}/momentsLD_inferences_sim_{sim_number}.pkl",
         "wb",
     ) as f:
         pickle.dump(mega_result_dict, f)

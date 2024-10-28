@@ -13,7 +13,7 @@
         "Na": 10000, 
         "m": 1e-8
     },
-    "num_sims_pretrain": 100,
+    "num_sims_pretrain": 2,
     "num_sims_inference": 1,
     "num_samples": {
         "N1": 20,

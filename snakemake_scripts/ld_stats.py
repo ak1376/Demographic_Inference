@@ -18,7 +18,7 @@ def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, 
 
     # In another function I need to collect the filepaths for each ld_stat pickle file, load in all the ld_stat pickle files, and create a dictionary out of those loaded results. 
 
-    with open(f"{sim_directory}/sampled_genome_windows/sim_{sim_number}/ld_stats_window.{window_number}.pkl", "wb") as f:
+    with open(f"{sim_directory}/sim_{sim_number}/ld_stats_window.{window_number}.pkl", "wb") as f:
         pickle.dump(ld_stats, f)
 
 if __name__ == "__main__":

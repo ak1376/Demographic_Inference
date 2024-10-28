@@ -46,41 +46,37 @@ MODEL_DIRECTORY = (
 rule all:
     input:
         # Simulation outputs first
-        expand("{sim_directory}/simulation_results/sampled_params_{sim_number}.pkl", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/simulation_results/metadata_{sim_number}.txt", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/simulation_results/SFS_sim_{sim_number}.pkl", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/samples.txt",
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt",
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt",
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain']),
-                window_number=range(0, experiment_config['num_windows'])),
-        expand("{sim_directory}/sampled_genome_windows/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl",
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl",
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        ## Software and momentsLD inferences (these should run after the simulations)
-        expand("{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl", 
-               sim_directory=SIM_DIRECTORY, sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl", 
+                sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("simulated_parameters_and_inferences/simulation_results/metadata_{sim_number}.txt", 
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl", 
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("sampled_genome_windows/sim_{sim_number}/samples.txt",
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("sampled_genome_windows/sim_{sim_number}/flat_map.txt",
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("sampled_genome_windows/sim_{sim_number}/metadata.txt",
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
+               sim_number=range(0, experiment_config['num_sims_pretrain']),
+               window_number=range(0, experiment_config['num_windows'])),
+        expand("combined_LD_inferences/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl",
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("final_LD_inferences/momentsLD_inferences_sim_{sim_number}.pkl",
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("moments_dadi_features/software_inferences_sim_{sim_number}.pkl", 
+               sim_number=range(0, experiment_config['num_sims_pretrain'])),
         f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
-        # f"{SIM_DIRECTORY}/training_features.npy",
-        # f"{SIM_DIRECTORY}/training_targets.npy",
-        # f"{SIM_DIRECTORY}/validation_features.npy",
-        # f"{SIM_DIRECTORY}/validation_targets.npy",
-        # f'{SIM_DIRECTORY}/postprocessing_results.pkl',
-        # f"{SIM_DIRECTORY}/features_and_targets.pkl",
+        f"{SIM_DIRECTORY}/training_features.npy",
+        f"{SIM_DIRECTORY}/training_targets.npy",
+        f"{SIM_DIRECTORY}/validation_features.npy",
+        f"{SIM_DIRECTORY}/validation_targets.npy",  # Added missing comma here
+        f'{SIM_DIRECTORY}/postprocessing_results.pkl',
+        f"{SIM_DIRECTORY}/features_and_targets.pkl"
         # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",
         # f"{MODEL_DIRECTORY}/snn_model.pth"
-        # Outputs from model training (add these when you have corresponding rules)
         # f"{MODEL_DIRECTORY}/xgb_model_obj.pkl",
         # f"{MODEL_DIRECTORY}/inferred_params_GHIST_bottleneck.txt"
 
@@ -111,89 +107,96 @@ rule create_experiment:
 rule run_simulation:
     params:
         CONFIG_FILEPATH = CONFIG_FILEPATH,
-        SIM_DIRECTORY = SIM_DIRECTORY
+        SIM_DIRECTORY = 'simulated_parameters_and_inferences'
     output:
-        sampled_params_pkl="{sim_directory}/simulation_results/sampled_params_{sim_number}.pkl",
-        metadata_file="{sim_directory}/simulation_results/metadata_{sim_number}.txt",
-        sfs_file="{sim_directory}/simulation_results/SFS_sim_{sim_number}.pkl"
+        sampled_params_pkl = "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl",
+        metadata_file = "simulated_parameters_and_inferences/simulation_results/metadata_{sim_number}.txt",
+        sfs_file = "simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl"
     shell:
         """
+        mkdir -p {params.SIM_DIRECTORY}/simulation_results/
+        echo "Saving files to: {params.SIM_DIRECTORY}/simulation_results/"
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/single_simulation.py \
         --experiment_config {params.CONFIG_FILEPATH} \
         --sim_directory {params.SIM_DIRECTORY} \
         --sim_number {wildcards.sim_number}
         """
 
-
-# Rule: create the windowed genome trees / vcf files
-
 rule genome_windows:
     input:
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
     output:
-        samples_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/samples.txt",
-        flat_map_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/flat_map.txt",
-        metadata_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/metadata.txt"
+        samples_file = "sampled_genome_windows/sim_{sim_number}/samples.txt",
+        flat_map_file = "sampled_genome_windows/sim_{sim_number}/flat_map.txt",
+        metadata_file = "sampled_genome_windows/sim_{sim_number}/metadata.txt"
     shell:
         """
+        mkdir -p sampled_genome_windows/sim_{wildcards.sim_number}
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_genome_vcfs.py \
         --sampled_params_path {input.sampled_params_pkl} \
         --experiment_config_filepath {CONFIG_FILEPATH} \
-        --sim_directory {SIM_DIRECTORY} \
+        --genome_sim_directory sampled_genome_windows \
         --sim_number {wildcards.sim_number}
         """
 
-checkpoint calculate_LD_stats:
+rule calculate_LD_stats:
     input:
-        flat_map_file = rules.genome_windows.output.flat_map_file,  # Ensure genome windows have been created
-        pop_file_path = rules.genome_windows.output.samples_file,  # Ensure experiment config is ready
-        metadata_file = rules.genome_windows.output.metadata_file,  # Ensure metadata.txt is ready
-        sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl  # This ensures run_simulation finishes first
+        pop_file_path = rules.genome_windows.output.samples_file,
+        flat_map_file = rules.genome_windows.output.flat_map_file,
+        metadata_file = rules.genome_windows.output.metadata_file,
+        sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
     output:
-        processed_file = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
+        processed_file = "LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
     params:
-        window_number = lambda wildcards: wildcards.window_number,
-        sim_directory = SIM_DIRECTORY
+        window_number = lambda wildcards: wildcards.window_number
     shell:
         """
-        set -euo pipefail  # Enable strict mode with error trapping
+        mkdir -p LD_inferences/sim_{wildcards.sim_number}
+        set -euo pipefail
         echo "Extracting VCF file for window number {wildcards.window_number}"
         vcf_filepath=$(sed -n "$(( {wildcards.window_number} + 1 ))p" {input.metadata_file})
         echo "Processing VCF file: $vcf_filepath"
-         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/ld_stats.py \
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/ld_stats.py \
             --vcf_filepath "$vcf_filepath" \
             --pop_file_path {input.pop_file_path} \
             --flat_map_file {input.flat_map_file} \
-            --sim_directory {params.sim_directory} \
+            --sim_directory LD_inferences \
             --sim_number {wildcards.sim_number} \
-            --window_number {params.window_number}
+            --window_number {wildcards.window_number}
         """
-def collect_ld_stats(wildcards):
-    # Get the checkpoint output to resolve all windows
-    checkpoint_output = checkpoints.calculate_LD_stats.get(
-        sim_directory=wildcards.sim_directory,
-        sim_number=wildcards.sim_number
-    ).output.processed_file
-
-    # Return all ld_stats files for the simulation by expanding the windows
-    return checkpoint_output
 
 rule gather_ld_stats:
     input:
-        flat_map_path = rules.genome_windows.output.flat_map_file,  # Use the file from genome_windows
         ld_stats_files = lambda wildcards: expand(
-            "{sim_directory}/sampled_genome_windows/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
-            sim_directory=wildcards.sim_directory,
+            "LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
             sim_number=wildcards.sim_number,
-            window_number=range(0, experiment_config['num_windows'])  # Ensure this is correct
+            window_number=range(0, experiment_config['num_windows'])
         )
     output:
-        combined_ld_stats_sim = "{sim_directory}/sampled_genome_windows/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl"
+        combined_ld_stats_sim = "combined_LD_inferences/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl"
     shell:
         """
+        mkdir -p combined_LD_inferences/sim_{wildcards.sim_number}
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/combine_ld_stats.py \
-            --flat_map_path {input.flat_map_path} \
+            --LD_inferences_path LD_inferences/sim_{wildcards.sim_number} \
             --sim_number {wildcards.sim_number}
+        """
+
+rule obtain_MomentsLD_feature:
+    input:
+        combined_ld_stats_path = rules.gather_ld_stats.output.combined_ld_stats_sim,
+        sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
+    output:
+        software_inferences = "final_LD_inferences/momentsLD_inferences_sim_{sim_number}.pkl"
+    shell:
+        """
+        mkdir -p final_LD_inferences
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/momentsLD_analysis.py \
+        --combined_ld_stats_path {input.combined_ld_stats_path} \
+        --sampled_params {input.sampled_params_pkl} \
+        --experiment_config_filepath {CONFIG_FILEPATH} \
+        --sim_directory final_LD_inferences \
+        --sim_number {wildcards.sim_number}
         """
 
 rule obtain_feature:
@@ -202,7 +205,7 @@ rule obtain_feature:
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl,
         SFS = rules.run_simulation.output.sfs_file
     output:
-        software_inferences = "{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl"
+        software_inferences = "moments_dadi_features/software_inferences_sim_{sim_number}.pkl"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_single_feature.py \
@@ -213,45 +216,21 @@ rule obtain_feature:
         --sim_number {wildcards.sim_number}
         """
 
-checkpoint obtain_MomentsLD_feature:
-    input:
-        combined_ld_stats_path = rules.gather_ld_stats.output.combined_ld_stats_sim,  # Ensure LD stats are calculated
-        sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl  # This ensures run_simulation finishes first
-    output:
-        software_inferences = "{sim_directory}/simulation_results/momentsLD_inferences_sim_{sim_number}.pkl"
-    params:
-        SIM_DIRECTORY = SIM_DIRECTORY,
-        CONFIG_FILEPATH = CONFIG_FILEPATH
-    shell:
-        """
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/momentsLD_analysis.py \
-        --combined_ld_stats_path {input.combined_ld_stats_path} \
-        --sampled_params {input.sampled_params_pkl} \
-        --experiment_config_filepath {CONFIG_FILEPATH} \
-        --sim_directory {params.SIM_DIRECTORY} \
-        --sim_number {wildcards.sim_number}
-        """
-
 # Rule to gather both software_inferences and momentsLD_inferences
 # Rule to gather both software_inferences and momentsLD_inferences
 def gather_all_inferences(wildcards):
     software_inferences = expand(
-        f"{SIM_DIRECTORY}/simulation_results/software_inferences_sim_{{sim_number}}.pkl",
+        f"moments_dadi_features/software_inferences_sim_{{sim_number}}.pkl",
         sim_number=range(0, experiment_config['num_sims_pretrain'])
     )
     
     momentsLD_inferences = expand(
-        f"{SIM_DIRECTORY}/simulation_results/momentsLD_inferences_sim_{{sim_number}}.pkl",
+        f"final_LD_inferences/momentsLD_inferences_sim_{{sim_number}}.pkl",
         sim_number=range(0, experiment_config['num_sims_pretrain'])
     )
 
     print(f'Total Length (software inferences + momentsLD inferences): {len(software_inferences)} + {len(momentsLD_inferences)}')
 
-    # Combine the two lists of file paths and return
-
-    print(f'Total Length (software inferences + momentsLD inferences): {len(software_inferences)} + {len(momentsLD_inferences)}')
-
-    # Combine the two lists of file paths and return
     return software_inferences + momentsLD_inferences
 
 
@@ -295,6 +274,7 @@ rule postprocessing:
         postprocessing_results = f'{SIM_DIRECTORY}/postprocessing_results.pkl'
     shell:
         """
+        mkdir -p {params.SIM_DIRECTORY}
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/postprocessing.py \
         --config_file {input.experiment_config_filepath} \
         --training_features_filepath {input.training_features_filepath} \

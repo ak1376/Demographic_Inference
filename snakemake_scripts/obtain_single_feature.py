@@ -144,7 +144,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     #     mega_result_dict.update(momentsLD_results)
 
     # Save the results in a pickle file
-    with open(f"{sim_directory}/simulation_results/software_inferences_sim_{sim_number}.pkl", "wb") as f:
+    with open(f"moments_dadi_features/software_inferences_sim_{sim_number}.pkl", "wb") as f:
         pickle.dump(mega_result_dict, f)
 
 if __name__ == "__main__":

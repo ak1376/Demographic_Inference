@@ -7,7 +7,6 @@ import src.demographic_models as demographic_models
 
 
 def main(experiment_config, sim_directory, sim_number):
-    print(f"SIM DIRECTORY: {sim_directory}")
 
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
@@ -47,6 +46,10 @@ def main(experiment_config, sim_directory, sim_number):
 
     # Save the SFS in a .pkl file
     SFS_filename = f'{simulation_results_directory}/SFS_sim_{sim_number}.pkl'
+
+    print("=================================================================")
+    print(f'SFS filename path: {SFS_filename}')
+    print("=================================================================")
     
     with open(SFS_filename, "wb") as f:
         pickle.dump(SFS, f)
@@ -56,7 +59,6 @@ def main(experiment_config, sim_directory, sim_number):
     if demographic_model == demographic_models.bottleneck_model:
         sampled_params = {key: sampled_params[key] for key in experiment_config['parameters_to_estimate'] if key in sampled_params}
 
-    print(sampled_params.keys())
     pkl_filename = f"{simulation_results_directory}/sampled_params_{sim_number}.pkl"
     with open(pkl_filename, "wb") as f:
         pickle.dump(sampled_params, f)
