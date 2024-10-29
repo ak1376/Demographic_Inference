@@ -12,17 +12,6 @@ def generate_window(ts, window_length, n_samples):
     end = start + window_length
     return ts.keep_intervals([[start, end]])
 
-# def process_window(demographic_model, ts_window, folderpath, ii):
-#     vcf_name = os.path.join(folderpath, f"bottleneck_window.{ii}.vcf")
-
-#     with open(vcf_name, "w+") as fout:
-#         ts_window.write_vcf(fout, allow_position_zero=True)
-
-#     os.system(f"gzip -f {vcf_name}")
-
-#     return vcf_name  # Optionally return the filename or any other relevant information
-
-
 def delete_vcf_files(directory):
     # Get a list of all files in the directory
     files = glob.glob(os.path.join(directory, "*"))
@@ -76,7 +65,8 @@ class Processor:
 
 
     @staticmethod
-    def run_msprime_replicates(sampled_params, experiment_config, folderpath):
+    def run_msprime_replicates(sampled_params, experiment_config, window_number, folderpath):
+        #TODO: Completely revise this function. 
 
         if experiment_config["demographic_model"] == "bottleneck_model":
             demographic_model = demographic_models.bottleneck_model
@@ -109,30 +99,28 @@ class Processor:
         # Generate random windows
         windows = [
             generate_window(ts, experiment_config['window_length'], experiment_config['genome_length'])
-            for _ in range(experiment_config['num_windows'])
         ]
 
         # List to store file paths of the generated VCFs
         vcf_filepaths = []
 
         # Iterate over windows and write VCFs
-        for ii, ts_window in tqdm(enumerate(windows), total=len(windows)):
-            vcf_name = os.path.join(output_folder, f'window.{ii}.vcf')
-            with open(vcf_name, "w+") as fout:
-                ts_window.write_vcf(fout, allow_position_zero=True)
+        vcf_name = os.path.join(output_folder, f'window.{window_number}.vcf')
+        with open(vcf_name, "w+") as fout:
+            ts_window.write_vcf(fout, allow_position_zero=True)
             
-            # Compress the VCF file
-            os.system(f"gzip {vcf_name}")
-            
-            # Store the compressed VCF file path
-            vcf_filepaths.append(f"{vcf_name}.gz")
+        # Compress the VCF file
+        os.system(f"gzip {vcf_name}")
         
-        # Write the metadata file with all VCF file paths
-        metadata_file = os.path.join(output_folder, "metadata.txt")
-        with open(metadata_file, "w+") as metafile:
-            metafile.write("\n".join(vcf_filepaths))
+        # # Store the compressed VCF file path
+        # vcf_filepaths.append(f"{vcf_name}.gz")
+        
+        # # Write the metadata file with all VCF file paths
+        # metadata_file = os.path.join(output_folder, "metadata.txt")
+        # with open(metadata_file, "w+") as metafile:
+        #     metafile.write("\n".join(vcf_filepaths))
 
-        print(f"Metadata file written to {metadata_file}")
+        # print(f"Metadata file written to {metadata_file}")
 
     @staticmethod
     def write_samples_and_rec_map(experiment_config, folderpath):
@@ -184,8 +172,32 @@ class Processor:
 
         return sampled_params
 
-    def create_SFS(self,
-        sampled_params, mode, num_samples, demographic_model, length=1e7, mutation_rate=5.7e-9, recombination_rate = 3.386e-9, **kwargs
+    def simulate_chromosome(self, sampled_params, num_samples, demographic_model, length=1e7, mutation_rate=5.7e-9, recombination_rate = 3.386e-9, **kwargs):
+        g = demographic_model(sampled_params)
+
+        demog = msprime.Demography.from_demes(g)
+
+        # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
+        samples = [
+            msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
+            for pop_name, sample_size in num_samples.items()
+        ]
+
+        # Simulate ancestry for two populations (joint simulation)
+        ts = msprime.sim_ancestry(
+            samples=samples,  # Two populations
+            demography=demog,
+            sequence_length=length,
+            recombination_rate=recombination_rate,
+            random_seed=self.experiment_config['seed'],
+        )
+        
+        # Simulate mutations over the ancestry tree sequence
+        ts = msprime.sim_mutations(ts, rate=mutation_rate)
+
+        return ts
+
+    def create_SFS(self, ts, mode, num_samples, length=1e7, **kwargs
     ):
         """
         If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
@@ -193,28 +205,6 @@ class Processor:
         """
 
         if mode == "pretrain":
-            # Simulate the demographic model
-            g = demographic_model(sampled_params)
-            demog = msprime.Demography.from_demes(g)
-
-            # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
-            samples = [
-                msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
-                for pop_name, sample_size in num_samples.items()
-            ]
-
-            # Simulate ancestry for two populations (joint simulation)
-            ts = msprime.sim_ancestry(
-                samples=samples,  # Two populations
-                demography=demog,
-                sequence_length=length,
-                recombination_rate=recombination_rate,
-                random_seed=self.experiment_config['seed'],
-            )
-            
-            # Simulate mutations over the ancestry tree sequence
-            ts = msprime.sim_mutations(ts, rate=mutation_rate)
-
             # Define sample sets dynamically for the SFS
             sample_sets = [
                 ts.samples(population=pop.id) 

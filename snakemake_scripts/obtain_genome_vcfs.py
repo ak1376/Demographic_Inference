@@ -9,7 +9,7 @@ import src.demographic_models as demographic_models
 import argparse
 from src.preprocess import Processor
 
-def main(experiment_config_file, sampled_params_path, genome_sim_directory, sim_number):
+def main(experiment_config_file, sampled_params_path, genome_sim_directory, window_number, sim_number):
 
     # Open the pickled file with the sampled parameters
     with open(sampled_params_path, 'rb') as f:

@@ -33,15 +33,13 @@ def main(experiment_config, sim_directory, sim_number):
     else:
         raise ValueError(f"Unsupported demographic model: {experiment_config['demographic_model']}")
 
+    # Now simulate the chromosome
+    ts = processor.simulate_chromosome(sampled_params, num_samples, demographic_model, length=experiment_config['genome_length'], mutation_rate=experiment_config['mutation_rate'], recombination_rate = experiment_config['recombination_rate'])
+
     # Now create the SFS
     
     SFS = processor.create_SFS(
-        sampled_params,
-        mode="pretrain",
-        num_samples=experiment_config["num_samples"],
-        demographic_model=demographic_model,
-        length=experiment_config["genome_length"],
-        mutation_rate=experiment_config["mutation_rate"],
+        ts, mode = 'pretrain', num_samples = experiment_config["num_samples"]
     )
 
     # Save the SFS in a .pkl file

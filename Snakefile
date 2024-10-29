@@ -129,6 +129,8 @@ rule genome_windows:
         samples_file = "sampled_genome_windows/sim_{sim_number}/samples.txt",
         flat_map_file = "sampled_genome_windows/sim_{sim_number}/flat_map.txt",
         metadata_file = "sampled_genome_windows/sim_{sim_number}/metadata.txt"
+    params:
+        window_number = lambda wildcards: wildcards.window_number
     shell:
         """
         mkdir -p sampled_genome_windows/sim_{wildcards.sim_number}
