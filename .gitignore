@@ -15,3 +15,5 @@ slurm*
 LD_inferences/
 sampled_genome_windows/
 simulated_parameters_and_inferences/
+combined_LD_inferences/
+final_LD_inferences/

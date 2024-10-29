@@ -3,7 +3,7 @@
 #SBATCH --array=0-99                    # Adjusted to match your simulation needs
 #SBATCH --output=logs/job_%A_%a.out      # Standard output log file (%A is job ID, %a is the array index)
 #SBATCH --error=logs/job_%A_%a.err       # Standard error log file
-#SBATCH --time=36:00:00                  # Time limit
+#SBATCH --time=3:00:00                  # Time limit
 #SBATCH --cpus-per-task=1                # Number of CPU cores per task
 #SBATCH --mem=1G                         # Memory per task
 #SBATCH --partition=kern,preempt,kerngpu # Partitions to submit the job to
@@ -58,9 +58,9 @@ snakemake \
     --config sim_directory=$SIM_DIRECTORY sim_number=$TASK_ID \
     --rerun-incomplete \
     "simulated_parameters_and_inferences/simulation_results/sampled_params_${TASK_ID}.pkl" \
-    # "simulated_parameters_and_inferences/simulation_results/metadata_${TASK_ID}.txt" \
+    "simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_${TASK_ID}.txt" \
     "simulated_parameters_and_inferences/simulation_results/SFS_sim_${TASK_ID}.pkl" \
-    "moments_dadi_features/software_inferences_sim_${TASK_ID}.pkl"
+    "simulated_parameters_and_inferences/simulation_results/ts_sim_${TASK_ID}.trees"
 
 # Calculate elapsed time only for the last task in the array
 if [ "$SLURM_ARRAY_TASK_ID" -eq 99 ]; then

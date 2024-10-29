@@ -10,6 +10,7 @@
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
+current_dir = `pwd`
 # Define the batch size
 BATCH_SIZE=50
 TOTAL_TASKS=10000  # Total tasks to process
@@ -71,6 +72,7 @@ fi
 
 # Run tasks in parallel
 for TASK_ID in $(seq $BATCH_START $BATCH_END); do
+    ### CD into a tmp directory that is unique to the SLURM array _ by simulation number and window number
     SIM_NUMBER=$((TASK_ID / NUM_WINDOWS))
     WINDOW_NUMBER=$((TASK_ID % NUM_WINDOWS))
 
@@ -82,15 +84,17 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER window_number=$WINDOW_NUMBER \
         --rerun-incomplete \
         "sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt" \
-        "LD_inferences/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl" &
+        "LD_inferences/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl" 
+
+    ### CD back into current_dir
 
     # Check and process if all windows are completed
     if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
         echo "All windows processed for sim_number: $SIM_NUMBER"
-        snakemake --nolock --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
-                  --rerun-incomplete "combined_LD_inferences/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl" &
-        snakemake --nolock --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
-                  --rerun-incomplete "final_LD_inferences/momentsLD_inferences_sim_${SIM_NUMBER}.pkl" &
+        snakemake --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
+                  --rerun-incomplete "combined_LD_inferences/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl"
+        snakemake --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
+                  --rerun-incomplete "final_LD_inferences/momentsLD_inferences_sim_${SIM_NUMBER}.pkl"
     fi
 done
 

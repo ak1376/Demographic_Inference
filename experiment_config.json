@@ -13,7 +13,7 @@
         "Na": 10000, 
         "m": 1e-8
     },
-    "num_sims_pretrain": 4,
+    "num_sims_pretrain": 100,
     "num_sims_inference": 1,
     "num_samples": {
         "N1": 20,
@@ -22,7 +22,7 @@
     "dadi_analysis": true,
     "moments_analysis": true,
     "momentsLD_analysis": true,
-    "num_windows": 5,
+    "num_windows": 100,
     "window_length": 10000.0,
     "maxiter": 20,
     "genome_length": 1000000.0,

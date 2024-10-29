@@ -6,9 +6,10 @@ import json
 # experiment_config = config["experiment"]
 # model_config = config["model"]
 
-CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
-MODEL_CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config.json'
-MODEL_CONFIG_XGBOOST_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config_xgb.json'
+CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
+MODEL_CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config.json'
+MODEL_CONFIG_XGBOOST_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config_xgb.json'
+
 
 with open(CONFIG_FILEPATH, 'r') as f:
    experiment_config = json.load(f)
