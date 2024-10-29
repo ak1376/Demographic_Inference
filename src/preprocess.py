@@ -65,72 +65,43 @@ class Processor:
 
 
     @staticmethod
-    def run_msprime_replicates(sampled_params, experiment_config, window_number, folderpath):
-        #TODO: Completely revise this function. 
+    def run_msprime_replicates(ts, experiment_config, window_number, folderpath):
 
-        if experiment_config["demographic_model"] == "bottleneck_model":
-            demographic_model = demographic_models.bottleneck_model
-
-        elif experiment_config["demographic_model"] == "split_isolation_model":
-            demographic_model = demographic_models.split_isolation_model_simulation
-
-        else:
-            raise ValueError(f"Unsupported demographic model: {experiment_config['demographic_model']}")
-
-        g = demographic_model(sampled_params)
-        demog = msprime.Demography.from_demes(g)
+        folderpath = os.path.join(folderpath, f"window_{window_number}")
 
         # Create directory for storing VCFs
-        output_folder = folderpath
-        os.makedirs(output_folder, exist_ok=True)
-
-        # Simulate ancestry for multiple populations
-        ts = msprime.sim_ancestry(
-            samples=experiment_config['num_samples'],
-            demography=demog,
-            sequence_length=experiment_config['genome_length'],
-            recombination_rate=experiment_config['recombination_rate'],
-            random_seed=experiment_config['seed'],
-        )
-
-        # Simulate mutations over the ancestry tree sequence
-        ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'])
+        os.makedirs(folderpath, exist_ok=True)
 
         # Generate random windows
-        windows = [
-            generate_window(ts, experiment_config['window_length'], experiment_config['genome_length'])
-        ]
+        window = generate_window(ts, experiment_config['window_length'], experiment_config['genome_length'])
 
         # List to store file paths of the generated VCFs
-        vcf_filepaths = []
+        vcf_filepath = []
 
         # Iterate over windows and write VCFs
-        vcf_name = os.path.join(output_folder, f'window.{window_number}.vcf')
+        vcf_name = os.path.join(folderpath, f'window.{window_number}.vcf')
         with open(vcf_name, "w+") as fout:
-            ts_window.write_vcf(fout, allow_position_zero=True)
+            window.write_vcf(fout, allow_position_zero=True)
             
         # Compress the VCF file
         os.system(f"gzip {vcf_name}")
         
         # # Store the compressed VCF file path
-        # vcf_filepaths.append(f"{vcf_name}.gz")
+        vcf_filepath.append(f"{vcf_name}.gz")
         
-        # # Write the metadata file with all VCF file paths
-        # metadata_file = os.path.join(output_folder, "metadata.txt")
-        # with open(metadata_file, "w+") as metafile:
-        #     metafile.write("\n".join(vcf_filepaths))
-
-        # print(f"Metadata file written to {metadata_file}")
+        # Write the metadata file with all VCF file paths
+        metadata_file = os.path.join(folderpath, "individual_file_metadata.txt")
+        with open(metadata_file, "w+") as metafile:
+            metafile.write(vcf_name)
 
     @staticmethod
-    def write_samples_and_rec_map(experiment_config, folderpath):
+    def write_samples_and_rec_map(experiment_config, window_number, folderpath):
+
+        folderpath = os.path.join(folderpath, f"window_{window_number}")
 
         # Define the file paths
         samples_file = os.path.join(folderpath, f"samples.txt")
         flat_map_file = os.path.join(folderpath, f"flat_map.txt")
-
-        print(f'Samples filepath: {samples_file}')
-        print(f'Flat map filepath: {flat_map_file}')
 
         # Open and write the sample file
         with open(samples_file, "w+") as fout:
@@ -211,7 +182,7 @@ class Processor:
                 for pop in ts.populations() 
                 if len(ts.samples(population=pop.id)) > 0  # Exclude populations with no samples
             ]
-            
+                        
             # Create the joint allele frequency spectrum
             sfs = ts.allele_frequency_spectrum(sample_sets=sample_sets, mode="site", polarised=True)
             

@@ -6,9 +6,9 @@ import json
 # experiment_config = config["experiment"]
 # model_config = config["model"]
 
-CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
-MODEL_CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config.json'
-MODEL_CONFIG_XGBOOST_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config_xgb.json'
+CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
+MODEL_CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config.json'
+MODEL_CONFIG_XGBOOST_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config_xgb.json'
 
 with open(CONFIG_FILEPATH, 'r') as f:
    experiment_config = json.load(f)
@@ -48,16 +48,24 @@ rule all:
         # Simulation outputs first
         expand("simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl", 
                 sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("simulated_parameters_and_inferences/simulation_results/metadata_{sim_number}.txt", 
+        expand("simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_{sim_number}.txt", 
                sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl", 
                sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("sampled_genome_windows/sim_{sim_number}/samples.txt",
+        expand("simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees",
+                sim_number=range(0, experiment_config['num_sims_pretrain'])),
+        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
+               sim_number=range(0, experiment_config['num_sims_pretrain']),
+               window_number=range(0, experiment_config['num_windows'])),
+        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+               sim_number=range(0, experiment_config['num_sims_pretrain']),
+               window_number=range(0, experiment_config['num_windows'])),
+        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt",
+               sim_number=range(0, experiment_config['num_sims_pretrain']),
+               window_number=range(0, experiment_config['num_windows'])),
+        expand("sampled_genome_windows/sim_{sim_number}/metadata.txt", 
                sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("sampled_genome_windows/sim_{sim_number}/flat_map.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("sampled_genome_windows/sim_{sim_number}/metadata.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
+
         expand("LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
                sim_number=range(0, experiment_config['num_sims_pretrain']),
                window_number=range(0, experiment_config['num_windows'])),
@@ -67,13 +75,13 @@ rule all:
                sim_number=range(0, experiment_config['num_sims_pretrain'])),
         expand("moments_dadi_features/software_inferences_sim_{sim_number}.pkl", 
                sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
-        f"{SIM_DIRECTORY}/training_features.npy",
-        f"{SIM_DIRECTORY}/training_targets.npy",
-        f"{SIM_DIRECTORY}/validation_features.npy",
-        f"{SIM_DIRECTORY}/validation_targets.npy",  # Added missing comma here
-        f'{SIM_DIRECTORY}/postprocessing_results.pkl',
-        f"{SIM_DIRECTORY}/features_and_targets.pkl"
+        # f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
+        # f"{SIM_DIRECTORY}/training_features.npy",
+        # f"{SIM_DIRECTORY}/training_targets.npy",
+        # f"{SIM_DIRECTORY}/validation_features.npy",
+        # f"{SIM_DIRECTORY}/validation_targets.npy",  # Added missing comma here
+        # f'{SIM_DIRECTORY}/postprocessing_results.pkl',
+        # f"{SIM_DIRECTORY}/features_and_targets.pkl"
         # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",
         # f"{MODEL_DIRECTORY}/snn_model.pth"
@@ -110,12 +118,11 @@ rule run_simulation:
         SIM_DIRECTORY = 'simulated_parameters_and_inferences'
     output:
         sampled_params_pkl = "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl",
-        metadata_file = "simulated_parameters_and_inferences/simulation_results/metadata_{sim_number}.txt",
-        sfs_file = "simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl"
+        metadata_file = "simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_{sim_number}.txt",
+        sfs_file = "simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl",
+        tree_sequence_file = "simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees"
     shell:
         """
-        mkdir -p {params.SIM_DIRECTORY}/simulation_results/
-        echo "Saving files to: {params.SIM_DIRECTORY}/simulation_results/"
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/single_simulation.py \
         --experiment_config {params.CONFIG_FILEPATH} \
         --sim_directory {params.SIM_DIRECTORY} \
@@ -124,28 +131,54 @@ rule run_simulation:
 
 rule genome_windows:
     input:
-        sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
+        tree_sequence_file = rules.run_simulation.output.tree_sequence_file
     output:
-        samples_file = "sampled_genome_windows/sim_{sim_number}/samples.txt",
-        flat_map_file = "sampled_genome_windows/sim_{sim_number}/flat_map.txt",
-        metadata_file = "sampled_genome_windows/sim_{sim_number}/metadata.txt"
+        samples_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
+        flat_map_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+        metadata_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt"
+
     params:
-        window_number = lambda wildcards: wildcards.window_number
+        window_number = lambda wildcards: wildcards.window_number,
+        CONFIG_FILEPATH = CONFIG_FILEPATH
     shell:
         """
         mkdir -p sampled_genome_windows/sim_{wildcards.sim_number}
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_genome_vcfs.py \
-        --sampled_params_path {input.sampled_params_pkl} \
-        --experiment_config_filepath {CONFIG_FILEPATH} \
+        --tree_sequence_file {input.tree_sequence_file} \
+        --experiment_config_filepath {params.CONFIG_FILEPATH} \
         --genome_sim_directory sampled_genome_windows \
+        --window_number {wildcards.window_number} \
         --sim_number {wildcards.sim_number}
+        """
+
+rule combine_metadata:
+    input:
+        tree_sequence_file = rules.run_simulation.output.tree_sequence_file,
+        experiment_config = CONFIG_FILEPATH,
+        samples_files = lambda wildcards: [
+            f"sampled_genome_windows/sim_{wildcards.sim_number}/window_{i}/samples.txt"
+            for i in range(json.load(open(CONFIG_FILEPATH))["num_windows"])
+        ]
+    output:
+        metadata_file = "sampled_genome_windows/sim_{sim_number}/metadata.txt"
+    params:
+        num_windows = lambda wildcards: json.load(open(CONFIG_FILEPATH))["num_windows"]
+    shell:
+        """
+        # Create output directory
+        mkdir -p $(dirname {output.metadata_file})
+        
+        # Concatenate all VCF file paths into the metadata file
+        for ((i=0; i<{params.num_windows}; i++)); do
+            echo "sampled_genome_windows/sim_{wildcards.sim_number}/window_$i/window.$i.vcf.gz" >> {output.metadata_file}
+        done
         """
 
 rule calculate_LD_stats:
     input:
         pop_file_path = rules.genome_windows.output.samples_file,
         flat_map_file = rules.genome_windows.output.flat_map_file,
-        metadata_file = rules.genome_windows.output.metadata_file,
+        metadata_file = rules.combine_metadata.output.metadata_file,
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
     output:
         processed_file = "LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
@@ -153,8 +186,6 @@ rule calculate_LD_stats:
         window_number = lambda wildcards: wildcards.window_number
     shell:
         """
-        mkdir -p LD_inferences/sim_{wildcards.sim_number}
-        set -euo pipefail
         echo "Extracting VCF file for window number {wildcards.window_number}"
         vcf_filepath=$(sed -n "$(( {wildcards.window_number} + 1 ))p" {input.metadata_file})
         echo "Processing VCF file: $vcf_filepath"
@@ -203,7 +234,10 @@ rule obtain_MomentsLD_feature:
 
 rule obtain_feature:
     input:
-        flat_map_file = rules.genome_windows.output.flat_map_file,  # Depend on genome_windows output
+        flat_map_files = lambda wildcards: [
+            f"sampled_genome_windows/sim_{wildcards.sim_number}/window_{i}/flat_map.txt"
+            for i in range(json.load(open(CONFIG_FILEPATH))["num_windows"])
+        ],
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl,
         SFS = rules.run_simulation.output.sfs_file
     output:
@@ -218,7 +252,6 @@ rule obtain_feature:
         --sim_number {wildcards.sim_number}
         """
 
-# Rule to gather both software_inferences and momentsLD_inferences
 # Rule to gather both software_inferences and momentsLD_inferences
 def gather_all_inferences(wildcards):
     software_inferences = expand(

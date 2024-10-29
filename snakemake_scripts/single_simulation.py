@@ -31,38 +31,56 @@ def main(experiment_config, sim_directory, sim_number):
         demographic_model = demographic_models.split_isolation_model_simulation
 
     else:
-        raise ValueError(f"Unsupported demographic model: {experiment_config['demographic_model']}")
+        raise ValueError(
+            f"Unsupported demographic model: {experiment_config['demographic_model']}"
+        )
+    
+
+    print("BEGINNING THE PROCESS OF SIMULATING THE CHROMOSOME")
 
     # Now simulate the chromosome
-    ts = processor.simulate_chromosome(sampled_params, num_samples, demographic_model, length=experiment_config['genome_length'], mutation_rate=experiment_config['mutation_rate'], recombination_rate = experiment_config['recombination_rate'])
-
-    # Now create the SFS
-    
-    SFS = processor.create_SFS(
-        ts, mode = 'pretrain', num_samples = experiment_config["num_samples"]
+    ts = processor.simulate_chromosome(
+        sampled_params,
+        num_samples=experiment_config["num_samples"],
+        demographic_model=demographic_model,
+        length=experiment_config["genome_length"],
+        mutation_rate=experiment_config["mutation_rate"],
+        recombination_rate=experiment_config["recombination_rate"],
     )
 
-    # Save the SFS in a .pkl file
-    SFS_filename = f'{simulation_results_directory}/SFS_sim_{sim_number}.pkl'
+    # Now create the SFS
 
-    print("=================================================================")
-    print(f'SFS filename path: {SFS_filename}')
-    print("=================================================================")
-    
+    SFS = processor.create_SFS(
+        ts, mode="pretrain", num_samples=experiment_config["num_samples"], length = experiment_config["genome_length"]
+    )
+
+
+    # Save the SFS in a .pkl file
+    SFS_filename = f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl"
+
     with open(SFS_filename, "wb") as f:
         pickle.dump(SFS, f)
+
+    # Save the tree sequence in a .trees file
+
+    ts_filename = f"{simulation_results_directory}/ts_sim_{sim_number}.trees"
+    ts.dump(ts_filename)
 
     # Save the unique identifier in a .pkl file
 
     if demographic_model == demographic_models.bottleneck_model:
-        sampled_params = {key: sampled_params[key] for key in experiment_config['parameters_to_estimate'] if key in sampled_params}
+        sampled_params = {
+            key: sampled_params[key]
+            for key in experiment_config["parameters_to_estimate"]
+            if key in sampled_params
+        }
 
     pkl_filename = f"{simulation_results_directory}/sampled_params_{sim_number}.pkl"
     with open(pkl_filename, "wb") as f:
         pickle.dump(sampled_params, f)
 
     # Also save the name of the .pkl file to metadata_{sim_number}.txt
-    metadata_filename = f"{simulation_results_directory}/metadata_{sim_number}.txt"
+    metadata_filename = f"{simulation_results_directory}/sampled_params_metadata_{sim_number}.txt"
     with open(metadata_filename, "w") as meta_f:
         meta_f.write(pkl_filename)
 
