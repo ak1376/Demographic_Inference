@@ -57,13 +57,13 @@ TASK_ID=$SLURM_ARRAY_TASK_ID
 snakemake \
     --config sim_directory=$SIM_DIRECTORY sim_number=$TASK_ID \
     --rerun-incomplete \
-    "${SIM_DIRECTORY}/simulation_results/sampled_params_${TASK_ID}.pkl" \
-    "${SIM_DIRECTORY}/simulation_results/metadata_${TASK_ID}.txt" \
-    "${SIM_DIRECTORY}/simulation_results/SFS_sim_${TASK_ID}.pkl" \
-    "${SIM_DIRECTORY}/simulation_results/software_inferences_sim_${TASK_ID}.pkl"
+    "simulated_parameters_and_inferences/simulation_results/sampled_params_${TASK_ID}.pkl" \
+    # "simulated_parameters_and_inferences/simulation_results/metadata_${TASK_ID}.txt" \
+    "simulated_parameters_and_inferences/simulation_results/SFS_sim_${TASK_ID}.pkl" \
+    "moments_dadi_features/software_inferences_sim_${TASK_ID}.pkl"
 
 # Calculate elapsed time only for the last task in the array
-if [ "$SLURM_ARRAY_TASK_ID" -eq 20 ]; then
+if [ "$SLURM_ARRAY_TASK_ID" -eq 99 ]; then
     # End timing at the end of the last job array task
     overall_end_time=$(date +%s)
     echo "End time recorded: $overall_end_time"

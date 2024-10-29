@@ -12,3 +12,6 @@ e
 /split_isolation_model_*/
 logs/
 slurm*
+LD_inferences/
+sampled_genome_windows/
+simulated_parameters_and_inferences/

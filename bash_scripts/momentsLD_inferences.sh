@@ -81,15 +81,16 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --nolock \
         --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER window_number=$WINDOW_NUMBER \
         --rerun-incomplete \
-        "${SIM_DIRECTORY}/sampled_genome_windows/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl" &
+        "sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt" \
+        "LD_inferences/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl" &
 
     # Check and process if all windows are completed
     if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
         echo "All windows processed for sim_number: $SIM_NUMBER"
         snakemake --nolock --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
-                  --rerun-incomplete "${SIM_DIRECTORY}/sampled_genome_windows/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl" &
+                  --rerun-incomplete "combined_LD_inferences/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl" &
         snakemake --nolock --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
-                  --rerun-incomplete "${SIM_DIRECTORY}/simulation_results/momentsLD_inferences_sim_${SIM_NUMBER}.pkl" &
+                  --rerun-incomplete "final_LD_inferences/momentsLD_inferences_sim_${SIM_NUMBER}.pkl" &
     fi
 done
 
