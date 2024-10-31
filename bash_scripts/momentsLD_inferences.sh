@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=batched_momentsLD_job_array
-#SBATCH --array=0-7
-#SBATCH --output=logs/job_%A_%a.out
-#SBATCH --error=logs/job_%A_%a.err
+#SBATCH --array=0-8
+#SBATCH --output=logs/momentsLD_%A_%a.out
+#SBATCH --error=logs/momentsLD_%A_%a.err
 #SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
@@ -14,13 +14,9 @@
 current_dir=$(pwd)
 echo "Current Directory: ${current_dir}"
 
-# At the start of your script, after defining current_dir
-# Create a local .snakemake directory for locks
-mkdir -p "${current_dir}/.snakemake"
-
 # Define the batch size
-BATCH_SIZE=50
-TOTAL_TASKS=400
+BATCH_SIZE=125
+TOTAL_TASKS=1000
 
 # Start the timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -77,8 +73,6 @@ if [ "$BATCH_END" -ge "$TOTAL_TASKS" ]; then
     BATCH_END=$((TOTAL_TASKS - 1))
 fi
 
-mkdir -p logs
-
 # Run tasks in parallel
 for TASK_ID in $(seq $BATCH_START $BATCH_END); do
     SIM_NUMBER=$((TASK_ID / NUM_WINDOWS))
@@ -86,21 +80,31 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
 
     echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER"
 
-    # Create directory and cd into it
-    mkdir -p sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/
-    cd sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/ || { echo "Failed to change directory"; exit 1; }
+    # Note where we are
+    CURRENT_DIR=$(pwd)
 
-    # Run Snakemake for window-specific files only
+    echo "Our current directory: $CURRENT_DIR"
+
+    # Create directory and cd into it
+    mkdir -p /gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/
+   
+    # CD into directory for running snakemake
+    cd /gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/ || { echo "Failed to change directory"; exit 1; }
+
+    echo "Directory we just CD-ed into: /gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/"
+
+    # Run Snakemake for window-specific files only - using absolute path
     snakemake \
         --snakefile /gpfs/projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
-        --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER window_number=$WINDOW_NUMBER \
         --rerun-incomplete \
         --nolock \
-        "LD_inferences/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl" 
+        "/gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl"
 
-    # Return to original directory
-    cd "$current_dir" || { echo "Failed to return to original directory"; exit 1; }
+
+
+    # Navigate to the directory where we want to store the metadata.txt file for each simulation
+    # cd /gpfs/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}/ || { echo "Failed to return to original directory"; exit 1; }
 
     # Only create metadata file after all windows are done
     if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
@@ -115,6 +119,10 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
             "sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt"
             
         # Run other tasks that depend on all windows being complete
+        # Change back to base directory
+        cd /gpfs/projects/kernlab/akapoor/Demographic_Inference || { echo "Failed to return to base directory"; exit 1; }
+
+
         snakemake \
             --snakefile /gpfs/projects/kernlab/akapoor/Demographic_Inference/Snakefile \
             --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \

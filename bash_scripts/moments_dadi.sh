@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-3  # Adjust based on num_sims_pretrain
+#SBATCH --array=0-7  # Adjust based on num_sims_pretrain
 #SBATCH --output=logs/feature_processing_%A_%a.out
 #SBATCH --error=logs/feature_processing_%A_%a.err
 #SBATCH --time=24:00:00
@@ -26,6 +26,8 @@ NUM_WINDOWS=$(jq -r '.num_windows' $EXPERIMENT_CONFIG_FILE)
 DADI_ANALYSIS=$(jq -r '.dadi_analysis' $EXPERIMENT_CONFIG_FILE)
 MOMENTS_ANALYSIS=$(jq -r '.moments_analysis' $EXPERIMENT_CONFIG_FILE)
 MOMENTS_LD_ANALYSIS=$(jq -r '.momentsLD_analysis' $EXPERIMENT_CONFIG_FILE)
+K=$(jq -r '.k' $EXPERIMENT_CONFIG_FILE)           # Added this
+TOP_VALUES_K=$(jq -r '.top_values_k' $EXPERIMENT_CONFIG_FILE)  # Added this
 
 # Function to convert lowercase true/false to True/False
 capitalize_bool() {
@@ -42,11 +44,9 @@ DADI_ANALYSIS=$(capitalize_bool $DADI_ANALYSIS)
 MOMENTS_ANALYSIS=$(capitalize_bool $MOMENTS_ANALYSIS)
 MOMENTS_LD_ANALYSIS=$(capitalize_bool $MOMENTS_LD_ANALYSIS)
 
-# Set up the full simulation directory path
-SIM_DIRECTORY="${DEMOGRAPHIC_MODEL}_dadi_analysis_${DADI_ANALYSIS}_moments_analysis_${MOMENTS_ANALYSIS}_momentsLD_analysis_${MOMENTS_LD_ANALYSIS}_seed_${SEED}/sims/sims_pretrain_${NUM_SIMS_PRETRAIN}_sims_inference_${NUM_SIMS_INFERENCE}_seed_${SEED}"
+# Set up the full simulation directory path - added num_replicates and top_values
+SIM_DIRECTORY="${DEMOGRAPHIC_MODEL}_dadi_analysis_${DADI_ANALYSIS}_moments_analysis_${MOMENTS_ANALYSIS}_momentsLD_analysis_${MOMENTS_LD_ANALYSIS}_seed_${SEED}/sims/sims_pretrain_${NUM_SIMS_PRETRAIN}_sims_inference_${NUM_SIMS_INFERENCE}_seed_${SEED}_num_replicates_${K}_top_values_${TOP_VALUES_K}"
 echo "Sim directory: $SIM_DIRECTORY"
-
-mkdir -p logs
 
 # Process single simulation
 SIM_NUMBER=$SLURM_ARRAY_TASK_ID

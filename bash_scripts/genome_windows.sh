@@ -11,8 +11,8 @@
 #SBATCH --requeue
 
 # Define batch parameters
-BATCH_SIZE=50
-TOTAL_TASKS=400
+BATCH_SIZE=125
+TOTAL_TASKS=1000
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -61,11 +61,13 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
     WINDOW_NUMBER=$((TASK_ID % NUM_WINDOWS))
 
     mkdir -p sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/
-
+    
     echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER"
 
     # Navigate to the directory, with error checking
     cd sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/ || { echo "Failed to change directory"; exit 1; }
+    echo "Directory we just CD-ed into: sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/"
+
 
     # Set PYTHONPATH and Python script path explicitly
     export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference

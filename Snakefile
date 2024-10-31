@@ -46,44 +46,9 @@ MODEL_DIRECTORY = (
 
 rule all:
     input:
-        # Simulation outputs first
-        expand("simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl", 
-                sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_{sim_number}.txt", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees",
-                sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("sampled_genome_windows/sim_{sim_number}/metadata.txt", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-
-        expand("LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("combined_LD_inferences/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl",
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("final_LD_inferences/momentsLD_inferences_sim_{sim_number}.pkl",
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("moments_dadi_features/software_inferences_sim_{sim_number}.pkl", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        # f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
-        # f"{SIM_DIRECTORY}/training_features.npy",
-        # f"{SIM_DIRECTORY}/training_targets.npy",
-        # f"{SIM_DIRECTORY}/validation_features.npy",
-        # f"{SIM_DIRECTORY}/validation_targets.npy",  # Added missing comma here
-        # f'{SIM_DIRECTORY}/postprocessing_results.pkl',
-        # f"{SIM_DIRECTORY}/features_and_targets.pkl"
-        # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
+        f"{SIM_DIRECTORY}/postprocessing_results.pkl",
+        f"{SIM_DIRECTORY}/features_and_targets.pkl",
+        f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",
         # f"{MODEL_DIRECTORY}/snn_model.pth"
         # f"{MODEL_DIRECTORY}/xgb_model_obj.pkl",
