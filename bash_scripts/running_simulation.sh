@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=sim_job_array         # Job name
-#SBATCH --array=0-99                    # Adjusted to match your simulation needs
+#SBATCH --array=0-4                    # Adjusted to match your simulation needs
 #SBATCH --output=logs/job_%A_%a.out      # Standard output log file (%A is job ID, %a is the array index)
 #SBATCH --error=logs/job_%A_%a.err       # Standard error log file
 #SBATCH --time=3:00:00                  # Time limit
@@ -55,7 +55,8 @@ TASK_ID=$SLURM_ARRAY_TASK_ID
 
 # Run the Snakemake rule for the specific simulation number
 snakemake \
-    --config sim_directory=$SIM_DIRECTORY sim_number=$TASK_ID \
+    --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+    --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
     --rerun-incomplete \
     "simulated_parameters_and_inferences/simulation_results/sampled_params_${TASK_ID}.pkl" \
     "simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_${TASK_ID}.txt" \
