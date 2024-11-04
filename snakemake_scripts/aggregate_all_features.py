@@ -35,6 +35,8 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
         ("validation", validation_indices)
     ]:
         
+        print(f'Indices for Stage: {stage} are: {indices}')
+        
         # Step 1: Initialize lists to hold simulation data
         all_simulations_data = []   # Inferred parameters
         all_targets_data = []       # Simulated parameters (targets)

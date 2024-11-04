@@ -1,18 +1,22 @@
 #!/bin/bash
 #SBATCH --job-name=batched_momentsLD_job_array
-#SBATCH --array=0-9999
-#SBATCH --output=logs/job_%A_%a.out
-#SBATCH --error=logs/job_%A_%a.err
+#SBATCH --array=0-8
+#SBATCH --output=logs/momentsLD_%A_%a.out
+#SBATCH --error=logs/momentsLD_%A_%a.err
 #SBATCH --time=12:00:00
-#SBATCH --cpus-per-task=8  # Increase if running tasks in parallel
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
+# Store the original directory
+current_dir=$(pwd)
+echo "Current Directory: ${current_dir}"
+
 # Define the batch size
-BATCH_SIZE=50
-TOTAL_TASKS=10000  # Total tasks to process
+BATCH_SIZE=125
+TOTAL_TASKS=1000
 
 # Start the timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -33,7 +37,7 @@ NUM_SIMS_PRETRAIN=$(jq -r '.num_sims_pretrain' $EXPERIMENT_CONFIG_FILE)
 NUM_SIMS_INFERENCE=$(jq -r '.num_sims_inference' $EXPERIMENT_CONFIG_FILE)
 K=$(jq -r '.k' $EXPERIMENT_CONFIG_FILE)
 TOP_VALUES_K=$(jq -r '.top_values_k' $EXPERIMENT_CONFIG_FILE)
-NUM_WINDOWS=$(jq -r '.num_windows' $EXPERIMENT_CONFIG_FILE)  # Ensure NUM_WINDOWS is correctly extracted
+NUM_WINDOWS=$(jq -r '.num_windows' $EXPERIMENT_CONFIG_FILE)
 
 # Check if NUM_WINDOWS is valid
 if [ -z "$NUM_WINDOWS" ] || [ "$NUM_WINDOWS" -eq 0 ]; then
@@ -76,31 +80,54 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
 
     echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER"
 
-    # Run Snakemake in the background (&) for each task
-    snakemake \
-        --nolock \
-        --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER window_number=$WINDOW_NUMBER \
-        --rerun-incomplete \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt" \
-        "LD_inferences/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl" &
+    # Note where we are
+    CURRENT_DIR=$(pwd)
 
-    # Check and process if all windows are completed
+    echo "Our current directory: $CURRENT_DIR"
+
+    # Create directory and cd into it
+    mkdir -p /gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/
+   
+    # CD into directory for running snakemake
+    cd /gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/ || { echo "Failed to change directory"; exit 1; }
+
+    echo "Directory we just CD-ed into: /gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/"
+
+    # Run Snakemake for window-specific files only - using absolute path
+    snakemake \
+        --snakefile /gpfs/projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+        --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
+        --rerun-incomplete \
+        --nolock \
+        "/gpfs/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl"
+
+
+
+    # Navigate to the directory where we want to store the metadata.txt file for each simulation
+    # cd /gpfs/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}/ || { echo "Failed to return to original directory"; exit 1; }
+
+    # Only create metadata file after all windows are done
     if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
         echo "All windows processed for sim_number: $SIM_NUMBER"
-        snakemake --nolock --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
-                  --rerun-incomplete "combined_LD_inferences/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl" &
-        snakemake --nolock --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER \
-                  --rerun-incomplete "final_LD_inferences/momentsLD_inferences_sim_${SIM_NUMBER}.pkl" &
+        
+        # Create metadata file
+        snakemake \
+            --snakefile /gpfs/projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+            --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
+            --rerun-incomplete \
+            --nolock \
+            "sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt"
+            
+        # Run other tasks that depend on all windows being complete
+        # Change back to base directory
+        cd /gpfs/projects/kernlab/akapoor/Demographic_Inference || { echo "Failed to return to base directory"; exit 1; }
+
+
+        snakemake \
+            --snakefile /gpfs/projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+            --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
+            --rerun-incomplete \
+            "combined_LD_inferences/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl" \
+            "final_LD_inferences/momentsLD_inferences_sim_${SIM_NUMBER}.pkl"
     fi
 done
-
-# Wait for all parallel jobs in the batch to complete
-wait
-
-# If this is the last batch, calculate the total time for all jobs
-if [ "$SLURM_ARRAY_TASK_ID" -eq $((TOTAL_BATCHES - 1)) ]; then
-    overall_end_time=$(date +%s)
-    echo "Overall end time: $overall_end_time"
-    overall_elapsed_time=$((overall_end_time - overall_start_time))
-    echo "Total time taken: $overall_elapsed_time seconds"
-fi

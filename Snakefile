@@ -6,9 +6,10 @@ import json
 # experiment_config = config["experiment"]
 # model_config = config["model"]
 
-CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/experiment_config.json'
-MODEL_CONFIG_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config.json'
-MODEL_CONFIG_XGBOOST_FILEPATH = '/sietch_colab/akapoor/Demographic_Inference/model_config_xgb.json'
+CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
+MODEL_CONFIG_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config.json'
+MODEL_CONFIG_XGBOOST_FILEPATH = '/home/akapoor/kernlab/Demographic_Inference/model_config_xgb.json'
+
 
 with open(CONFIG_FILEPATH, 'r') as f:
    experiment_config = json.load(f)
@@ -45,44 +46,9 @@ MODEL_DIRECTORY = (
 
 rule all:
     input:
-        # Simulation outputs first
-        expand("simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl", 
-                sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_{sim_number}.txt", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees",
-                sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("sampled_genome_windows/sim_{sim_number}/metadata.txt", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-
-        expand("LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
-               sim_number=range(0, experiment_config['num_sims_pretrain']),
-               window_number=range(0, experiment_config['num_windows'])),
-        expand("combined_LD_inferences/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl",
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("final_LD_inferences/momentsLD_inferences_sim_{sim_number}.pkl",
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        expand("moments_dadi_features/software_inferences_sim_{sim_number}.pkl", 
-               sim_number=range(0, experiment_config['num_sims_pretrain'])),
-        # f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
-        # f"{SIM_DIRECTORY}/training_features.npy",
-        # f"{SIM_DIRECTORY}/training_targets.npy",
-        # f"{SIM_DIRECTORY}/validation_features.npy",
-        # f"{SIM_DIRECTORY}/validation_targets.npy",  # Added missing comma here
-        # f'{SIM_DIRECTORY}/postprocessing_results.pkl',
-        # f"{SIM_DIRECTORY}/features_and_targets.pkl"
-        # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
+        f"{SIM_DIRECTORY}/postprocessing_results.pkl",
+        f"{SIM_DIRECTORY}/features_and_targets.pkl",
+        f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",
         # f"{MODEL_DIRECTORY}/snn_model.pth"
         # f"{MODEL_DIRECTORY}/xgb_model_obj.pkl",
@@ -135,7 +101,8 @@ rule genome_windows:
     output:
         samples_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
         flat_map_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
-        metadata_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt"
+        metadata_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt",
+        vcf_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/window.{window_number}.vcf.gz"  # Add this line
 
     params:
         window_number = lambda wildcards: wildcards.window_number,
@@ -269,11 +236,10 @@ def gather_all_inferences(wildcards):
     return software_inferences + momentsLD_inferences
 
 
-# Rule to aggregate features after all simulations are complete
 rule aggregate_features:
     input:
-        inferences = gather_all_inferences,  # Gather all inferences (both software and momentsLD)
-        experiment_config_filepath = CONFIG_FILEPATH  # No wildcard needed here
+        inferences = gather_all_inferences,
+        experiment_config_filepath = CONFIG_FILEPATH
     output:
         preprocessing_results = f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
         training_features = f"{SIM_DIRECTORY}/training_features.npy",
@@ -281,19 +247,15 @@ rule aggregate_features:
         validation_features = f"{SIM_DIRECTORY}/validation_features.npy",
         validation_targets = f"{SIM_DIRECTORY}/validation_targets.npy"
     params:
-        SIM_DIRECTORY = SIM_DIRECTORY
-    run:
-        # Dynamically create list of inference file paths (software and momentsLD combined)
-        inferences_file_list = [str(inf) for inf in input.inferences]
-
-        # Call the Python script to aggregate features
-        shell(f"""
-            PYTHONPATH={CWD} python {CWD}/snakemake_scripts/aggregate_all_features.py \
+        sim_directory = SIM_DIRECTORY
+    shell:
+        """
+        mkdir -p {params.sim_directory}
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/aggregate_all_features.py \
             {input.experiment_config_filepath} \
-            {params.SIM_DIRECTORY} \
-            {' '.join(inferences_file_list)}
-        """)
-
+            {params.sim_directory} \
+            {input.inferences:q}
+        """
 
 
 rule postprocessing:
