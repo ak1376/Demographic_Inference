@@ -1,4 +1,14 @@
 #!/bin/bash
+#SBATCH --job-name=main_pipeline
+#SBATCH --output=logs/pipeline_main.out
+#SBATCH --error=logs/pipeline_main.err
+#SBATCH --time=00:10:00  # Main pipeline script time; adjust if needed
+#SBATCH --partition=kern,preempt,kerngpu # Partitions to submit the job to
+#SBATCH --account=kernlab                # Account to use
+#SBATCH --requeue                        # Requeue on preemption
+
+
+# This script manages dependencies but doesn't need significant resources itself.
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
