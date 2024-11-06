@@ -40,8 +40,8 @@ def main(experiment_config, sim_directory, sim_number):
 
     # Now simulate the chromosome
     ts = processor.simulate_chromosome(
+        experiment_config, # TODO: temporary 
         sampled_params,
-        num_samples=experiment_config["num_samples"],
         demographic_model=demographic_model,
         length=experiment_config["genome_length"],
         mutation_rate=experiment_config["mutation_rate"],

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=batched_momentsLD_job_array
-#SBATCH --array=0-8
+#SBATCH --array=0-99
 #SBATCH --output=logs/momentsLD_%A_%a.out
 #SBATCH --error=logs/momentsLD_%A_%a.err
 #SBATCH --time=12:00:00
@@ -15,8 +15,8 @@ current_dir=$(pwd)
 echo "Current Directory: ${current_dir}"
 
 # Define the batch size
-BATCH_SIZE=125
-TOTAL_TASKS=1000
+BATCH_SIZE=100
+TOTAL_TASKS=10000
 
 # Start the timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then

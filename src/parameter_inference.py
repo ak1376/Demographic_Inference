@@ -335,7 +335,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, max_attempts=5
                 print(f"Attempt {attempt+1} with perturbed parameters: {p_guess}")
 
             opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
-                p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3
+                p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter = 100
             )
             
             # If we get here, optimization succeeded

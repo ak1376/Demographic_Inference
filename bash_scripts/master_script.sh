@@ -1,87 +1,32 @@
 #!/bin/bash
-#SBATCH --job-name=master_job              # Job name
-#SBATCH --output=logs/master_job_%j.out    # Standard output log file
-#SBATCH --error=logs/master_job_%j.err     # Standard error log file
-#SBATCH --time=48:00:00                    # Total time limit for all jobs combined
-#SBATCH --cpus-per-task=4                  # Adjust based on your needs
-#SBATCH --mem=16G                          # Adjust memory per task
-#SBATCH --partition=kern,preempt,kerngpu   # Partitions to submit the job to
-#SBATCH --account=kernlab                  # Account to use
-#SBATCH --requeue                          # Requeue on preemption
 
-LOG_DIR="/projects/kernlab/akapoor/Demographic_Inference/logs"
-ERROR_LOG="${LOG_DIR}/error_log.txt"
-SUCCESS_LOG="${LOG_DIR}/success_log.txt"
+# Create logs directory if it doesn't exist
+mkdir -p logs
 
-# Ensure log directory exists
-mkdir -p $LOG_DIR
+echo "Starting pipeline execution..."
 
-# Function to unlock Snakemake if a lock exists
-unlock_snakemake() {
-    if [ -e "/projects/kernlab/akapoor/Demographic_Inference/.snakemake/locks" ]; then
-        echo "Unlocking Snakemake directory..."
-        snakemake --unlock
-        if [ $? -ne 0 ]; then
-            echo "Error unlocking Snakemake." >> $ERROR_LOG
-            exit 1
-        fi
-    fi
-}
+# 1. Submit setup job
+echo "Submitting setup job..."
+setup_job=$(sbatch bash_scripts/setup.sh | awk '{print $4}')
 
-# Function to run Snakemake with unlocking and logging
-run_snakemake() {
-    local snakemake_command=$1
-    local description=$2
+# 2. Submit simulation job with dependency
+echo "Submitting simulation job..."
+sim_job=$(sbatch --dependency=afterok:$setup_job bash_scripts/running_simulation.sh | awk '{print $4}')
 
-    # Unlock Snakemake before running
-    unlock_snakemake
+# 3. Submit genome windows job with dependency
+echo "Submitting genome windows job..."
+genome_job=$(sbatch --dependency=afterok:$sim_job bash_scripts/genome_windows.sh | awk '{print $4}')
 
-    # Run Snakemake command
-    echo "Running Snakemake: $description"
-    eval $snakemake_command
+# 4. Submit momentsLD inferences job with dependency
+echo "Submitting momentsLD inferences job..."
+momentsld_job=$(sbatch --dependency=afterok:$genome_job bash_scripts/momentsLD_inferences.sh | awk '{print $4}')
 
-    # Check for errors and log the outcome
-    if [ $? -ne 0 ]; then
-        echo "Error: Snakemake failed during $description" >> $ERROR_LOG
-        exit 1
-    else
-        echo "Snakemake completed successfully during $description" >> $SUCCESS_LOG
-    fi
-}
+# 5. Submit moments and dadi job with dependency
+echo "Submitting moments and dadi job..."
+moments_dadi_job=$(sbatch --dependency=afterok:$momentsld_job bash_scripts/moments_dadi.sh | awk '{print $4}')
 
-# Step 1: Run setup.sh
-echo "Submitting setup.sh job..."
-setup_job=$(sbatch /projects/kernlab/akapoor/Demographic_Inference/bash_scripts/setup.sh)
-setup_job_id=$(echo $setup_job | awk '{print $4}')
-echo "Setup job submitted with ID: $setup_job_id"
+# 6. Submit remaining rules job with dependency
+echo "Submitting remaining rules job..."
+sbatch --dependency=afterok:$moments_dadi_job bash_scripts/remaining_rules.sh
 
-# Step 2: Run running_simulation.sh after setup.sh completes
-echo "Submitting running_simulation.sh job..."
-simulation_job=$(sbatch --dependency=afterok:$setup_job_id /projects/kernlab/akapoor/Demographic_Inference/bash_scripts/running_simulation.sh)
-simulation_job_id=$(echo $simulation_job | awk '{print $4}')
-echo "Simulation job submitted with ID: $simulation_job_id"
-
-# Step 3: Run momentsLD_inference.sh after running_simulation.sh completes
-echo "Submitting momentsLD_inference.sh job..."
-momentsLD_job=$(sbatch --dependency=afterok:$simulation_job_id /projects/kernlab/akapoor/Demographic_Inference/bash_scripts/momentsLD_inferences.sh)
-momentsLD_job_id=$(echo $momentsLD_job | awk '{print $4}')
-echo "MomentsLD job submitted with ID: $momentsLD_job_id"
-
-# Step 4: Run remaining_rules.sh after momentsLD_inference.sh completes
-echo "Submitting remaining_rules.sh job..."
-remaining_rules_job=$(sbatch --dependency=afterok:$momentsLD_job_id /projects/kernlab/akapoor/Demographic_Inference/bash_scripts/remaining_rules.sh)
-remaining_rules_job_id=$(echo $remaining_rules_job | awk '{print $4}')
-echo "Remaining rules job submitted with ID: $remaining_rules_job_id"
-
-# Wait for all jobs to complete
-scontrol show jobid $remaining_rules_job_id
-
-# Snakemake commands to be run sequentially within each script
-run_snakemake "snakemake --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER window_number=$WINDOW_NUMBER --rerun-incomplete '${SIM_DIRECTORY}/sampled_genome_windows/sim_${SIM_NUMBER}/ld_stats_window.${WINDOW_NUMBER}.pkl'" \
-              "Calculating LD stats for sim_number $SIM_NUMBER and window_number $WINDOW_NUMBER"
-
-run_snakemake "snakemake --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER --rerun-incomplete '${SIM_DIRECTORY}/sampled_genome_windows/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl'" \
-              "Gathering LD stats for sim_number $SIM_NUMBER"
-
-run_snakemake "snakemake --config sim_directory=$SIM_DIRECTORY sim_number=$SIM_NUMBER --rerun-incomplete '${SIM_DIRECTORY}/simulation_results/momentsLD_inferences_sim_${SIM_NUMBER}.pkl'" \
-              "Running MomentsLD analysis for sim_number $SIM_NUMBER"
+echo "All jobs submitted with dependencies!"
