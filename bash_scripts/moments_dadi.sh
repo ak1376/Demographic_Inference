@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-7  # Adjust based on num_sims_pretrain
+#SBATCH --array=0-3  # Adjust based on num_sims_pretrain
 #SBATCH --output=logs/feature_processing_%A_%a.out
 #SBATCH --error=logs/feature_processing_%A_%a.err
 #SBATCH --time=24:00:00

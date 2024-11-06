@@ -11,8 +11,8 @@
 #SBATCH --requeue
 
 # Define batch parameters
-BATCH_SIZE=125
-TOTAL_TASKS=1000
+BATCH_SIZE=50
+TOTAL_TASKS=400
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
