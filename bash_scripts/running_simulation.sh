@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=sim_job_array         # Job name
-#SBATCH --array=0-3                    # Adjusted to match your simulation needs
+#SBATCH --array=0-99                    # Adjusted to match your simulation needs
 #SBATCH --output=logs/simulation_%A_%a.out      # Standard output log file (%A is job ID, %a is the array index)
 #SBATCH --error=logs/simulation_%A_%a.err       # Standard error log file
 #SBATCH --time=3:00:00                  # Time limit

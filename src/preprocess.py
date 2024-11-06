@@ -10,7 +10,7 @@ import src.demographic_models as demographic_models
 def generate_window(ts, window_length, n_samples):
     start = np.random.randint(0, n_samples - window_length)
     end = start + window_length
-    return ts.keep_intervals([[start, end]])
+    return ts.keep_intervals([[start, end]]).trim()
 
 def delete_vcf_files(directory):
     # Get a list of all files in the directory
@@ -143,16 +143,18 @@ class Processor:
 
         return sampled_params
 
-    def simulate_chromosome(self, sampled_params, num_samples, demographic_model, length=1e7, mutation_rate=5.7e-9, recombination_rate = 3.386e-9, **kwargs):
+    def simulate_chromosome(self, experiment_config, sampled_params, demographic_model, length=1e7, mutation_rate=5.7e-9, recombination_rate = 3.386e-9, **kwargs):
         g = demographic_model(sampled_params)
 
         demog = msprime.Demography.from_demes(g)
 
         # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
-        samples = [
-            msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
-            for pop_name, sample_size in num_samples.items()
-        ]
+        # samples = [
+        #     msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
+        #     for pop_name, sample_size in num_samples.items()
+        # ]
+
+        samples = {"N1": experiment_config['num_samples']['N1'], "N2": experiment_config['num_samples']['N2']}
 
         # Simulate ancestry for two populations (joint simulation)
         ts = msprime.sim_ancestry(
@@ -160,7 +162,7 @@ class Processor:
             demography=demog,
             sequence_length=length,
             recombination_rate=recombination_rate,
-            random_seed=self.experiment_config['seed'],
+            random_seed=experiment_config['seed'],
         )
         
         # Simulate mutations over the ancestry tree sequence
