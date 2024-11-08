@@ -304,11 +304,9 @@ def run_inference_moments(
     # print(f'Log Likelihood Values for Moments: {ll_list}')
     return model_list, opt_theta_list, opt_params_final_list, ll_list
 
-
-def run_inference_momentsLD(ld_stats, demographic_model, p_guess, max_attempts=5):
+def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
     """
-    This should do the parameter inference for momentsLD
-    index: unique simulation number
+    This should do the parameter inference for momentsLD.
     """
     r_bins = np.array([0, 1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3])
     ll_list = []
@@ -320,69 +318,54 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, max_attempts=5
     mv = moments.LD.Parsing.bootstrap_data(ld_stats)  # type: ignore
 
     if demographic_model == "bottleneck_model":
-        demo_func = moments.LD.Demographics1D.three_epoch # type: ignore
+        demo_func = moments.LD.Demographics1D.three_epoch  # type: ignore
     elif demographic_model == "split_isolation_model":
         demo_func = demographic_models.split_isolation_model_momentsLD
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    # Add retry loop here
-    for attempt in range(max_attempts):
-        try:
-            if attempt > 0:
-                # Perturb parameters on retry
-                p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
-                print(f"Attempt {attempt+1} with perturbed parameters: {p_guess}")
+    # Perform optimization
+    opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
+        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter=100
+    )
 
-            opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb( #type:ignore
-                p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter = 100
-            )
-            
-            # If we get here, optimization succeeded
-            physical_units = moments.LD.Util.rescale_params( # type: ignore
-                opt_params, ["nu", "nu", "T", "m", "Ne"]
-            )
-            ll_list.append(ll)
+    # Rescale parameters to physical units
+    physical_units = moments.LD.Util.rescale_params(  # type: ignore
+        opt_params, ["nu", "nu", "T", "m", "Ne"]
+    )
+    ll_list.append(ll)
 
-            opt_params_dict = {}
-            if demographic_model == "bottleneck_model":
-                opt_params_dict = {
-                    "Nb": opt_params[0] * opt_params[4],
-                    "N_recover": opt_params[1] * opt_params[4],
-                    "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * opt_params[4],
-                    "t_bottleneck_end": opt_params[3] * 2 * opt_params[4]
-                }
+    opt_params_dict = {}
+    if demographic_model == "bottleneck_model":
+        opt_params_dict = {
+            "Nb": opt_params[0] * opt_params[4],
+            "N_recover": opt_params[1] * opt_params[4],
+            "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * opt_params[4],
+            "t_bottleneck_end": opt_params[3] * 2 * opt_params[4]
+        }
 
-            elif demographic_model == "split_isolation_model":
-                physical_units = moments.LD.Util.rescale_params( #type:ignore
-                    opt_params, ["nu", "nu", "T", "m", "Ne"]
-                )
+    elif demographic_model == "split_isolation_model":
+        physical_units = moments.LD.Util.rescale_params(  # type: ignore
+            opt_params, ["nu", "nu", "T", "m", "Ne"]
+        )
 
-                print(physical_units)
+        print(physical_units)
 
-                opt_params_dict = {
-                    "N1": physical_units[0],
-                    "N2": physical_units[1],
-                    "t_split": physical_units[2],
-                    "m": physical_units[3], 
-                    'Na': physical_units[4]
-                }
+        opt_params_dict = {
+            "N1": physical_units[0],
+            "N2": physical_units[1],
+            "t_split": physical_units[2],
+            "m": physical_units[3],
+            'Na': physical_units[4]
+        }
 
-                print("best fit parameters:")
-                print(f"  N(deme0)         :  {physical_units[0]:.1f}")
-                print(f"  N(deme1)         :  {physical_units[1]:.1f}")
-                print(f"  Div. time (gen)  :  {physical_units[2]:.1f}")
-                print(f"  Migration rate   :  {physical_units[3]:.6f}")
-                print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
+        print("best fit parameters:")
+        print(f"  N(deme0)         :  {physical_units[0]:.1f}")
+        print(f"  N(deme1)         :  {physical_units[1]:.1f}")
+        print(f"  Div. time (gen)  :  {physical_units[2]:.1f}")
+        print(f"  Migration rate   :  {physical_units[3]:.6f}")
+        print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
 
-                opt_params_dict_list.append(opt_params_dict)
+        opt_params_dict_list.append(opt_params_dict)
 
-            return opt_params_dict_list, ll_list
-
-        except np.linalg.LinAlgError:
-            print(f"LinAlgError on attempt {attempt+1}, retrying with perturbed parameters")
-            if attempt == max_attempts - 1:
-                print("All attempts failed")
-                return None, None
-
-    return None, None
+    return opt_params_dict_list, ll_list

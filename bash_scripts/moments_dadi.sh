@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-99  # Adjust based on num_sims_pretrain
+#SBATCH --array=0-19  # Adjust based on num_sims_pretrain
 #SBATCH --output=logs/moments_dadi_%A_%a.out
 #SBATCH --error=logs/moments_dadi_%A_%a.err
 #SBATCH --time=24:00:00

@@ -11,8 +11,8 @@
 #SBATCH --requeue
 
 # Define batch parameters
-BATCH_SIZE=100
-TOTAL_TASKS=10000
+BATCH_SIZE=20
+TOTAL_TASKS=2000
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -78,6 +78,7 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
         --rerun-incomplete \
+        --nolock \
         "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/samples.txt" \
         "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/flat_map.txt" \
         "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/individual_file_metadata.txt" \

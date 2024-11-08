@@ -6,43 +6,54 @@ import numpy as np
 import moments
 import subprocess
 from src.parameter_inference import run_inference_momentsLD
+import os 
 
+import shutil
 
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
+def cleanup_files(sim_directory, sim_number):
+    simulation_results_directory = '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results'
+    genome_windows_directory = f'/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}'
+    
+    # Define files to delete
+    files_to_delete = [
+        f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl",
+        f"{simulation_results_directory}/ts_sim_{sim_number}.trees",
+        f"{simulation_results_directory}/sampled_params_{sim_number}.pkl",
+        f"{simulation_results_directory}/sampled_params_metadata_{sim_number}.txt"
+    ]
+    
+    # Delete individual files
+    for filepath in files_to_delete:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"Deleted {filepath}")
+        else:
+            print(f"File not found, skipping deletion: {filepath}")
+    
+    # Delete genome windows directory
+    if os.path.exists(genome_windows_directory):
+        shutil.rmtree(genome_windows_directory)
+        print(f"Deleted genome windows directory: {genome_windows_directory}")
     else:
-        raise argparse.ArgumentTypeError("Boolean value expected.")
-
-
-# Function to load in the combined moments LD pickle files for each simulation
+        print(f"Genome windows directory not found: {genome_windows_directory}")
+        
 def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experiment_config_filepath, sim_number):
-    # Load the experiment config
     with open(experiment_config_filepath, "r") as f:
         experiment_config = json.load(f)
 
-    # Load the sampled params
     with open(sampled_params, "rb") as f:
         sampled_params = pickle.load(f)
 
-    # Load the combined moments LD stats
     with open(combined_ld_stats_path, "rb") as f:
         combined_ld_stats = pickle.load(f)
 
-    # Dictionary to store results for downstream postprocessing
     mega_result_dict = {"simulated_params": sampled_params}
 
-    # Set up the initial guess for the optimization
     p_guess = experiment_config["optimization_initial_guess"].copy()
-    p_guess.extend([10000])  # Example of hardcoded value; replace as necessary
-    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)  # type: ignore
+    p_guess.extend([10000])
+    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)
 
     try:
-        # Attempt inference
         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
             ld_stats=combined_ld_stats,
             demographic_model=experiment_config["demographic_model"],
@@ -50,20 +61,39 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
         )
 
     except (np.linalg.LinAlgError, KeyError) as e:
+        print("======================================================================================")
         print(f"Error encountered: {e}. Attempting to rerun simulation for sim_number={sim_number}.")
+        print("======================================================================================")
+        
+        # Clean up files before rerun
+        cleanup_files(sim_directory, sim_number)
 
-        # Rerun simulation via subprocess call
         rerun_command = [
             "python",
-            "/path/to/rerun_simulation_script.py",  # Replace with actual path
+            "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/single_simulation.py",
             "--experiment_config", experiment_config_filepath,
-            "--sim_directory", sim_directory,
-            "--sim_number", str(sim_number),
-            # Add any other necessary arguments here
+            "--sim_directory", '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences',
+            "--sim_number", str(sim_number)
         ]
-        subprocess.run(rerun_command, check=True)
 
-        # Re-attempt inference after rerunning simulation
+        subprocess.run(rerun_command, check=True)
+        print("THE RE-SIMULATION HAS BEEN COMPLETED SUCCESSFULLY")
+
+        # Rerun the genome window creation for each window (0-99)
+        for window_number in range(experiment_config['num_windows']):
+            rerun_window_command = [
+                "python",
+                "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_genome_vcfs.py",
+                "--tree_sequence_file", f"/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees",  # Add actual path
+                "--experiment_config_filepath", experiment_config_filepath,
+                "--genome_sim_directory", '/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows',
+                "--window_number", str(window_number),
+                "--sim_number", str(sim_number)
+            ]
+            
+            subprocess.run(rerun_window_command, check=True)
+            print(f"Genome window creation for window {window_number} rerun successfully.")
+
         p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)
         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
             ld_stats=combined_ld_stats,
@@ -94,7 +124,7 @@ if __name__ == "__main__":
     obtain_feature(
         combined_ld_stats_path=args.combined_ld_stats_path,
         sampled_params=args.sampled_params_pkl,
-        experiment_config=args.experiment_config_filepath,
+        experiment_config_filepath=args.experiment_config_filepath,
         sim_directory=args.sim_directory,
         sim_number=args.sim_number
     )
