@@ -84,8 +84,8 @@ class MLPTrainer:
         visualize=True,
     ):
         # Convert data to tensors
-        training_features = torch.tensor(training_data, dtype=torch.float32).cuda()
-        validation_features = torch.tensor(validation_data, dtype=torch.float32).cuda()
+        training_features = torch.tensor(training_data, dtype=torch.float32)
+        validation_features = torch.tensor(validation_data, dtype=torch.float32)
 
         # Predictions
         training_predictions = model.predict_from_trained_network(
