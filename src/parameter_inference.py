@@ -17,6 +17,7 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
         pops=["N1", "N2"], # TODO: Change later
         r_bins=r_bins,
         report=False,
+        use_genotypes = False
     )
 
     return ld_stats
@@ -326,7 +327,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
 
     # Perform optimization
     opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
-        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter=100
+        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter=20
     )
 
     # Rescale parameters to physical units
