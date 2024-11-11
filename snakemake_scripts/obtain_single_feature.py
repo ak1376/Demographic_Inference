@@ -18,7 +18,7 @@ def str2bool(v):
 
 # I want to load in the 
 
-def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_number):
+def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_number, replicate_number):
 
     # Load in the experiment config 
     with open(experiment_config, "r") as f:
@@ -43,12 +43,6 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     # elif experiment_config["demographic_model"] == "split_isolation_model":
     #     demographic_model = demographic_models.split_isolation_model_simulation
 
-    mega_result_dict = (
-            {}
-        )  # This will store all the results (downstream postprocessing) later
-    
-    mega_result_dict = {"simulated_params": sampled_params, "sfs": SFS}
-
     # Load the experiment config and run the simulation (as before)
     # processor = Processor(
     #     experiment_config,
@@ -60,7 +54,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
 
     # Conditional analysis based on provided functions
     if experiment_config["dadi_analysis"]:
-        model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi, ll_list_dadi = (
+        model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = (
             run_inference_dadi(
                 sfs = SFS,
                 p0= experiment_config['optimization_initial_guess'],

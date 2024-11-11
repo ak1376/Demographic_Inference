@@ -85,12 +85,11 @@ def run_inference_dadi(
     p0,
     num_samples,
     demographic_model,
-    k,
+    replicate_number
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
     mutation_rate=1.26e-8,
     length=1e8,
-    top_values_k=3
 ):
     """
     This should do the parameter inference for dadi
@@ -107,79 +106,71 @@ def run_inference_dadi(
     func_ex = dadi.Numerics.make_extrap_log_func(model_func)
     pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
 
-    opt_params_dict_list = []
-    model_list = []
-    opt_theta_list = []
-    ll_list = []
 
-    for i in np.arange(k):
-        p_guess = moments.Misc.perturb_params(
-            p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
-        )
+    p_guess = moments.Misc.perturb_params(
+        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
+    )
 
-        start = time.time()
+    start = time.time()
 
-        # Optimization with dadi
-        opt_params, ll_value = dadi.Inference.opt(
-            p_guess,
-            sfs,
-            func_ex,
-            pts=pts_ext,
-            lower_bound=lower_bound,
-            upper_bound=upper_bound,
-            algorithm=nlopt.LN_BOBYQA,
-            maxeval=10
-        )
+    # Optimization with dadi
+    opt_params, ll_value = dadi.Inference.opt(
+        p_guess,
+        sfs,
+        func_ex,
+        pts=pts_ext,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        algorithm=nlopt.LN_BOBYQA,
+        maxeval=10
+    )
 
-        ll_list.append(ll_value)
-        opt_params_dict_list.append(opt_params)
+    print(f"OPT DADI PARAMETER: {opt_params}")
 
-        print(f"OPT DADI PARAMETER: {opt_params}")
+    # # Find the indices of the top top_k_values (those with the highest likelihood)
+    # top_k_indices = np.argsort(ll_list)[-top_values_k:]
+    # top_k_indices = np.array(top_k_indices, dtype=int)  # Convert to numpy integer array
 
-    # Find the indices of the top top_k_values (those with the highest likelihood)
-    top_k_indices = np.argsort(ll_list)[-top_values_k:]
-    top_k_indices = np.array(top_k_indices, dtype=int)  # Convert to numpy integer array
+    # opt_params_dict_list_top_values = [opt_params_dict_list[i] for i in top_k_indices]
+    # opt_params_final_list = []
 
-    opt_params_dict_list_top_values = [opt_params_dict_list[i] for i in top_k_indices]
-    opt_params_final_list = []
+    model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
+    opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
+    N_ref = opt_theta / (4 * mutation_rate * length)
 
-    for j in np.arange(top_values_k):
-        opt_params = opt_params_dict_list_top_values[j]
-        model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
-        opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
-        N_ref = opt_theta / (4 * mutation_rate * length)
+    # Initialize opt_params_dict properly in all cases
+    opt_params_dict = {}
 
-        # Initialize opt_params_dict properly in all cases
-        opt_params_dict = {}
+    if demographic_model == "bottleneck_model":
+        opt_params_dict = {
+            "N0": N_ref,
+            "Nb": opt_params[0] * N_ref,
+            "N_recover": opt_params[1] * N_ref,
+            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
+            "t_bottleneck_end": opt_params[2] * 2 * N_ref,
+            "ll": ll_value
+        }
 
-        if demographic_model == "bottleneck_model":
-            opt_params_dict = {
-                "N0": N_ref,
-                "Nb": opt_params[0] * N_ref,
-                "N_recover": opt_params[1] * N_ref,
-                "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
-                "t_bottleneck_end": opt_params[2] * 2 * N_ref,
-            }
+    elif demographic_model == "split_isolation_model":
+        opt_params_dict = {
+            "Na": N_ref,
+            "N1": opt_params[0]*N_ref,
+            "N2": opt_params[1]*N_ref,
+            "t_split": opt_params[2]*2*N_ref,
+            "m": opt_params[3]*2*N_ref, 
+            "ll": ll_value 
+        }
 
-        elif demographic_model == "split_isolation_model":
-            opt_params_dict = {
-                "Na": N_ref,
-                "N1": opt_params[0]*N_ref,
-                "N2": opt_params[1]*N_ref,
-                "t_split": opt_params[2]*2*N_ref,
-                "m": opt_params[3]*2*N_ref
-            }
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-        else:
-            raise ValueError(f"Unsupported demographic model: {demographic_model}")
+    model = model * opt_theta
 
-        model = model * opt_theta
+    model_list.append(model)
+    opt_theta_list.append(opt_theta)
+    opt_params_final_list.append(opt_params_dict)
 
-        model_list.append(model)
-        opt_theta_list.append(opt_theta)
-        opt_params_final_list.append(opt_params_dict)
-
-    return model_list, opt_theta_list, opt_params_final_list, ll_list
+    return model, opt_theta, opt_params_dict
 
 def run_inference_moments(
     sfs,
