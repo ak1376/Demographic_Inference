@@ -216,7 +216,9 @@ rule obtain_feature:
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl,
         SFS = rules.run_simulation.output.sfs_file
     output:
-        software_inferences = "moments_dadi_features/software_inferences_sim_{sim_number}.pkl"
+        software_inferences = "moments_dadi_features/sim_{sim_number}/{analysis}/replicate_{replicate_number}.pkl"
+    params:
+        analysis = lambda wildcards: "dadi" if wildcards.analysis == "dadi" else "moments"
     shell:
         """
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_single_feature.py \
@@ -224,8 +226,28 @@ rule obtain_feature:
         --sampled_params_pkl {input.sampled_params_pkl} \
         --experiment_config_filepath {CONFIG_FILEPATH} \
         --sim_directory {SIM_DIRECTORY} \
-        --sim_number {wildcards.sim_number}
+        --sim_number {wildcards.sim_number} \
+        --replicate_number {wildcards.replicate_number}
         """
+
+
+rule aggregate_top_k_results:
+    input:
+        # Specify all result files for each analysis
+        expand("moments_dadi_features/sim_{sim_number}/{analysis}/replicate_{replicate}.pkl", sim_number=range(json.load(open(CONFIG_FILEPATH))["num_sims_pretrain"]), replicate=range(json.load(open(CONFIG_FILEPATH))["k"]), analysis=["moments", "dadi"])
+    output:
+        "aggregated_results/top_k_results_sim_{sim_number}_{analysis}.pkl"
+    params:
+        top_k = json.load(open(CONFIG_FILEPATH))["top_k_values"]
+    shell:
+        """
+        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/aggregate_top_k.py \
+        --input_files {input} \
+        --top_k {params.top_k} \
+        --output_file {output} \
+        --analysis {wildcards.analysis}
+        """
+
 
 # Rule to gather both software_inferences and momentsLD_inferences
 def gather_all_inferences(wildcards):
