@@ -44,6 +44,14 @@ MODEL_DIRECTORY = (
     f"EarlyStopping_{model_config['neural_net_hyperparameters']['EarlyStopping']}"
 )
 
+# Set working directory
+workdir: "/gpfs/projects/kernlab/akapoor/Demographic_Inference"
+
+# Add wildcard constraints
+wildcard_constraints:
+    sim_number=r"\d+",    # Note the 'r' prefix
+    window_number=r"\d+"  # Note the 'r' prefix
+
 rule all:
     input:
         f"{SIM_DIRECTORY}/postprocessing_results.pkl",
@@ -143,10 +151,10 @@ rule combine_metadata:
 
 rule calculate_LD_stats:
     input:
-        pop_file_path = rules.genome_windows.output.samples_file,
-        flat_map_file = rules.genome_windows.output.flat_map_file,
-        metadata_file = rules.combine_metadata.output.metadata_file,
-        sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
+        pop_file_path = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
+        flat_map_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+        metadata_file = "sampled_genome_windows/sim_{sim_number}/metadata.txt",
+        sampled_params_pkl = "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl"
     output:
         processed_file = "LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
     params:
