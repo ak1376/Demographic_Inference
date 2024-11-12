@@ -85,7 +85,6 @@ def run_inference_dadi(
     p0,
     num_samples,
     demographic_model,
-    replicate_number
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
     mutation_rate=1.26e-8,
@@ -110,8 +109,6 @@ def run_inference_dadi(
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
-
-    start = time.time()
 
     # Optimization with dadi
     opt_params, ll_value = dadi.Inference.opt(
@@ -166,97 +163,74 @@ def run_inference_dadi(
 
     model = model * opt_theta
 
-    model_list.append(model)
-    opt_theta_list.append(opt_theta)
-    opt_params_final_list.append(opt_params_dict)
-
     return model, opt_theta, opt_params_dict
 
 def run_inference_moments(
     sfs,
     p0,
     demographic_model,
-    k,
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
     use_FIM=False,
     mutation_rate=1.26e-8,
     length=1e7,
-    top_values_k = 3
 ):
     """
     This should do the parameter inference for moments
     """
-    ll_list = []
-    model_list = []
-    opt_theta_list = []
-    opt_params_dict_list = []
 
-    for i in range(k):
+    p_guess = moments.Misc.perturb_params(
+        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
+    )
+    if demographic_model == "bottleneck_model":
+        model_func = moments.Demographics1D.three_epoch
 
-        p_guess = moments.Misc.perturb_params(
-            p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
-        )
-        if demographic_model == "bottleneck_model":
-            model_func = moments.Demographics1D.three_epoch
+    elif demographic_model == "split_isolation_model":
+        model_func = demographic_models.split_isolation_model_moments
 
-        elif demographic_model == "split_isolation_model":
-            model_func = demographic_models.split_isolation_model_moments
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-        else:
-            raise ValueError(f"Unsupported demographic model: {demographic_model}")
+    opt_params, ll =opt(
+        p_guess,
+        sfs,
+        model_func,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        log_opt=True, 
+        algorithm=nlopt.LN_BOBYQA,
+        maxeval=10
+    ) # I don't want the log likelihood. 
 
-        opt_params, ll =opt(
-            p_guess,
-            sfs,
+    print(f"OPT MOMENTS PARAMETER: {opt_params}")
+
+    model = model_func(opt_params, sfs.sample_sizes)
+    opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
+
+    N_ref = opt_theta / (4 * mutation_rate * length)
+
+    if use_FIM:
+
+        # Let's extract the hessian
+        H = _get_godambe(
             model_func,
-            lower_bound=lower_bound,
-            upper_bound=upper_bound,
-            log_opt=True, 
-            algorithm=nlopt.LN_BOBYQA,
-            maxeval=10
-        ) # I don't want the log likelihood. 
+            all_boot=[],
+            p0=opt_params,
+            data=sfs,
+            eps=1e-6,
+            log=False,
+            just_hess=True,
+        )
+        FIM = -1 * H
 
-        ll_list.append(ll)
-        opt_params_dict_list.append(opt_params)
+        # Get the indices of the upper triangular part (including the diagonal)
+        upper_tri_indices = np.triu_indices(FIM.shape[0])  # type: ignore
 
-        print(f"OPT MOMENTS PARAMETER: {opt_params}")
-    
-    # Now find the indices of the top top_k_values (those with the highest likelihood)
-    top_k_indices = np.array(np.argsort(ll_list)[-top_values_k:], dtype = int)    
-    
-    opt_params_dict_list_top_values = [opt_params_dict_list[i] for i in top_k_indices]
-    opt_params_final_list = []
+        # Extract the upper triangular elements
+        upper_triangular = FIM[upper_tri_indices]  # type: ignore
 
-    for j in np.arange(top_values_k):
-        opt_params = opt_params_dict_list_top_values[j]
-        model = model_func(opt_params, sfs.sample_sizes)
-        opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
-
-        N_ref = opt_theta / (4 * mutation_rate * length)
-
-        if use_FIM:
-
-            # Let's extract the hessian
-            H = _get_godambe(
-                model_func,
-                all_boot=[],
-                p0=opt_params,
-                data=sfs,
-                eps=1e-6,
-                log=False,
-                just_hess=True,
-            )
-            FIM = -1 * H
-
-            # Get the indices of the upper triangular part (including the diagonal)
-            upper_tri_indices = np.triu_indices(FIM.shape[0])  # type: ignore
-
-            # Extract the upper triangular elements
-            upper_triangular = FIM[upper_tri_indices]  # type: ignore
-
-        else:
-            upper_triangular = None
+    else:
+        upper_triangular = None
 
         opt_params_dict = {}
 
@@ -269,6 +243,7 @@ def run_inference_moments(
                 "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref, # type: ignore
                 "t_bottleneck_end": opt_params[2] * 2 * N_ref, # type: ignore
                 "upper_triangular_FIM": upper_triangular,
+                "ll": ll
             }
 
         elif demographic_model == "split_isolation_model":
@@ -278,7 +253,8 @@ def run_inference_moments(
                 "N2": opt_params[1]*N_ref,
                 "t_split": opt_params[2]*2*N_ref,
                 "m": opt_params[3]*2*N_ref,
-                "upper_triangular_FIM": upper_triangular
+                "upper_triangular_FIM": upper_triangular,
+                "ll": ll
             }
 
         else:
@@ -289,12 +265,8 @@ def run_inference_moments(
 
         model = model * opt_theta
 
-        model_list.append(model)
-        opt_theta_list.append(opt_theta)
-        opt_params_final_list.append(opt_params_dict)
-
     # print(f'Log Likelihood Values for Moments: {ll_list}')
-    return model_list, opt_theta_list, opt_params_final_list, ll_list
+    return model, opt_theta, opt_params
 
 def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
     """

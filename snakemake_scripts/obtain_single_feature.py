@@ -16,9 +16,9 @@ def str2bool(v):
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
-# I want to load in the 
+# I want to do dadi and moments inference but separately for each replicate. Note to self: need to define another function that will aggregate the results of each replicate and then choose the top k ones. 
 
-def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_number, replicate_number):
+def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate_number):
 
     # Load in the experiment config 
     with open(experiment_config, "r") as f:
@@ -63,9 +63,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
                 num_samples=20,
                 demographic_model=experiment_config['demographic_model'],
                 mutation_rate=experiment_config['mutation_rate'],
-                length=experiment_config['genome_length'],
-                k  = experiment_config['k'], 
-                top_values_k = experiment_config['top_values_k']
+                length=experiment_config['genome_length']
             )
         )
 
@@ -73,14 +71,13 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             "model_sfs_dadi": model_sfs_dadi,
             "opt_theta_dadi": opt_theta_dadi,
             "opt_params_dadi": opt_params_dict_dadi,
-            "ll_all_replicates_dadi": ll_list_dadi,
+            "ll_dadi": opt_params_dict_dadi['ll'],
         }
         
-        mega_result_dict.update(dadi_results)
 
 
     if experiment_config["moments_analysis"]:
-        model_sfs_moments, opt_theta_moments, opt_params_dict_moments, ll_list_moments = (
+        model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
             run_inference_moments(
                 sfs = SFS,
                 p0=experiment_config['optimization_initial_guess'],
@@ -89,9 +86,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
                 demographic_model=experiment_config['demographic_model'],
                 use_FIM=experiment_config["use_FIM"],
                 mutation_rate=experiment_config['mutation_rate'],
-                length=experiment_config['genome_length'],
-                k = experiment_config['k'],
-                top_values_k=experiment_config['top_values_k']
+                length=experiment_config['genome_length']
             )
         )
 
@@ -100,46 +95,17 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             "model_sfs_moments": model_sfs_moments,
             "opt_theta_moments": opt_theta_moments,
             "opt_params_moments": opt_params_dict_moments,
-            "ll_all_replicates_moments": ll_list_moments
+            "ll_moments": opt_params_dict_moments['ll'] # type:ignore
         }
-        mega_result_dict.update(moments_results)
 
-    # if experiment_config["momentsLD_analysis"]:
+    
+    # save the results in a pickle file
+    with open(f"moments_dadi_features/sim_{sim_number}/dadi/replicate_{replicate_number}.pkl", "wb") as f:
+        pickle.dump(dadi_results, f)
 
-    #     p_guess = experiment_config['optimization_initial_guess'].copy()
-                
-    #     # Set up the initial guess
-    #     p_guess.extend([10000]) #TODO: Need to change this to not be a hardcoded value. 
-    #     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
-        
-    #     folderpath = f'{sim_directory}/sampled_genome_windows/sim_{sim_number}'
+    with open(f"moments_dadi_features/sim_{sim_number}/moments/replicate_{replicate_number}.pkl", "wb") as f:
+        pickle.dump(moments_results, f)
 
-    #     try:
-
-    #         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(folderpath=folderpath,
-    #         demographic_model=experiment_config["demographic_model"],
-    #         num_reps = experiment_config["num_reps"], 
-    #         p_guess = p_guess
-    #         )
-    #     except np.linalg.LinAlgError as e:
-    #         p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) # type: ignore
-            
-    #         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(folderpath=folderpath,
-    #         demographic_model=experiment_config["demographic_model"],
-    #         num_reps = experiment_config["num_reps"], 
-    #         p_guess = p_guess
-    #         )
-
-    #     momentsLD_results = {
-    #         "opt_params_momentsLD": opt_params_momentsLD,
-    #         "ll_all_replicates_momentsLD": ll_list_momentsLD
-    #         }
-                
-    #     mega_result_dict.update(momentsLD_results)
-
-    # Save the results in a pickle file
-    with open(f"moments_dadi_features/software_inferences_sim_{sim_number}.pkl", "wb") as f:
-        pickle.dump(mega_result_dict, f)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -148,12 +114,13 @@ if __name__ == "__main__":
     parser.add_argument("--experiment_config_filepath", type=str, required=True)
     parser.add_argument("--sim_directory", type=str, required=True)
     parser.add_argument("--sim_number", type=int, required=True)
+    parser.add_argument("--replicate_number", type=int, required=True)  # Add this line
     args = parser.parse_args()
 
     obtain_feature(
         SFS=args.sfs_file,
         sampled_params=args.sampled_params_pkl,
         experiment_config=args.experiment_config_filepath,
-        sim_directory=args.sim_directory,
-        sim_number=args.sim_number
+        sim_number=args.sim_number, 
+        replicate_number=args.replicate_number  # Pass replicate number here
     )
