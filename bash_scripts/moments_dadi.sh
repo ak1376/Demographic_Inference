@@ -1,18 +1,25 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-19  # Adjust based on num_sims_pretrain
+#SBATCH --array=0-49  # Adjust based on num_sims_pretrain
 #SBATCH --output=logs/moments_dadi_%A_%a.out
 #SBATCH --error=logs/moments_dadi_%A_%a.err
-#SBATCH --time=24:00:00
+#SBATCH --time=6:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
+# Define the batch size
+BATCH_SIZE=1 # let's do 1 for now just to see each individual operation 
+TOTAL_TASKS=50 # 10 simulations, 5 replicates per simulation 
+
 # Store the original directory
 current_dir=$(pwd)
 echo "Current Directory: ${current_dir}"
+
+# Set PYTHONPATH
+export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference
 
 # Extract config information
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
@@ -22,12 +29,11 @@ DEMOGRAPHIC_MODEL=$(jq -r '.demographic_model' $EXPERIMENT_CONFIG_FILE)
 SEED=$(jq -r '.seed' $EXPERIMENT_CONFIG_FILE)
 NUM_SIMS_PRETRAIN=$(jq -r '.num_sims_pretrain' $EXPERIMENT_CONFIG_FILE)
 NUM_SIMS_INFERENCE=$(jq -r '.num_sims_inference' $EXPERIMENT_CONFIG_FILE)
-NUM_WINDOWS=$(jq -r '.num_windows' $EXPERIMENT_CONFIG_FILE)
 DADI_ANALYSIS=$(jq -r '.dadi_analysis' $EXPERIMENT_CONFIG_FILE)
 MOMENTS_ANALYSIS=$(jq -r '.moments_analysis' $EXPERIMENT_CONFIG_FILE)
 MOMENTS_LD_ANALYSIS=$(jq -r '.momentsLD_analysis' $EXPERIMENT_CONFIG_FILE)
-K=$(jq -r '.k' $EXPERIMENT_CONFIG_FILE)           # Added this
-TOP_VALUES_K=$(jq -r '.top_values_k' $EXPERIMENT_CONFIG_FILE)  # Added this
+NUM_REPLICATES=$(jq -r '.k' $EXPERIMENT_CONFIG_FILE)           # Added this
+# TOP_VALUES_K=$(jq -r '.top_values_k' $EXPERIMENT_CONFIG_FILE)  # Added this
 
 # Function to convert lowercase true/false to True/False
 capitalize_bool() {
@@ -48,49 +54,123 @@ MOMENTS_LD_ANALYSIS=$(capitalize_bool $MOMENTS_LD_ANALYSIS)
 SIM_DIRECTORY="${DEMOGRAPHIC_MODEL}_dadi_analysis_${DADI_ANALYSIS}_moments_analysis_${MOMENTS_ANALYSIS}_momentsLD_analysis_${MOMENTS_LD_ANALYSIS}_seed_${SEED}/sims/sims_pretrain_${NUM_SIMS_PRETRAIN}_sims_inference_${NUM_SIMS_INFERENCE}_seed_${SEED}_num_replicates_${K}_top_values_${TOP_VALUES_K}"
 echo "Sim directory: $SIM_DIRECTORY"
 
-# Process single simulation
-SIM_NUMBER=$SLURM_ARRAY_TASK_ID
+# Calculate batch indices
+BATCH_START=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))
+BATCH_END=$(((SLURM_ARRAY_TASK_ID + 1) * BATCH_SIZE - 1))
 
-echo "Processing simulation number: $SIM_NUMBER"
+if [ "$BATCH_END" -ge "$TOTAL_TASKS" ]; then
+    BATCH_END=$((TOTAL_TASKS - 1))
+fi
 
-# Create and navigate to simulation-specific directory
-mkdir -p moments_dadi_features
-cd moments_dadi_features || { echo "Failed to change directory"; exit 1; }
+mkdir -p logs
 
-# Set PYTHONPATH
-export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference
+current_dir=$(pwd)
+echo "Current Directory: ${current_dir}"
 
-# Run feature extraction for this simulation
-snakemake \
-    --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
-    --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
-    --rerun-incomplete \
-    "moments_dadi_features/software_inferences_sim_${SIM_NUMBER}.pkl"
+# Process tasks in parallel
+for TASK_ID in $(seq $BATCH_START $BATCH_END); do
+
+    # Calculate simulation number (0-9) and replicate number (0-2)
+    SIM_NUMBER=$((TASK_ID / NUM_REPLICATES))
+    REPLICATE_NUMBER=$((TASK_ID % NUM_REPLICATES))
+
+    echo "Processing simulation number: $SIM_NUMBER and replicate number: $REPLICATE_NUMBER"
+
+    # Create and navigate to simulation-specific directory
+    # Create base directory
+    BASE_DIR="moments_dadi_features"
+    mkdir -p ${BASE_DIR}/sim_${SIM_NUMBER}  # Create the base directory first
+
+    cd ${BASE_DIR}/sim_${SIM_NUMBER} || { echo "Failed to change directory"; exit 1; }
+
+    # Create directories for both dadi and moments
+    mkdir -p ${BASE_DIR}/sim_${SIM_NUMBER}/dadi
+    mkdir -p ${BASE_DIR}/sim_${SIM_NUMBER}/moments
+
+    # Define output files
+    # DADI_OUT="${BASE_DIR}/sim_${SIM_NUMBER}/dadi/replicate_${REPLICATE_NUMBER}.pkl"
+    # MOMENTS_OUT="${BASE_DIR}/sim_${SIM_NUMBER}/moments/replicate_${REPLICATE_NUMBER}.pkl"
+
+    # Part 1: Run feature extraction for this simulation (replicates for both moments and dadi)
+    snakemake \
+        --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+        --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
+        --rerun-incomplete \
+        "moments_dadi_features/sim_${SIM_NUMBER}/dadi/replicate_${REPLICATE_NUMBER}.pkl" \
+        "moments_dadi_features/sim_${SIM_NUMBER}/moments/replicate_${REPLICATE_NUMBER}.pkl"
+
+done
 
 # Return to original directory
 cd "$current_dir" || { echo "Failed to return to original directory"; exit 1; }
 
-# Print debug information
-echo "Current SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
-echo "NUM_SIMS_PRETRAIN: $NUM_SIMS_PRETRAIN"
-echo "NUM_SIMS_PRETRAIN - 1: $((NUM_SIMS_PRETRAIN - 1))"
-
-if [ "$SLURM_ARRAY_TASK_ID" -eq $((NUM_SIMS_PRETRAIN - 1)) ]; then
-    echo "Last simulation completed. Starting feature aggregation..."
+# Part 2: Aggregate the results to get the top k 
+# Only run aggregation if this is the last replicate for the current simulation
+LAST_REPLICATE=$((NUM_REPLICATES - 1))
+if [ "$REPLICATE_NUMBER" -eq "$LAST_REPLICATE" ]; then
+    echo "Processing last replicate for simulation ${SIM_NUMBER}, starting aggregation..."
     
-    # Create the output directory if it doesn't exist
-    mkdir -p "${SIM_DIRECTORY}"
-    
-    # First collect all inference files
-    SOFTWARE_INFERENCES=(moments_dadi_features/software_inferences_sim_*.pkl)
-    MOMENTSLD_INFERENCES=(final_LD_inferences/momentsLD_inferences_sim_*.pkl)
-    
-    # Run aggregation directly with Python
-    PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference \
-    python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_all_features.py \
-        "${EXPERIMENT_CONFIG_FILE}" \
-        "${SIM_DIRECTORY}" \
-        ${SOFTWARE_INFERENCES[@]} ${MOMENTSLD_INFERENCES[@]}
-    
-    echo "Feature aggregation completed"
+    snakemake \
+        --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+        --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
+        --rerun-incomplete \
+        "moments_dadi_features/software_inferences_sim_${SIM_NUMBER}.pkl"
 fi
+
+# Part 3: Aggregate the MomentsLD features and the dadi/moments features 
+cd "$current_dir" || { echo "Failed to return to original directory"; exit 1; }
+
+# Create the output directory if it doesn't exist
+mkdir -p "${SIM_DIRECTORY}"
+
+# First collect all inference files
+SOFTWARE_INFERENCES=(moments_dadi_features/software_inferences_sim_*.pkl)
+MOMENTSLD_INFERENCES=(final_LD_inferences/momentsLD_inferences_sim_*.pkl)
+
+# Run aggregation directly with Python
+PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference \
+python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_all_features.py \
+    "${EXPERIMENT_CONFIG_FILE}" \
+    "${SIM_DIRECTORY}" \
+    ${SOFTWARE_INFERENCES[@]} ${MOMENTSLD_INFERENCES[@]}
+
+echo "Feature aggregation completed"
+
+
+# # Return to original directory
+# cd "$current_dir" || { echo "Failed to return to original directory"; exit 1; }
+
+# # Print debug information
+# echo "Current SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
+# echo "NUM_SIMS_PRETRAIN: $NUM_SIMS_PRETRAIN"
+# echo "NUM_SIMS_PRETRAIN - 1: $((NUM_SIMS_PRETRAIN - 1))"
+
+# # Part 2: Aggregate the moments and dadi results when all simulations are completed
+# if [ "$SLURM_ARRAY_TASK_ID" -eq $((NUM_SIMS_PRETRAIN - 1)) ]; then
+#     echo "All simulations completed. Starting aggregation of moments and dadi results..."
+    
+#     # Aggregate the moments and dadi results
+#     python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_top_k.py \
+#         --input_files moments_dadi_features/software_inferences_sim_*.pkl \
+#         --top_k "$TOP_VALUES_K" \
+#         --output_file moments_dadi_features/aggregated_moments_dadi.pkl
+    
+#     echo "Moments and dadi aggregation completed."
+# fi
+
+# # Part 3: Aggregate momentsLD with moments/dadi results
+# if [ "$SLURM_ARRAY_TASK_ID" -eq $((NUM_SIMS_PRETRAIN - 1)) ]; then
+#     echo "Aggregating momentsLD with moments/dadi results..."
+    
+#     # First collect all inference files for momentsLD
+#     MOMENTSLD_INFERENCES=(final_LD_inferences/momentsLD_inferences_sim_*.pkl)
+    
+#     # Aggregate all features into one final file
+#     python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_all_features.py \
+#         --config_file "${EXPERIMENT_CONFIG_FILE}" \
+#         --output_dir "${SIM_DIRECTORY}" \
+#         --moments_dadi_file moments_dadi_features/aggregated_moments_dadi.pkl \
+#         --momentsLD_files "${MOMENTSLD_INFERENCES[@]}"
+    
+#     echo "Final feature aggregation with momentsLD completed."
+# fi

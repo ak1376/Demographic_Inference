@@ -2,79 +2,95 @@ import argparse
 import pickle
 import heapq
 
-def load_results(input_files):
+def load_results_from_files(dadi_files, moments_files, sfs_file, params_file):
+    # Initialize the results dictionary
     results = {"moments": [], "dadi": []}
-    for file in input_files:
-        with open(file, "rb") as f:
-            result = pickle.load(f)
-            # Classify results by analysis type based on file path
-            if "moments" in file:
-                results["moments"].append(result)
-            elif "dadi" in file:
-                results["dadi"].append(result)
-    return results
-
-def find_top_k_parameters(results, top_k, analysis):
-    loglikelihood_key = "ll_" + analysis
-    # Extract log-likelihood values and get top k indices
-    loglikelihoods = [res[loglikelihood_key] for res in results if loglikelihood_key in res]
-    top_k_indices = heapq.nlargest(top_k, range(len(loglikelihoods)), key=loglikelihoods.__getitem__)
-    # Retrieve parameters and model SFS for top k entries
-    top_k_data = {
-        "loglikelihoods": [loglikelihoods[idx] for idx in top_k_indices],
-        "opt_params": [results[idx]["opt_params_" + analysis] for idx in top_k_indices],
-        "model_sfs": [results[idx]["model_sfs_" + analysis] for idx in top_k_indices],
-        "opt_theta": [results[idx]["opt_theta_" + analysis] for idx in top_k_indices],
-    }
-    return top_k_data
-
-def main(input_files, top_k, output_file):
-    results = load_results(input_files)
     
-    # Initialize dictionary to store the required keys
+    # Load dadi results
+    for file in dadi_files:
+        with open(file, "rb") as f:
+            results["dadi"].append(pickle.load(f))
+            
+    # Load moments results
+    for file in moments_files:
+        with open(file, "rb") as f:
+            results["moments"].append(pickle.load(f))
+    
+    # Load simulated parameters and SFS
+    with open(params_file, "rb") as f:
+        simulated_params = pickle.load(f)
+    with open(sfs_file, "rb") as f:
+        sfs = pickle.load(f)
+        
+    return results, simulated_params, sfs
+
+def find_top_k_results(results, top_k, method):
+    # Get likelihoods
+    if method == "dadi":
+        lls = [res["ll_dadi"] for res in results]
+    else:  # moments
+        lls = [res["ll_moments"] for res in results]
+        
+    # Get top k indices
+    top_k_indices = heapq.nlargest(top_k, range(len(lls)), key=lls.__getitem__)
+    
+    return {
+        "lls": [lls[i] for i in top_k_indices],
+        "model_sfs": [results[i][f"model_sfs_{method}"] for i in top_k_indices],
+        "opt_theta": [results[i][f"opt_theta_{method}"] for i in top_k_indices],
+        "opt_params": [results[i][f"opt_params_{method}"] for i in top_k_indices]
+    }
+
+def main(dadi_files, moments_files, sfs_file, params_file, top_k, sim_number):
+    # Load all results
+    results, simulated_params, sfs = load_results_from_files(dadi_files, moments_files, sfs_file, params_file)
+    
+    # Initialize aggregated data dictionary
     aggregated_data = {
-        "simulated_params": None,
-        "sfs": None,
+        "simulated_params": simulated_params,
+        "sfs": sfs,
         "model_sfs_dadi": [],
         "opt_theta_dadi": [],
         "opt_params_dadi": [],
-        "ll_dadi": [],
+        "ll_all_replicates_dadi": [],
         "model_sfs_moments": [],
         "opt_theta_moments": [],
         "opt_params_moments": [],
-        "ll_moments": []
+        "ll_all_replicates_moments": []
     }
-
-    # Assuming simulated parameters and SFS data are the same across replicates, extract from the first entry of each analysis type
-    for analysis in ["moments", "dadi"]:
-        top_k_data = find_top_k_parameters(results[analysis], top_k, analysis)
-
-        # Populate the corresponding fields in aggregated_data
-        if analysis == "dadi":
-            aggregated_data["model_sfs_dadi"] = top_k_data["model_sfs"]
-            aggregated_data["opt_theta_dadi"] = top_k_data["opt_theta"]
-            aggregated_data["opt_params_dadi"] = top_k_data["opt_params"]
-            aggregated_data["ll_dadi"] = top_k_data["loglikelihoods"]
-        elif analysis == "moments":
-            aggregated_data["model_sfs_moments"] = top_k_data["model_sfs"]
-            aggregated_data["opt_theta_moments"] = top_k_data["opt_theta"]
-            aggregated_data["opt_params_moments"] = top_k_data["opt_params"]
-            aggregated_data["ll_moments"] = top_k_data["loglikelihoods"]
-
-    # Extract common fields from one of the replicates (assuming these are consistent across replicates)
-    sample_result = results["dadi"][0] if results["dadi"] else results["moments"][0]
-    aggregated_data["simulated_params"] = sample_result.get("simulated_params", None)
-    aggregated_data["sfs"] = sample_result.get("sfs", None)
-
-    # Save the combined data as a single pickle file
-    with open(output_file, "wb") as f:
+    
+    # Process dadi results
+    dadi_top_k = find_top_k_results(results["dadi"], top_k, "dadi")
+    aggregated_data["model_sfs_dadi"] = dadi_top_k["model_sfs"]
+    aggregated_data["opt_theta_dadi"] = dadi_top_k["opt_theta"]
+    aggregated_data["opt_params_dadi"] = dadi_top_k["opt_params"]
+    aggregated_data["ll_all_replicates_dadi"] = dadi_top_k["lls"]
+    
+    # Process moments results
+    moments_top_k = find_top_k_results(results["moments"], top_k, "moments")
+    aggregated_data["model_sfs_moments"] = moments_top_k["model_sfs"]
+    aggregated_data["opt_theta_moments"] = moments_top_k["opt_theta"]
+    aggregated_data["opt_params_moments"] = moments_top_k["opt_params"]
+    aggregated_data["ll_all_replicates_moments"] = moments_top_k["lls"]
+    
+    # Save aggregated results
+    with open(f'moments_dadi_features/software_inferences_sim_{sim_number}.pkl', "wb") as f:
         pickle.dump(aggregated_data, f)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_files", nargs='+', type=str, required=True)
+    parser.add_argument("--dadi_files", nargs='+', type=str, required=True)
+    parser.add_argument("--moments_files", nargs='+', type=str, required=True)
+    parser.add_argument("--sfs_file", type=str, required=True)
+    parser.add_argument("--params_file", type=str, required=True)
     parser.add_argument("--top_k", type=int, required=True)
-    parser.add_argument("--output_file", type=str, required=True)
+    parser.add_argument("--sim_number", type=int, required=True)
+    
     args = parser.parse_args()
-
-    main(args.input_files, args.top_k, args.output_file)
+    
+    main(args.dadi_files, 
+         args.moments_files, 
+         args.sfs_file, 
+         args.params_file, 
+         args.top_k, 
+         args.sim_number)

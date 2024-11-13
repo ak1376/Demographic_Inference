@@ -67,6 +67,9 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate
             )
         )
 
+        print("KEYS")
+        print(opt_params_dict_dadi.keys())
+
         dadi_results = {
             "model_sfs_dadi": model_sfs_dadi,
             "opt_theta_dadi": opt_theta_dadi,
@@ -90,12 +93,15 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate
             )
         )
 
+        print("KEYS")
+        print(opt_params_dict_moments.keys())
+
 
         moments_results = {
             "model_sfs_moments": model_sfs_moments,
             "opt_theta_moments": opt_theta_moments,
             "opt_params_moments": opt_params_dict_moments,
-            "ll_moments": opt_params_dict_moments['ll'] # type:ignore
+            "ll_moments": opt_params_dict_moments['ll']
         }
 
     

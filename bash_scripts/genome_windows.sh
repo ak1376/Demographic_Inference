@@ -3,16 +3,16 @@
 #SBATCH --array=0-99           
 #SBATCH --output=logs/genome_windows_%A_%a.out
 #SBATCH --error=logs/genome_windows_%A_%a.err
-#SBATCH --time=36:00:00
+#SBATCH --time=5:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --mem=32G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
-# Define batch parameters
-BATCH_SIZE=20
-TOTAL_TASKS=2000
+# Define the batch size
+BATCH_SIZE=10
+TOTAL_TASKS=1000
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -60,29 +60,26 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
     SIM_NUMBER=$((TASK_ID / NUM_WINDOWS))
     WINDOW_NUMBER=$((TASK_ID % NUM_WINDOWS))
 
-    mkdir -p sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/
+    # Define the directory path and create it if necessary
+    DIR_PATH="sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}"
+    mkdir -p "$DIR_PATH"
     
-    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER"
-
-    # Navigate to the directory, with error checking
-    cd sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/ || { echo "Failed to change directory"; exit 1; }
-    echo "Directory we just CD-ed into: sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/"
-
+    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER in $DIR_PATH"
 
     # Set PYTHONPATH and Python script path explicitly
     export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference
     PYTHON_SCRIPT="/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_genome_vcfs.py"
 
-    # Run Snakemake with explicit Python script path
+    # Run Snakemake with explicit Python script path and avoid `cd`
     snakemake \
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
         --rerun-incomplete \
         --nolock \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/samples.txt" \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/flat_map.txt" \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/individual_file_metadata.txt" \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/window.${WINDOW_NUMBER}.vcf.gz"  # Add this line
+        "${DIR_PATH}/samples.txt" \
+        "${DIR_PATH}/flat_map.txt" \
+        "${DIR_PATH}/individual_file_metadata.txt" \
+        "${DIR_PATH}/window.${WINDOW_NUMBER}.vcf.gz"
 
     # If this is the last window for a simulation, run combine_metadata
     if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
