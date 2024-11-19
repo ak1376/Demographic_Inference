@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=ld_stats_array
-#SBATCH --array=0-99
+#SBATCH --array=0-9999           
 #SBATCH --output=logs/ld_stats_%A_%a.out
 #SBATCH --error=logs/ld_stats_%A_%a.err
-#SBATCH --time=5:00:00
+#SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu
@@ -13,9 +13,9 @@
 BASE_DIR="/gpfs/projects/kernlab/akapoor/Demographic_Inference"
 cd $BASE_DIR
 
-# Define batch size
+# Define the batch size
 BATCH_SIZE=10
-TOTAL_TASKS=1000
+TOTAL_TASKS=100000
 
 # Calculate batch indices
 BATCH_START=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))

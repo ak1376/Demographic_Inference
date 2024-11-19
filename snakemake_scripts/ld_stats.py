@@ -4,54 +4,71 @@ import numpy as np
 import pickle
 import json
 import tskit
+import os
+import shutil
 
 # Function to create LD statistics
-def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, sim_number, window_number, max_retries=3):
+def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, sim_number, window_number):
     # Define recombination bins
     r_bins = np.array([0, 1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3])
-    retry_count = 0
     errors_to_retry = (IndexError, ValueError)  # Specific errors for retry logic
 
-    while retry_count < max_retries:
-        try:
-            print(f"Attempt {retry_count + 1}: Calculating LD stats for window {window_number}, sim {sim_number}")
+    try:
+        print(f"Calculating LD stats for window {window_number}, sim {sim_number}")
 
-            # Calculate LD stats
-            ld_stats = get_LD_stats(vcf_filepath, r_bins, flat_map_path, pop_file_path)
+        # Calculate LD stats
+        ld_stats = get_LD_stats(vcf_filepath, r_bins, flat_map_path, pop_file_path)
 
-            # Save LD stats to a file
-            output_file = f"{sim_directory}/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
-            with open(output_file, "wb") as f:
-                pickle.dump(ld_stats, f)
+        # Save LD stats to a file
+        output_file = f"{sim_directory}/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
+        with open(output_file, "wb") as f:
+            pickle.dump(ld_stats, f)
 
-            print(f"LD stats successfully created for window {window_number}, sim {sim_number}")
-            return  # Exit the function on success
+        print(f"LD stats successfully created for window {window_number}, sim {sim_number}")
+    except errors_to_retry as e:
+        print(f"Error encountered ({e}) for window {window_number}, sim {sim_number}. Regenerating the window...")
 
-        except errors_to_retry as e:
-            retry_count += 1
-            print(f"Error encountered ({e}) for window {window_number}, sim {sim_number} -- retry attempt {retry_count}/{max_retries}")
+        # First delete the windows
+        dir_path = f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}"
+        print("========================================================")
+        print(f'WINDOWS PATH TO REMOVE: {dir_path}')
+        print("========================================================")
 
-            # Reload experiment configuration
-            with open("/projects/kernlab/akapoor/Demographic_Inference/experiment_config.json", "r") as f:
-                experiment_config = json.load(f)
+        if os.path.exists(dir_path):
+            shutil.rmtree(dir_path)  # Recursively delete the directory and its contents
+            print(f"Deleted directory and all contents: {dir_path}")
+        else:
+            print(f"Directory not found: {dir_path}")
+                    
+        # Delete the LD stats that correspond to each window
+        [os.remove(os.path.join(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}", f)) for f in os.listdir(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}") if os.path.isfile(os.path.join(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}", f))]
 
-            # Load the tree sequence
-            ts_path = f"/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees"
-            ts = tskit.load(ts_path)
+        from src.preprocess import Processor
 
-            # Regenerate the window
-            Processor.run_msprime_replicates(ts, experiment_config, window_number, f"{sim_directory}/sim_{sim_number}")
-            Processor.write_samples_and_rec_map(experiment_config, window_number, f"{sim_directory}/sim_{sim_number}")
+        # Reload experiment configuration
+        with open("/projects/kernlab/akapoor/Demographic_Inference/experiment_config.json", "r") as f:
+            experiment_config = json.load(f)
 
-            # Update file paths for the regenerated window
-            vcf_filepath = f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/window.{window_number}.vcf.gz"
-            flat_map_path = f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt"
+        # Load the tree sequence
+        ts_path = f"/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees"
+        ts = tskit.load(ts_path)
 
-        except Exception as e:
-            print(f"Unexpected error: {e} for window {window_number}, sim {sim_number}. Type: {type(e)}")
-            break  # Exit loop for unexpected errors
+        genome_window_dir = f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}"
 
-    print(f"Failed to create LD stats for window {window_number}, sim {sim_number} after {max_retries} attempts.")
+        # Regenerate the window
+        Processor.run_msprime_replicates(ts, experiment_config, window_number, genome_window_dir)
+        Processor.write_samples_and_rec_map(experiment_config, window_number, genome_window_dir)
+
+        # Update file paths for the regenerated window
+        new_vcf_filepath = f"{genome_window_dir}/window_{window_number}/window.{window_number}.vcf.gz"
+        new_flat_map_path = f"{genome_window_dir}/window_{window_number}/flat_map.txt"
+
+        print(f"Retrying LD stats calculation for regenerated window {window_number}, sim {sim_number}")
+        ld_stat_creation(new_vcf_filepath, new_flat_map_path, pop_file_path, sim_directory, sim_number, window_number)
+
+    except Exception as e:
+        print(f"Unexpected error: {e} for window {window_number}, sim {sim_number}. Type: {type(e)}")
+        print(f"Failed to create LD stats for window {window_number}, sim {sim_number}.")
 
 # Main entry point
 if __name__ == "__main__":

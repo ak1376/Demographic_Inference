@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=moments_ld_array
-#SBATCH --array=0-9  # For 10 simulations
+#SBATCH --array=0-999  # For 10 simulations
 #SBATCH --output=logs/moments_ld_%A_%a.out
 #SBATCH --error=logs/moments_ld_%A_%a.err
 #SBATCH --time=5:00:00
@@ -15,7 +15,7 @@ cd $BASE_DIR
 
 # Define batch size for simulations
 BATCH_SIZE=1
-TOTAL_SIMS=10
+TOTAL_SIMS=1000
 
 # Calculate which simulations to process
 BATCH_START=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))

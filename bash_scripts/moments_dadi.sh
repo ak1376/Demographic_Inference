@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-49  # Adjust based on num_sims_pretrain
+#SBATCH --array=0-4999  # Adjust based on num_sims_pretrain
 #SBATCH --output=logs/moments_dadi_%A_%a.out
 #SBATCH --error=logs/moments_dadi_%A_%a.err
-#SBATCH --time=6:00:00
+#SBATCH --time=5:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu
@@ -12,7 +12,7 @@
 
 # Define the batch size
 BATCH_SIZE=1 # let's do 1 for now just to see each individual operation 
-TOTAL_TASKS=50 # 10 simulations, 5 replicates per simulation 
+TOTAL_TASKS=5000 # 10 simulations, 5 replicates per simulation 
 
 # Store the original directory
 current_dir=$(pwd)
@@ -93,6 +93,7 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
 
     # Part 1: Run feature extraction for this simulation (replicates for both moments and dadi)
     snakemake \
+        --nolock \
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
         --rerun-incomplete \
@@ -111,66 +112,9 @@ if [ "$REPLICATE_NUMBER" -eq "$LAST_REPLICATE" ]; then
     echo "Processing last replicate for simulation ${SIM_NUMBER}, starting aggregation..."
     
     snakemake \
+        --nolock \
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
         --rerun-incomplete \
         "moments_dadi_features/software_inferences_sim_${SIM_NUMBER}.pkl"
 fi
-
-# Part 3: Aggregate the MomentsLD features and the dadi/moments features 
-cd "$current_dir" || { echo "Failed to return to original directory"; exit 1; }
-
-# Create the output directory if it doesn't exist
-mkdir -p "${SIM_DIRECTORY}"
-
-# First collect all inference files
-SOFTWARE_INFERENCES=(moments_dadi_features/software_inferences_sim_*.pkl)
-MOMENTSLD_INFERENCES=(final_LD_inferences/momentsLD_inferences_sim_*.pkl)
-
-# Run aggregation directly with Python
-PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference \
-python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_all_features.py \
-    "${EXPERIMENT_CONFIG_FILE}" \
-    "${SIM_DIRECTORY}" \
-    ${SOFTWARE_INFERENCES[@]} ${MOMENTSLD_INFERENCES[@]}
-
-echo "Feature aggregation completed"
-
-
-# # Return to original directory
-# cd "$current_dir" || { echo "Failed to return to original directory"; exit 1; }
-
-# # Print debug information
-# echo "Current SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
-# echo "NUM_SIMS_PRETRAIN: $NUM_SIMS_PRETRAIN"
-# echo "NUM_SIMS_PRETRAIN - 1: $((NUM_SIMS_PRETRAIN - 1))"
-
-# # Part 2: Aggregate the moments and dadi results when all simulations are completed
-# if [ "$SLURM_ARRAY_TASK_ID" -eq $((NUM_SIMS_PRETRAIN - 1)) ]; then
-#     echo "All simulations completed. Starting aggregation of moments and dadi results..."
-    
-#     # Aggregate the moments and dadi results
-#     python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_top_k.py \
-#         --input_files moments_dadi_features/software_inferences_sim_*.pkl \
-#         --top_k "$TOP_VALUES_K" \
-#         --output_file moments_dadi_features/aggregated_moments_dadi.pkl
-    
-#     echo "Moments and dadi aggregation completed."
-# fi
-
-# # Part 3: Aggregate momentsLD with moments/dadi results
-# if [ "$SLURM_ARRAY_TASK_ID" -eq $((NUM_SIMS_PRETRAIN - 1)) ]; then
-#     echo "Aggregating momentsLD with moments/dadi results..."
-    
-#     # First collect all inference files for momentsLD
-#     MOMENTSLD_INFERENCES=(final_LD_inferences/momentsLD_inferences_sim_*.pkl)
-    
-#     # Aggregate all features into one final file
-#     python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_all_features.py \
-#         --config_file "${EXPERIMENT_CONFIG_FILE}" \
-#         --output_dir "${SIM_DIRECTORY}" \
-#         --moments_dadi_file moments_dadi_features/aggregated_moments_dadi.pkl \
-#         --momentsLD_files "${MOMENTSLD_INFERENCES[@]}"
-    
-#     echo "Final feature aggregation with momentsLD completed."
-# fi

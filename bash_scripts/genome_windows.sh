@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=batched_genome_windows
-#SBATCH --array=0-99           
+#SBATCH --array=0-9999           
 #SBATCH --output=logs/genome_windows_%A_%a.out
 #SBATCH --error=logs/genome_windows_%A_%a.err
 #SBATCH --time=5:00:00
@@ -12,7 +12,7 @@
 
 # Define the batch size
 BATCH_SIZE=10
-TOTAL_TASKS=1000
+TOTAL_TASKS=100000
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then

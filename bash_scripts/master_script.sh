@@ -10,6 +10,20 @@
 # Ensure logs directory exists
 mkdir -p logs
 
+# Function to unlock Snakemake if a lock is present
+unlock_snakemake() {
+    echo "Checking for Snakemake lock..."
+    snakemake --unlock
+    if [ $? -eq 0 ]; then
+        echo "Snakemake unlocked successfully."
+    else
+        echo "Snakemake unlock failed or was not needed."
+    fi
+}
+
+# Call unlock_snakemake function at the start
+unlock_snakemake
+
 # Function to submit jobs and retrieve job IDs
 submit_job() {
     local script="$1"
@@ -37,7 +51,6 @@ wait_for_job_array_completion() {
     local start_time="$3"
 
     echo "Waiting for completion of job array $job_id ($job_name)..."
-    # Wait until the job no longer appears in `squeue`, indicating completion
     while squeue -j "$job_id" -h -o "%T" | grep -q .; do
         sleep 30
     done
@@ -47,7 +60,6 @@ wait_for_job_array_completion() {
     local elapsed=$((end_time - start_time))
     echo "$job_name,$job_id,$start_time,$end_time,$elapsed" >> logs/job_stats.txt
 
-    # Print out job completion information
     echo "$job_name completed: Start Time = $start_time, End Time = $end_time, Elapsed = $elapsed seconds"
 }
 
@@ -69,12 +81,10 @@ genome_id=$(submit_job "bash_scripts/genome_windows.sh" "$sim_id")
 genome_start=$(date +%s)
 wait_for_job_array_completion "$genome_id" "Genome Windows" "$genome_start"
 
-# Submit LD_stats_window.sh as a job array and capture the array job ID
 ld_stats_id=$(submit_job "bash_scripts/LD_stats_windows.sh" "$genome_id")
 ld_stats_start=$(date +%s)
 wait_for_job_array_completion "$ld_stats_id" "LD Stats Window" "$ld_stats_start"
 
-# Wait for all tasks in the LD_stats_window job array to complete before launching momentsLD_inferences.sh
 momentsld_id=$(submit_job "bash_scripts/momentsLD_inferences.sh" "$ld_stats_id")
 momentsld_start=$(date +%s)
 wait_for_job_array_completion "$momentsld_id" "MomentsLD" "$momentsld_start"
@@ -83,7 +93,12 @@ moments_dadi_id=$(submit_job "bash_scripts/moments_dadi.sh" "$momentsld_id")
 moments_dadi_start=$(date +%s)
 wait_for_job_array_completion "$moments_dadi_id" "Moments/Dadi" "$moments_dadi_start"
 
-remaining_id=$(submit_job "bash_scripts/remaining_rules.sh" "$moments_dadi_id")
+# Submit aggregate_features.sh after moments_dadi.sh
+aggregate_features_id=$(submit_job "bash_scripts/aggregate_features.sh" "$moments_dadi_id")
+aggregate_features_start=$(date +%s)
+wait_for_job_array_completion "$aggregate_features_id" "Aggregate Features" "$aggregate_features_start"
+
+remaining_id=$(submit_job "bash_scripts/remaining_rules.sh" "$aggregate_features_id")
 remaining_start=$(date +%s)
 wait_for_job_array_completion "$remaining_id" "Remaining Rules" "$remaining_start"
 

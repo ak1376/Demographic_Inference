@@ -6,14 +6,13 @@ import numpy as np
 import moments
 import subprocess
 from src.parameter_inference import run_inference_momentsLD
-import os 
-
+import os
 import shutil
 
 def cleanup_files(sim_directory, sim_number):
     simulation_results_directory = '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results'
     genome_windows_directory = f'/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}'
-    
+
     # Define files to delete
     files_to_delete = [
         f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl",
@@ -21,7 +20,7 @@ def cleanup_files(sim_directory, sim_number):
         f"{simulation_results_directory}/sampled_params_{sim_number}.pkl",
         f"{simulation_results_directory}/sampled_params_metadata_{sim_number}.txt"
     ]
-    
+
     # Delete individual files
     for filepath in files_to_delete:
         if os.path.exists(filepath):
@@ -29,14 +28,14 @@ def cleanup_files(sim_directory, sim_number):
             print(f"Deleted {filepath}")
         else:
             print(f"File not found, skipping deletion: {filepath}")
-    
+
     # Delete genome windows directory
     if os.path.exists(genome_windows_directory):
         shutil.rmtree(genome_windows_directory)
         print(f"Deleted genome windows directory: {genome_windows_directory}")
     else:
         print(f"Genome windows directory not found: {genome_windows_directory}")
-        
+
 def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experiment_config_filepath, sim_number):
     with open(experiment_config_filepath, "r") as f:
         experiment_config = json.load(f)
@@ -53,21 +52,27 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
     p_guess.extend([10000])
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)
 
-    try:
+    def reoptimize():
+        print("Attempting optimization...")
         opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
             ld_stats=combined_ld_stats,
             demographic_model=experiment_config["demographic_model"],
             p_guess=p_guess
         )
+        print("Optimization completed successfully.")
+        return opt_params_momentsLD, ll_list_momentsLD
 
+    try:
+        opt_params_momentsLD, ll_list_momentsLD = reoptimize()
     except (np.linalg.LinAlgError, KeyError) as e:
         print("======================================================================================")
-        print(f"Error encountered: {e}. Attempting to rerun simulation for sim_number={sim_number}.")
+        print(f"Error encountered: {e}. Attempting to resimulate for sim_number={sim_number}.")
         print("======================================================================================")
-        
+
         # Clean up files before rerun
         cleanup_files(sim_directory, sim_number)
 
+        # Resimulate
         rerun_command = [
             "python",
             "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/single_simulation.py",
@@ -75,31 +80,43 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
             "--sim_directory", '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences',
             "--sim_number", str(sim_number)
         ]
-
         subprocess.run(rerun_command, check=True)
-        print("THE RE-SIMULATION HAS BEEN COMPLETED SUCCESSFULLY")
+        print("Resimulation completed.")
 
-        # Rerun the genome window creation for each window (0-99)
+        # Rerun genome window creation
         for window_number in range(experiment_config['num_windows']):
             rerun_window_command = [
                 "python",
                 "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_genome_vcfs.py",
-                "--tree_sequence_file", f"/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees",  # Add actual path
+                "--tree_sequence_file", f"/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees",
                 "--experiment_config_filepath", experiment_config_filepath,
                 "--genome_sim_directory", '/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows',
                 "--window_number", str(window_number),
                 "--sim_number", str(sim_number)
             ]
-            
             subprocess.run(rerun_window_command, check=True)
             print(f"Genome window creation for window {window_number} rerun successfully.")
 
+        # Rerun the creation of LD stats 
+        # ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, sim_number, window_number)
+        from tqdm import tqdm
+
+        for window_number in tqdm(range(experiment_config['num_windows'])):
+            rerun_window_command = [
+                "python",
+                "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/ld_stats.py",
+                "--vcf_filepath", f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/window.{window_number}.vcf.gz",
+                "--flat_map_path", f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+                "--pop_file_path", f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt", 
+                "--sim_directory", '/projects/kernlab/akapoor/Demographic_Inference/LD_inferences',
+                "--sim_number", str(sim_number),
+                "--window_number", str(window_number)
+            ]
+
+        # Retry optimization
+        print("Retrying optimization after resimulation...")
         p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)
-        opt_params_momentsLD, ll_list_momentsLD = run_inference_momentsLD(
-            ld_stats=combined_ld_stats,
-            demographic_model=experiment_config["demographic_model"],
-            p_guess=p_guess
-        )
+        opt_params_momentsLD, ll_list_momentsLD = reoptimize()
 
     # Store results in dictionary and save to a pickle file
     momentsLD_results = {
@@ -108,9 +125,10 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
     }
     mega_result_dict.update(momentsLD_results)
 
-    with open(f"{sim_directory}/momentsLD_inferences_sim_{sim_number}.pkl", "wb") as f:
+    output_path = f"{sim_directory}/momentsLD_inferences_sim_{sim_number}.pkl"
+    with open(output_path, "wb") as f:
         pickle.dump(mega_result_dict, f)
-
+    print(f"Results saved to {output_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
