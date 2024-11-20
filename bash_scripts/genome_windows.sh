@@ -11,8 +11,8 @@
 #SBATCH --requeue
 
 # Define the batch size
-BATCH_SIZE=10
-TOTAL_TASKS=100000
+BATCH_SIZE=1
+TOTAL_TASKS=10000
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -61,7 +61,7 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
     WINDOW_NUMBER=$((TASK_ID % NUM_WINDOWS))
 
     # Define the directory path and create it if necessary
-    DIR_PATH="sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}"
+    DIR_PATH="/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}"
     mkdir -p "$DIR_PATH"
     
     echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER in $DIR_PATH"
@@ -73,9 +73,8 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
     # Run Snakemake with explicit Python script path and avoid `cd`
     snakemake \
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
-        --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
+        --directory /projects/kernlab/akapoor/Demographic_Inference \
         --rerun-incomplete \
-        --nolock \
         "${DIR_PATH}/samples.txt" \
         "${DIR_PATH}/flat_map.txt" \
         "${DIR_PATH}/individual_file_metadata.txt" \
@@ -87,7 +86,7 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         snakemake \
             --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
             --rerun-incomplete \
-            "sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt"
+            "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt"
     fi
 done
 

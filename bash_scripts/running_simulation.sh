@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=sim_job_array                # Job name
-#SBATCH --array=0-999                             # Array range (adjust based on the number of tasks and batch size)
+#SBATCH --array=0-99                             # Array range (adjust based on the number of tasks and batch size)
 #SBATCH --output=logs/simulation_%A_%a.out      # Standard output log file (%A is job ID, %a is the array index)
 #SBATCH --error=logs/simulation_%A_%a.err       # Standard error log file
 #SBATCH --time=10:00:00                          # Time limit
@@ -12,7 +12,7 @@
 
 # Define batch size and total number of tasks
 BATCH_SIZE=1
-TOTAL_TASKS=1000
+TOTAL_TASKS=100
 
 # Set up the simulation directory and other variables
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
@@ -71,10 +71,10 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
         --rerun-incomplete \
-        "simulated_parameters_and_inferences/simulation_results/sampled_params_${TASK_ID}.pkl" \
-        "simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_${TASK_ID}.txt" \
-        "simulated_parameters_and_inferences/simulation_results/SFS_sim_${TASK_ID}.pkl" \
-        "simulated_parameters_and_inferences/simulation_results/ts_sim_${TASK_ID}.trees"
+        "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_${TASK_ID}.pkl" \
+        "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_${TASK_ID}.txt" \
+        "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/SFS_sim_${TASK_ID}.pkl" \
+        "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_${TASK_ID}.trees"
 done
 
 # Calculate the overall elapsed time only at the last task in the array

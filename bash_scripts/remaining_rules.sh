@@ -68,7 +68,6 @@ module list
 snakemake \
     --snakefile /gpfs/projects/kernlab/akapoor/Demographic_Inference/Snakefile \
     --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
-    --nolock \
     --rerun-incomplete \
     "${SIM_DIRECTORY}/postprocessing_results.pkl" \
     "${SIM_DIRECTORY}/features_and_targets.pkl" \

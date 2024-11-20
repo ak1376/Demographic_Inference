@@ -20,7 +20,7 @@ def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, 
         ld_stats = get_LD_stats(vcf_filepath, r_bins, flat_map_path, pop_file_path)
 
         # Save LD stats to a file
-        output_file = f"{sim_directory}/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
+        output_file = f"{sim_directory}/sim_{sim_number}/window_{window_number}/ld_stats_window.{window_number}.pkl"
         with open(output_file, "wb") as f:
             pickle.dump(ld_stats, f)
 
