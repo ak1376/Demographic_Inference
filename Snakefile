@@ -45,7 +45,7 @@ MODEL_DIRECTORY = (
 )
 
 # Set working directory
-workdir: "/gpfs/projects/kernlab/akapoor/Demographic_Inference"
+workdir: "/projects/kernlab/akapoor/Demographic_Inference"
 
 # Add wildcard constraints
 wildcard_constraints:
@@ -89,15 +89,15 @@ rule create_experiment:
 rule run_simulation:
     params:
         CONFIG_FILEPATH = CONFIG_FILEPATH,
-        SIM_DIRECTORY = 'simulated_parameters_and_inferences'
+        SIM_DIRECTORY = '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences'
     output:
-        sampled_params_pkl = "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl",
-        metadata_file = "simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_{sim_number}.txt",
-        sfs_file = "simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl",
-        tree_sequence_file = "simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees"
+        sampled_params_pkl = "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl",
+        metadata_file = "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_{sim_number}.txt",
+        sfs_file = "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl",
+        tree_sequence_file = "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees"
     shell:
         """
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/single_simulation.py \
+        PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference/ python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/single_simulation.py \
         --experiment_config {params.CONFIG_FILEPATH} \
         --sim_directory {params.SIM_DIRECTORY} \
         --sim_number {wildcards.sim_number}
@@ -107,18 +107,18 @@ rule genome_windows:
     input:
         tree_sequence_file = rules.run_simulation.output.tree_sequence_file
     output:
-        samples_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
-        flat_map_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
-        metadata_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt",
-        vcf_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/window.{window_number}.vcf.gz"  # Add this line
+        samples_file = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
+        flat_map_file = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+        metadata_file = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/individual_file_metadata.txt",
+        vcf_file = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/window.{window_number}.vcf.gz"  # Add this line
 
     params:
         window_number = lambda wildcards: wildcards.window_number,
         CONFIG_FILEPATH = CONFIG_FILEPATH
     shell:
         """
-        mkdir -p sampled_genome_windows/sim_{wildcards.sim_number}
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_genome_vcfs.py \
+        mkdir -p /projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{wildcards.sim_number}
+        PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_genome_vcfs.py \
         --tree_sequence_file {input.tree_sequence_file} \
         --experiment_config_filepath {params.CONFIG_FILEPATH} \
         --genome_sim_directory sampled_genome_windows \
@@ -131,11 +131,11 @@ rule combine_metadata:
         tree_sequence_file = rules.run_simulation.output.tree_sequence_file,
         experiment_config = CONFIG_FILEPATH,
         samples_files = lambda wildcards: [
-            f"sampled_genome_windows/sim_{wildcards.sim_number}/window_{i}/samples.txt"
+            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{wildcards.sim_number}/window_{i}/samples.txt"
             for i in range(json.load(open(CONFIG_FILEPATH))["num_windows"])
         ]
     output:
-        metadata_file = "sampled_genome_windows/sim_{sim_number}/metadata.txt"
+        metadata_file = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/metadata.txt"
     params:
         num_windows = lambda wildcards: json.load(open(CONFIG_FILEPATH))["num_windows"]
     shell:
@@ -145,18 +145,18 @@ rule combine_metadata:
         
         # Concatenate all VCF file paths into the metadata file
         for ((i=0; i<{params.num_windows}; i++)); do
-            echo "sampled_genome_windows/sim_{wildcards.sim_number}/window_$i/window.$i.vcf.gz" >> {output.metadata_file}
+            echo "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{wildcards.sim_number}/window_$i/window.$i.vcf.gz" >> {output.metadata_file}
         done
         """
 
 rule calculate_LD_stats:
     input:
-        pop_file_path = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
-        flat_map_file = "sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
-        metadata_file = "sampled_genome_windows/sim_{sim_number}/metadata.txt",
-        sampled_params_pkl = "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl"
+        pop_file_path = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
+        flat_map_file = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+        metadata_file = "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/metadata.txt",
+        sampled_params_pkl = "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl"
     output:
-        processed_file = "LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl"
+        processed_file = "/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}/window_{window_number}/ld_stats_window.{window_number}.pkl"
     params:
         window_number = lambda wildcards: wildcards.window_number
     shell:
@@ -164,29 +164,31 @@ rule calculate_LD_stats:
         echo "Extracting VCF file for window number {wildcards.window_number}"
         vcf_filepath=$(sed -n "$(( {wildcards.window_number} + 1 ))p" {input.metadata_file})
         echo "Processing VCF file: $vcf_filepath"
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/ld_stats.py \
+        PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference/ python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/ld_stats.py \
             --vcf_filepath "$vcf_filepath" \
             --pop_file_path {input.pop_file_path} \
             --flat_map_file {input.flat_map_file} \
-            --sim_directory LD_inferences \
+            --sim_directory /projects/kernlab/akapoor/Demographic_Inference/LD_inferences \
             --sim_number {wildcards.sim_number} \
             --window_number {wildcards.window_number}
         """
 
 rule gather_ld_stats:
     input:
-        ld_stats_files = lambda wildcards: expand(
-            "LD_inferences/sim_{sim_number}/ld_stats_window.{window_number}.pkl",
+        ld_stats_files=lambda wildcards: expand(
+            "/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}/window_{window_number}/ld_stats_window.{window_number}.pkl",
             sim_number=wildcards.sim_number,
             window_number=range(0, experiment_config['num_windows'])
         )
     output:
-        combined_ld_stats_sim = "combined_LD_inferences/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl"
+        combined_ld_stats_sim="/projects/kernlab/akapoor/Demographic_Inference/combined_LD_inferences/sim_{sim_number}/combined_LD_stats_sim_{sim_number}.pkl"
     shell:
         """
-        mkdir -p combined_LD_inferences/sim_{wildcards.sim_number}
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/combine_ld_stats.py \
-            --LD_inferences_path LD_inferences/sim_{wildcards.sim_number} \
+        mkdir -p /projects/kernlab/akapoor/Demographic_Inference/combined_LD_inferences/sim_{wildcards.sim_number}
+
+        # Use process substitution to pass newline-separated filenames
+        PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/combine_ld_stats.py \
+            --ld_stats_files <(printf "%s\\n" {input.ld_stats_files}) \
             --sim_number {wildcards.sim_number}
         """
 
@@ -195,33 +197,33 @@ rule obtain_MomentsLD_feature:
         combined_ld_stats_path = rules.gather_ld_stats.output.combined_ld_stats_sim,
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl
     output:
-        software_inferences = "final_LD_inferences/momentsLD_inferences_sim_{sim_number}.pkl"
+        software_inferences = "/projects/kernlab/akapoor/Demographic_Inference/final_LD_inferences/momentsLD_inferences_sim_{sim_number}.pkl"
     shell:
         """
-        mkdir -p final_LD_inferences
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/momentsLD_analysis.py \
+        mkdir -p /projects/kernlab/akapoor/Demographic_Inference/final_LD_inferences
+        PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference/ python /projects/kernlab/akapoor/Demographic_Inference//snakemake_scripts/momentsLD_analysis.py \
         --combined_ld_stats_path {input.combined_ld_stats_path} \
         --sampled_params {input.sampled_params_pkl} \
         --experiment_config_filepath {CONFIG_FILEPATH} \
-        --sim_directory final_LD_inferences \
+        --sim_directory /projects/kernlab/akapoor/Demographic_Inference/final_LD_inferences \
         --sim_number {wildcards.sim_number}
         """
 
 rule obtain_feature:
     input:
         flat_map_files = lambda wildcards: [
-            f"sampled_genome_windows/sim_{wildcards.sim_number}/window_{i}/flat_map.txt"
+            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{wildcards.sim_number}/window_{i}/flat_map.txt"
             for i in range(json.load(open(CONFIG_FILEPATH))["num_windows"])
         ],
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl,
         SFS = rules.run_simulation.output.sfs_file
     output:
-        software_inferences = "moments_dadi_features/sim_{sim_number}/{analysis}/replicate_{replicate_number}.pkl"
+        software_inferences = "/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/{analysis}/replicate_{replicate_number}/replicate_{replicate_number}.pkl"
     params:
         analysis = lambda wildcards: "dadi" if wildcards.analysis == "dadi" else "moments"
     shell:
         """
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/obtain_single_feature.py \
+        PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference/ python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_single_feature.py \
         --sfs_file {input.SFS} \
         --sampled_params_pkl {input.sampled_params_pkl} \
         --experiment_config_filepath {CONFIG_FILEPATH} \
@@ -233,19 +235,19 @@ rule obtain_feature:
 
 rule aggregate_top_k_results:
     input:
-        dadi_files = expand("moments_dadi_features/sim_{{sim_number}}/dadi/replicate_{replicate}.pkl", 
+        dadi_files = expand("/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{{sim_number}}/dadi/replicate_{replicate}/replicate_{replicate}.pkl", 
                           replicate=range(json.load(open(CONFIG_FILEPATH))["k"])),
-        moments_files = expand("moments_dadi_features/sim_{{sim_number}}/moments/replicate_{replicate}.pkl", 
+        moments_files = expand("/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{{sim_number}}/moments/replicate_{replicate}/replicate_{replicate}.pkl", 
                              replicate=range(json.load(open(CONFIG_FILEPATH))["k"])),
-        sfs_file = "simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl",
-        params_file = "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl"
+        sfs_file = "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/SFS_sim_{sim_number}.pkl",
+        params_file = "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl"
     output:
-        "moments_dadi_features/software_inferences_sim_{sim_number}.pkl"
+        "/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/software_inferences_sim_{sim_number}.pkl"
     params:
         top_k = json.load(open(CONFIG_FILEPATH))["top_values_k"]
     shell:
         """
-        PYTHONPATH={CWD} python {CWD}/snakemake_scripts/aggregate_top_k.py \
+        PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference/ python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_top_k.py \
         --dadi_files {input.dadi_files} \
         --moments_files {input.moments_files} \
         --sfs_file {input.sfs_file} \
@@ -257,12 +259,12 @@ rule aggregate_top_k_results:
 # Rule to gather both software_inferences and momentsLD_inferences
 def gather_all_inferences(wildcards):
     software_inferences = expand(
-        f"moments_dadi_features/software_inferences_sim_{{sim_number}}.pkl",
+        f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/software_inferences_sim_{{sim_number}}.pkl",
         sim_number=range(0, experiment_config['num_sims_pretrain'])
     )
     
     momentsLD_inferences = expand(
-        f"final_LD_inferences/momentsLD_inferences_sim_{{sim_number}}.pkl",
+        f"/projects/kernlab/akapoor/Demographic_Inference/final_LD_inferences/momentsLD_inferences_sim_{{sim_number}}.pkl",
         sim_number=range(0, experiment_config['num_sims_pretrain'])
     )
 

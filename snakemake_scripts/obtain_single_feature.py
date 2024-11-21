@@ -4,6 +4,7 @@ import pickle
 import json
 from src.parameter_inference import run_inference_dadi, run_inference_moments
 import argparse
+import os 
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -19,6 +20,13 @@ def str2bool(v):
 # I want to do dadi and moments inference but separately for each replicate. Note to self: need to define another function that will aggregate the results of each replicate and then choose the top k ones. 
 
 def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate_number):
+
+    # Ensure required directories exist
+    dadi_dir = f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/dadi/replicate_{replicate_number}"
+    moments_dir = f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/moments/replicate_{replicate_number}"
+
+    os.makedirs(dadi_dir, exist_ok=True)
+    os.makedirs(moments_dir, exist_ok=True)
 
     # Load in the experiment config 
     with open(experiment_config, "r") as f:
@@ -67,8 +75,6 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate
             )
         )
 
-        print("KEYS")
-        print(opt_params_dict_dadi.keys())
 
         dadi_results = {
             "model_sfs_dadi": model_sfs_dadi,
@@ -93,10 +99,6 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate
             )
         )
 
-        print("KEYS")
-        print(opt_params_dict_moments.keys())
-
-
         moments_results = {
             "model_sfs_moments": model_sfs_moments,
             "opt_theta_moments": opt_theta_moments,
@@ -106,10 +108,10 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate
 
     
     # save the results in a pickle file
-    with open(f"moments_dadi_features/sim_{sim_number}/dadi/replicate_{replicate_number}.pkl", "wb") as f:
+    with open(f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/dadi/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
         pickle.dump(dadi_results, f)
 
-    with open(f"moments_dadi_features/sim_{sim_number}/moments/replicate_{replicate_number}.pkl", "wb") as f:
+    with open(f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/moments/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
         pickle.dump(moments_results, f)
 
 
