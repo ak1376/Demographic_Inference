@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-11  # Adjust based on (NUM_SIMS_PRETRAIN * NUM_REPLICATES * NUM_ANALYSES)
+#SBATCH --array=0-599  # Adjust based on (NUM_SIMS_PRETRAIN * NUM_REPLICATES * NUM_ANALYSES)
 #SBATCH --output=logs/moments_dadi_%A_%a.out
 #SBATCH --error=logs/moments_dadi_%A_%a.err
 #SBATCH --time=5:00:00
@@ -40,6 +40,7 @@ mkdir -p "$REPLICATE_DIR"
 
 # Run Snakemake in the replicate directory
 snakemake -p --rerun-incomplete --snakefile "/projects/kernlab/akapoor/Demographic_Inference/Snakefile" \
+    --latency-wait 60 \
     --directory "$REPLICATE_DIR" \
     "${REPLICATE_DIR}/replicate_${REPLICATE_NUMBER}.pkl"
 
