@@ -43,15 +43,23 @@ for TASK_ID in $(seq $((SLURM_ARRAY_TASK_ID * BATCH_SIZE)) $(((SLURM_ARRAY_TASK_
 
     # Run Snakemake from the simulation directory
     snakemake -p --verbose --rerun-incomplete \
+        --nolock \
         --snakefile "${SNAKEMAKE_DIR}/Snakefile" \
         --directory "$WORKING_DIR" \
         "${WORKING_DIR}/ld_stats_window.${WINDOW_NUMBER}.pkl"
 
-
+    # Check if Snakemake succeeded
     if [ $? -eq 0 ]; then
         echo "Snakemake completed successfully for sim ${SIM_NUMBER}, window ${WINDOW_NUMBER}"
     else
         echo "Snakemake failed for sim ${SIM_NUMBER}, window ${WINDOW_NUMBER}"
+
+        # Cleanup .snakemake directory for the task
+        if [ -d "${WORKING_DIR}/.snakemake" ]; then
+            echo "Cleaning up .snakemake directory in ${WORKING_DIR}"
+            rm -rf "${WORKING_DIR}/.snakemake"
+        fi
+
         popd  # Ensure we still return to BASE_DIR even if an error occurs
         exit 1
     fi

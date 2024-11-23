@@ -61,32 +61,52 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
     WINDOW_NUMBER=$((TASK_ID % NUM_WINDOWS))
 
     # Define the directory path and create it if necessary
-    DIR_PATH="/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}"
-    mkdir -p "$DIR_PATH"
+    SIM_DIR="/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}"
+    WINDOW_DIR="${SIM_DIR}/window_${WINDOW_NUMBER}"
+    mkdir -p "$WINDOW_DIR"
     
-    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER in $DIR_PATH"
+    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER in $WINDOW_DIR"
 
     # Set PYTHONPATH and Python script path explicitly
     export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference
-    PYTHON_SCRIPT="/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_genome_vcfs.py"
 
-    # Run Snakemake with explicit Python script path and avoid `cd`
+    # Run Snakemake from the window directory
+    pushd "$WINDOW_DIR" || { echo "Failed to change directory to $WINDOW_DIR"; exit 1; }
     snakemake \
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
-        --directory /projects/kernlab/akapoor/Demographic_Inference \
+        --directory "$WINDOW_DIR" \
         --rerun-incomplete \
-        "${DIR_PATH}/samples.txt" \
-        "${DIR_PATH}/flat_map.txt" \
-        "${DIR_PATH}/individual_file_metadata.txt" \
-        "${DIR_PATH}/window.${WINDOW_NUMBER}.vcf.gz"
+        "${WINDOW_DIR}/samples.txt" \
+        "${WINDOW_DIR}/flat_map.txt" \
+        "${WINDOW_DIR}/individual_file_metadata.txt" \
+        "${WINDOW_DIR}/window.${WINDOW_NUMBER}.vcf.gz"
+
+    if [ $? -eq 0 ]; then
+        echo "Snakemake completed successfully for sim ${SIM_NUMBER}, window ${WINDOW_NUMBER}"
+    else
+        echo "Snakemake failed for sim ${SIM_NUMBER}, window ${WINDOW_NUMBER}"
+        popd
+        exit 1
+    fi
+    popd || { echo "Failed to return to previous directory"; exit 1; }
 
     # If this is the last window for a simulation, run combine_metadata
     if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
         echo "Running combine_metadata for simulation ${SIM_NUMBER}"
+        pushd "$SIM_DIR" || { echo "Failed to change directory to $SIM_DIR"; exit 1; }
         snakemake \
+            --nolock \
             --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+            --directory "$SIM_DIR" \
+            --shadow-prefix "$SIM_DIR/.snakemake" \
             --rerun-incomplete \
-            "/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt"
+            "${SIM_DIR}/metadata.txt"
+        if [ $? -ne 0 ]; then
+            echo "Failed to run combine_metadata for simulation ${SIM_NUMBER}"
+            popd
+            exit 1
+        fi
+        popd || { echo "Failed to return to previous directory"; exit 1; }
     fi
 done
 

@@ -12,6 +12,12 @@
 
 # Base directory
 BASE_DIR="/projects/kernlab/akapoor/Demographic_Inference"
+COMBINED_LD_DIR="${BASE_DIR}/combined_LD_inferences"
+FINAL_LD_DIR="${BASE_DIR}/final_LD_inferences"
+
+# Ensure the necessary directories exist
+mkdir -p "${COMBINED_LD_DIR}"
+mkdir -p "${FINAL_LD_DIR}"
 
 # Move to base directory
 cd $BASE_DIR || { echo "Failed to change to BASE_DIR: $BASE_DIR"; exit 1; }
@@ -30,15 +36,17 @@ for SIM_NUMBER in $(seq $BATCH_START $BATCH_END); do
     echo "Processing SIM_NUMBER=${SIM_NUMBER}"
     
     # Log paths
-    COMBINED_STATS_OUTPUT="${BASE_DIR}/combined_LD_inferences/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl"
-    MOMENTS_LD_OUTPUT="${BASE_DIR}/final_LD_inferences/momentsLD_inferences_sim_${SIM_NUMBER}.pkl"
+    COMBINED_STATS_OUTPUT="${COMBINED_LD_DIR}/sim_${SIM_NUMBER}/combined_LD_stats_sim_${SIM_NUMBER}.pkl"
+    MOMENTS_LD_OUTPUT="${FINAL_LD_DIR}/momentsLD_inferences_sim_${SIM_NUMBER}.pkl"
     echo "Expected output for combined_LD_stats: $COMBINED_STATS_OUTPUT"
     echo "Expected output for momentsLD_inferences: $MOMENTS_LD_OUTPUT"
 
     # Run combined_ld_stats through combined_LD_inferences
+    mkdir -p "$(dirname "${COMBINED_STATS_OUTPUT}")"  # Ensure the sim_X directory exists
     snakemake \
+        --nolock \
         --snakefile "${BASE_DIR}/Snakefile" \
-        --directory "${BASE_DIR}/combined_LD_inferences" \
+        --directory "${COMBINED_LD_DIR}" \
         --rerun-incomplete \
         "$COMBINED_STATS_OUTPUT"
         
@@ -50,8 +58,9 @@ for SIM_NUMBER in $(seq $BATCH_START $BATCH_END); do
 
     # Run momentsLD inference through final_LD_inferences
     snakemake \
+        --nolock \
         --snakefile "${BASE_DIR}/Snakefile" \
-        --directory "${BASE_DIR}/final_LD_inferences" \
+        --directory "${FINAL_LD_DIR}" \
         --rerun-incomplete \
         "$MOMENTS_LD_OUTPUT"
     

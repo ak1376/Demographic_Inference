@@ -43,14 +43,41 @@ MOMENTS_LD_ANALYSIS=$(capitalize_bool $MOMENTS_LD_ANALYSIS)
 # Set up the simulation directory
 SIM_DIRECTORY="${DEMOGRAPHIC_MODEL}_dadi_analysis_${DADI_ANALYSIS}_moments_analysis_${MOMENTS_ANALYSIS}_momentsLD_analysis_${MOMENTS_LD_ANALYSIS}_seed_${SEED}/sims/sims_pretrain_${NUM_SIMS_PRETRAIN}_sims_inference_${NUM_SIMS_INFERENCE}_seed_${SEED}_num_replicates_${K}_top_values_${TOP_VALUES_K}"
 
-# Collect inference files
-SOFTWARE_INFERENCES=(moments_dadi_features/software_inferences_sim_*.pkl)
-MOMENTSLD_INFERENCES=(final_LD_inferences/momentsLD_inferences_sim_*.pkl)
+# Expand file wildcards
+SOFTWARE_INFERENCES=("/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/"*.pkl)
+MOMENTSLD_INFERENCES=("/projects/kernlab/akapoor/Demographic_Inference/final_LD_inferences/"*.pkl)
 
-# Run the aggregation
+# Debugging: Print expanded file lists
+echo "Expanded Software Inferences:"
+for file in "${SOFTWARE_INFERENCES[@]}"; do
+    echo "$file"
+done
+
+echo "Expanded MomentsLD Inferences:"
+for file in "${MOMENTSLD_INFERENCES[@]}"; do
+    echo "$file"
+done
+
+# Check for empty arrays and exit with an error if any are empty
+if [ ${#SOFTWARE_INFERENCES[@]} -eq 0 ]; then
+    echo "Error: No software inferences found!"
+    exit 1
+fi
+
+if [ ${#MOMENTSLD_INFERENCES[@]} -eq 0 ]; then
+    echo "Error: No MomentsLD inferences found!"
+    exit 1
+fi
+
+# Run the aggregation script
 python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_all_features.py \
     "${EXPERIMENT_CONFIG_FILE}" \
     "${SIM_DIRECTORY}" \
-    ${SOFTWARE_INFERENCES[@]} ${MOMENTSLD_INFERENCES[@]}
+    "${SOFTWARE_INFERENCES[@]}" "${MOMENTSLD_INFERENCES[@]}"
 
-echo "Feature aggregation completed."
+if [ $? -eq 0 ]; then
+    echo "Feature aggregation completed successfully."
+else
+    echo "Feature aggregation failed."
+    exit 1
+fi
