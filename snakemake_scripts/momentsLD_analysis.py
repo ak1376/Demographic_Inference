@@ -52,7 +52,7 @@ def resimulate(sim_number, sim_directory, experiment_config_filepath):
         "--experiment_config",
         experiment_config_filepath,
         "--sim_directory",
-        '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results',
+        '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences',
         "--sim_number",
         str(sim_number),
     ]
