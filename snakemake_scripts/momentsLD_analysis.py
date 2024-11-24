@@ -23,6 +23,7 @@ def cleanup_files(sim_directory, sim_number):
         f"{simulation_results_directory}/ts_sim_{sim_number}.trees",
         f"{simulation_results_directory}/sampled_params_{sim_number}.pkl",
         f"{simulation_results_directory}/sampled_params_metadata_{sim_number}.txt",
+        f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"
     ]
 
     # Delete individual files
@@ -81,6 +82,28 @@ def resimulate(sim_number, sim_directory, experiment_config_filepath):
         ]
         subprocess.run(regenerate_window_command, check=True)
         print(f"Regenerated genome window {window_number}.")
+
+    # ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, sim_number, window_number)
+    # Recompute the LD stats (since we are resimulating)
+    for window_number in range(experiment_config['num_windows']):
+        regenerate_window_command = [
+            "python", 
+            "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/ld_stats.py",
+            "--vcf_filepath",
+            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/window.{window_number}.vcf.gz",
+            "--flat_map_path",
+            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+            "--pop_file_path",
+            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
+            "--sim_directory",
+            f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences",
+            "--sim_number",
+            str(sim_number),
+            "--window_number",
+            str(window_number),
+        ]
+        subprocess.run(regenerate_window_command, check=True)
+        print(f"Recomputed LD stats for simulation {sim_number} and window {window_number}.")
 
 
 def reoptimize_with_retries(combined_ld_stats, p_guess, experiment_config, sim_number):
