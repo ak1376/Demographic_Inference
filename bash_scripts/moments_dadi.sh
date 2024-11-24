@@ -1,69 +1,102 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-599  # Adjust based on (NUM_SIMS_PRETRAIN * NUM_REPLICATES * NUM_ANALYSES)
-#SBATCH --output=logs/moments_dadi_%A_%a.out
-#SBATCH --error=logs/moments_dadi_%A_%a.err
-#SBATCH --time=5:00:00
+#SBATCH --array=0-2999  # Adjust based on TOTAL_TASKS / BATCH_SIZE
+#SBATCH --output=logs/moments_dadi_batch_%A_%a.out
+#SBATCH --error=logs/moments_dadi_batch_%A_%a.err
+#SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
-# Define variables from config file
+# Load base variables
+BASE_DIR="/projects/kernlab/akapoor/Demographic_Inference"
+FEATURES_DIR="${BASE_DIR}/moments_dadi_features"
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
 
-# Extract config values
+# Ensure necessary directories exist
+mkdir -p "${FEATURES_DIR}"
+
+# Move to base directory
+cd $BASE_DIR || { echo "Failed to change to BASE_DIR: $BASE_DIR"; exit 1; }
+echo "Current directory: $(pwd)"
+
+# Load experiment configuration
 DEMOGRAPHIC_MODEL=$(jq -r '.demographic_model' $EXPERIMENT_CONFIG_FILE)
 SEED=$(jq -r '.seed' $EXPERIMENT_CONFIG_FILE)
 NUM_SIMS_PRETRAIN=$(jq -r '.num_sims_pretrain' $EXPERIMENT_CONFIG_FILE)
 NUM_REPLICATES=$(jq -r '.k' $EXPERIMENT_CONFIG_FILE)
 
 # Supported analyses
-ANALYSES=("dadi" "moments")  # Add or remove analyses as needed
-NUM_ANALYSES=${#ANALYSES[@]}  # Number of analyses (2 in this case)
+ANALYSES=("dadi" "moments")
+NUM_ANALYSES=${#ANALYSES[@]}  # Number of analyses
 
-# Calculate total number of tasks
-TOTAL_TASKS=$((NUM_SIMS_PRETRAIN * NUM_REPLICATES * NUM_ANALYSES))
+# Define batch size
+BATCH_SIZE=10  # Number of tasks to run in each job
+TOTAL_TASKS=$((NUM_SIMS_PRETRAIN * NUM_REPLICATES * NUM_ANALYSES))  # Total tasks
+NUM_BATCHES=$(((TOTAL_TASKS + BATCH_SIZE - 1) / BATCH_SIZE))  # Calculate total batches
 
-# Get the specific analysis, simulation, and replicate for this task
-ANALYSIS_INDEX=$((SLURM_ARRAY_TASK_ID % NUM_ANALYSES))  # Which analysis (0=dadi, 1=moments)
-SIM_NUMBER=$((SLURM_ARRAY_TASK_ID / (NUM_REPLICATES * NUM_ANALYSES)))  # Simulation number
-REPLICATE_NUMBER=$(((SLURM_ARRAY_TASK_ID / NUM_ANALYSES) % NUM_REPLICATES))  # Replicate number
-ANALYSIS=${ANALYSES[$ANALYSIS_INDEX]}  # dadi or moments
+# Calculate start and end indices for this batch
+BATCH_START=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))
+BATCH_END=$(((SLURM_ARRAY_TASK_ID + 1) * BATCH_SIZE - 1))
 
-echo "Running analysis: $ANALYSIS for SIM_NUMBER=$SIM_NUMBER, REPLICATE_NUMBER=$REPLICATE_NUMBER"
-
-# Define the replicate directory within the analysis directory
-REPLICATE_DIR="/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_${SIM_NUMBER}/${ANALYSIS}/replicate_${REPLICATE_NUMBER}"
-mkdir -p "$REPLICATE_DIR"
-
-# Run Snakemake in the replicate directory
-snakemake -p --rerun-incomplete --snakefile "/projects/kernlab/akapoor/Demographic_Inference/Snakefile" \
-    --latency-wait 60 \
-    --directory "$REPLICATE_DIR" \
-    "${REPLICATE_DIR}/replicate_${REPLICATE_NUMBER}.pkl"
-
-if [ $? -eq 0 ]; then
-    echo "Snakemake completed successfully for $ANALYSIS, sim_${SIM_NUMBER}, replicate_${REPLICATE_NUMBER}"
-else
-    echo "Snakemake failed for $ANALYSIS, sim_${SIM_NUMBER}, replicate_${REPLICATE_NUMBER}"
-    exit 1
+# Adjust end index for the last batch
+if [ "$BATCH_END" -ge "$TOTAL_TASKS" ]; then
+    BATCH_END=$((TOTAL_TASKS - 1))
 fi
 
-# Run aggregation only for the last replicate of each simulation
-if [[ "$REPLICATE_NUMBER" -eq "$((NUM_REPLICATES - 1))" && "$ANALYSIS_INDEX" -eq "0" ]]; then
-    echo "Starting aggregation for SIM_NUMBER=$SIM_NUMBER..."
+echo "Processing tasks from $BATCH_START to $BATCH_END"
 
-    snakemake --nolock -p --rerun-incomplete \
-        --snakefile "/projects/kernlab/akapoor/Demographic_Inference/Snakefile" \
-        --directory "/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/" \
-        "/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/software_inferences_sim_${SIM_NUMBER}.pkl"
+# Process each task in this batch
+for TASK_ID in $(seq $BATCH_START $BATCH_END); do
+    # Extract task details
+    ANALYSIS_INDEX=$((TASK_ID % NUM_ANALYSES))
+    SIM_NUMBER=$((TASK_ID / (NUM_REPLICATES * NUM_ANALYSES)))
+    REPLICATE_NUMBER=$(((TASK_ID / NUM_ANALYSES) % NUM_REPLICATES))
+    ANALYSIS=${ANALYSES[$ANALYSIS_INDEX]}
+
+    echo "Running analysis: $ANALYSIS for SIM_NUMBER=$SIM_NUMBER, REPLICATE_NUMBER=$REPLICATE_NUMBER"
+
+    # Define output paths
+    REPLICATE_DIR="${FEATURES_DIR}/sim_${SIM_NUMBER}/${ANALYSIS}/replicate_${REPLICATE_NUMBER}"
+    AGGREGATION_OUTPUT="${FEATURES_DIR}/software_inferences_sim_${SIM_NUMBER}.pkl"
+
+    mkdir -p "$REPLICATE_DIR"
+
+    # Process the replicate
+    snakemake \
+        --nolock \
+        --rerun-incomplete \
+        --latency-wait 60 \
+        --snakefile "${BASE_DIR}/Snakefile" \
+        --directory "$REPLICATE_DIR" \
+        "${REPLICATE_DIR}/replicate_${REPLICATE_NUMBER}.pkl"
 
     if [ $? -eq 0 ]; then
-        echo "Aggregation completed successfully for SIM_NUMBER=$SIM_NUMBER"
+        echo "Snakemake completed successfully for $ANALYSIS, sim_${SIM_NUMBER}, replicate_${REPLICATE_NUMBER}"
     else
-        echo "Aggregation failed for SIM_NUMBER=$SIM_NUMBER"
-        exit 1
+        echo "Snakemake failed for $ANALYSIS, sim_${SIM_NUMBER}, replicate_${REPLICATE_NUMBER}"
+        continue  # Skip to the next task
     fi
-fi
+
+    # Aggregation step (run only for the last replicate of each simulation, for `dadi`)
+    if [[ "$REPLICATE_NUMBER" -eq "$((NUM_REPLICATES - 1))" && "$ANALYSIS_INDEX" -eq "0" ]]; then
+        echo "Running aggregation for SIM_NUMBER=${SIM_NUMBER}"
+
+        snakemake \
+            --nolock \
+            --rerun-incomplete \
+            --latency-wait 60 \
+            --snakefile "${BASE_DIR}/Snakefile" \
+            --directory "${FEATURES_DIR}" \
+            "$AGGREGATION_OUTPUT"
+
+        if [ $? -eq 0 ]; then
+            echo "Aggregation completed successfully for SIM_NUMBER=${SIM_NUMBER}"
+        else
+            echo "Aggregation failed for SIM_NUMBER=${SIM_NUMBER}"
+            continue
+        fi
+    fi
+done

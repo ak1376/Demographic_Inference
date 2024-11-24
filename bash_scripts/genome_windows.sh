@@ -1,18 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=batched_genome_windows
-#SBATCH --array=0-9999           
+#SBATCH --array=0-4999           
 #SBATCH --output=logs/genome_windows_%A_%a.out
 #SBATCH --error=logs/genome_windows_%A_%a.err
-#SBATCH --time=5:00:00
+#SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=128G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
 # Define the batch size
-BATCH_SIZE=1
-TOTAL_TASKS=10000
+BATCH_SIZE=100
+TOTAL_TASKS=500000
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -76,6 +76,7 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory "$WINDOW_DIR" \
         --rerun-incomplete \
+        --latency-wait 120 \
         "${WINDOW_DIR}/samples.txt" \
         "${WINDOW_DIR}/flat_map.txt" \
         "${WINDOW_DIR}/individual_file_metadata.txt" \

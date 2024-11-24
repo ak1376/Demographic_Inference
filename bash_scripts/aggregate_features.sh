@@ -4,7 +4,7 @@
 #SBATCH --error=logs/aggregate_features_%j.err
 #SBATCH --time=2:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --partition=kern,preempt
 #SBATCH --account=kernlab
 

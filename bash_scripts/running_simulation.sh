@@ -1,18 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=sim_job_array                # Job name
-#SBATCH --array=0-99                             # Array range (adjust based on the number of tasks and batch size)
+#SBATCH --array=0-4999                             # Array range (adjust based on the number of tasks and batch size)
 #SBATCH --output=logs/simulation_%A_%a.out      # Standard output log file (%A is job ID, %a is the array index)
 #SBATCH --error=logs/simulation_%A_%a.err       # Standard error log file
-#SBATCH --time=10:00:00                          # Time limit
+#SBATCH --time=18:00:00                          # Time limit
 #SBATCH --cpus-per-task=8                       # Number of CPU cores per task
-#SBATCH --mem=8G                                # Memory per task
+#SBATCH --mem=64G                                # Memory per task
 #SBATCH --partition=kern,preempt,kerngpu        # Partitions to submit the job to
 #SBATCH --account=kernlab                       # Account to use
 #SBATCH --requeue                               # Requeue on preemption
 
 # Define batch size and total number of tasks
 BATCH_SIZE=1
-TOTAL_TASKS=100
+TOTAL_TASKS=5000
 
 # Set up the simulation directory and other variables
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'

@@ -2,7 +2,7 @@
 #SBATCH --job-name=main_pipeline
 #SBATCH --output=logs/pipeline_main.out
 #SBATCH --error=logs/pipeline_main.err
-#SBATCH --time=10:00:00  # Increase overall time for the pipeline
+#SBATCH --time=72:00:00  # Increase overall time for the pipeline
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
