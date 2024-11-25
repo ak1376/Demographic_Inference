@@ -1,18 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=batched_genome_windows
-#SBATCH --array=0-99           
+#SBATCH --array=0-4999           
 #SBATCH --output=logs/genome_windows_%A_%a.out
 #SBATCH --error=logs/genome_windows_%A_%a.err
-#SBATCH --time=36:00:00
+#SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
-# Define batch parameters
-BATCH_SIZE=20
-TOTAL_TASKS=2000
+# Define the batch size
+BATCH_SIZE=100
+TOTAL_TASKS=500000
 
 # Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -60,37 +60,54 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
     SIM_NUMBER=$((TASK_ID / NUM_WINDOWS))
     WINDOW_NUMBER=$((TASK_ID % NUM_WINDOWS))
 
-    mkdir -p sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/
+    # Define the directory path and create it if necessary
+    SIM_DIR="/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}"
+    WINDOW_DIR="${SIM_DIR}/window_${WINDOW_NUMBER}"
+    mkdir -p "$WINDOW_DIR"
     
-    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER"
-
-    # Navigate to the directory, with error checking
-    cd sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/ || { echo "Failed to change directory"; exit 1; }
-    echo "Directory we just CD-ed into: sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/"
-
+    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER in $WINDOW_DIR"
 
     # Set PYTHONPATH and Python script path explicitly
     export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference
-    PYTHON_SCRIPT="/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_genome_vcfs.py"
 
-    # Run Snakemake with explicit Python script path
+    # Run Snakemake from the window directory
+    pushd "$WINDOW_DIR" || { echo "Failed to change directory to $WINDOW_DIR"; exit 1; }
     snakemake \
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
-        --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
+        --directory "$WINDOW_DIR" \
         --rerun-incomplete \
-        --nolock \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/samples.txt" \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/flat_map.txt" \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/individual_file_metadata.txt" \
-        "sampled_genome_windows/sim_${SIM_NUMBER}/window_${WINDOW_NUMBER}/window.${WINDOW_NUMBER}.vcf.gz"  # Add this line
+        --latency-wait 120 \
+        "${WINDOW_DIR}/samples.txt" \
+        "${WINDOW_DIR}/flat_map.txt" \
+        "${WINDOW_DIR}/individual_file_metadata.txt" \
+        "${WINDOW_DIR}/window.${WINDOW_NUMBER}.vcf.gz"
+
+    if [ $? -eq 0 ]; then
+        echo "Snakemake completed successfully for sim ${SIM_NUMBER}, window ${WINDOW_NUMBER}"
+    else
+        echo "Snakemake failed for sim ${SIM_NUMBER}, window ${WINDOW_NUMBER}"
+        popd
+        exit 1
+    fi
+    popd || { echo "Failed to return to previous directory"; exit 1; }
 
     # If this is the last window for a simulation, run combine_metadata
     if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
         echo "Running combine_metadata for simulation ${SIM_NUMBER}"
+        pushd "$SIM_DIR" || { echo "Failed to change directory to $SIM_DIR"; exit 1; }
         snakemake \
+            --nolock \
             --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
+            --directory "$SIM_DIR" \
+            --shadow-prefix "$SIM_DIR/.snakemake" \
             --rerun-incomplete \
-            "sampled_genome_windows/sim_${SIM_NUMBER}/metadata.txt"
+            "${SIM_DIR}/metadata.txt"
+        if [ $? -ne 0 ]; then
+            echo "Failed to run combine_metadata for simulation ${SIM_NUMBER}"
+            popd
+            exit 1
+        fi
+        popd || { echo "Failed to return to previous directory"; exit 1; }
     fi
 done
 

@@ -17,10 +17,4 @@ sampled_genome_windows/
 simulated_parameters_and_inferences/
 combined_LD_inferences/
 final_LD_inferences/
-sim_540/
-software_inferences_sim_0.pkl
 moments_dadi_features/
-software_inferences_sim_5.pkl
-ts_sim_2.trees
-ts_sim_540.trees
-SFS_sim_540.pkl

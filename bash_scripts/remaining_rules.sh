@@ -2,11 +2,12 @@
 #SBATCH --job-name=remaining_rules      
 #SBATCH --output=logs/remaining_rules_%j.out  
 #SBATCH --error=logs/remaining_rules_%j.err   
-#SBATCH --time=01:00:00                 
+#SBATCH --time=05:00:00                 
 #SBATCH --cpus-per-task=4               
-#SBATCH --mem=16G                       
-#SBATCH --partition=kern,kerngpu 
-#SBATCH --account=kernlab               
+#SBATCH --mem=32G                       
+#SBATCH --partition=kern,preempt,kerngpu
+#SBATCH --account=kernlab
+#SBATCH --requeue     
 
 # Set config file paths
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
@@ -67,7 +68,6 @@ module list
 snakemake \
     --snakefile /gpfs/projects/kernlab/akapoor/Demographic_Inference/Snakefile \
     --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
-    --nolock \
     --rerun-incomplete \
     "${SIM_DIRECTORY}/postprocessing_results.pkl" \
     "${SIM_DIRECTORY}/features_and_targets.pkl" \

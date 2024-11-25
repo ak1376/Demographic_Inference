@@ -15,7 +15,7 @@ def main(tree_sequence_file, experiment_config_filepath, genome_sim_directory, w
         experiment_config = json.load(f)
 
     # Simulate process and save windows as VCF files
-    directory_for_windows = f"{genome_sim_directory}/sim_{sim_number}"
+    directory_for_windows = f"/projects/kernlab/akapoor/Demographic_Inference/{genome_sim_directory}/sim_{sim_number}"
 
     Processor.run_msprime_replicates(ts, experiment_config, window_number, directory_for_windows)
     Processor.write_samples_and_rec_map(experiment_config, window_number = window_number, folderpath=directory_for_windows)

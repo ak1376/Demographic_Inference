@@ -178,20 +178,17 @@ def run_inference_moments(
     """
     This should do the parameter inference for moments
     """
-
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
     if demographic_model == "bottleneck_model":
         model_func = moments.Demographics1D.three_epoch
-
     elif demographic_model == "split_isolation_model":
         model_func = demographic_models.split_isolation_model_moments
-
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    opt_params, ll =opt(
+    opt_params, ll = opt(
         p_guess,
         sfs,
         model_func,
@@ -200,17 +197,19 @@ def run_inference_moments(
         log_opt=True, 
         algorithm=nlopt.LN_BOBYQA,
         maxeval=10
-    ) # I don't want the log likelihood. 
+    )
 
     print(f"OPT MOMENTS PARAMETER: {opt_params}")
 
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
-
     N_ref = opt_theta / (4 * mutation_rate * length)
 
-    if use_FIM:
+    # Initialize opt_params_dict and upper_triangular outside the if/else blocks
+    opt_params_dict = {}
+    upper_triangular = None
 
+    if use_FIM:
         # Let's extract the hessian
         H = _get_godambe(
             model_func,
@@ -222,51 +221,40 @@ def run_inference_moments(
             just_hess=True,
         )
         FIM = -1 * H
-
         # Get the indices of the upper triangular part (including the diagonal)
         upper_tri_indices = np.triu_indices(FIM.shape[0])  # type: ignore
-
         # Extract the upper triangular elements
         upper_triangular = FIM[upper_tri_indices]  # type: ignore
 
+    # Create the opt_params_dict regardless of use_FIM value
+    if demographic_model == "bottleneck_model":
+        opt_params_dict = {
+            "N0": N_ref,
+            "Nb": opt_params[0] * N_ref,
+            "N_recover": opt_params[1] * N_ref,
+            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
+            "t_bottleneck_end": opt_params[2] * 2 * N_ref,
+            "upper_triangular_FIM": upper_triangular,
+            "ll": ll
+        }
+    elif demographic_model == "split_isolation_model":
+        opt_params_dict = {
+            "Na": N_ref,
+            "N1": opt_params[0]*N_ref,
+            "N2": opt_params[1]*N_ref,
+            "t_split": opt_params[2]*2*N_ref,
+            "m": opt_params[3]*2*N_ref,
+            "upper_triangular_FIM": upper_triangular,
+            "ll": ll
+        }
     else:
-        upper_triangular = None
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-        opt_params_dict = {}
+    if opt_params_dict["upper_triangular_FIM"] is None:
+        del opt_params_dict["upper_triangular_FIM"]
 
-        if demographic_model == "bottleneck_model":
-
-            opt_params_dict = {
-                "N0": N_ref,
-                "Nb": opt_params[0] * N_ref,
-                "N_recover": opt_params[1] * N_ref,
-                "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref, # type: ignore
-                "t_bottleneck_end": opt_params[2] * 2 * N_ref, # type: ignore
-                "upper_triangular_FIM": upper_triangular,
-                "ll": ll
-            }
-
-        elif demographic_model == "split_isolation_model":
-            opt_params_dict = {
-                "Na": N_ref,
-                "N1": opt_params[0]*N_ref,
-                "N2": opt_params[1]*N_ref,
-                "t_split": opt_params[2]*2*N_ref,
-                "m": opt_params[3]*2*N_ref,
-                "upper_triangular_FIM": upper_triangular,
-                "ll": ll
-            }
-
-        else:
-            raise ValueError(f"Unsupported demographic model: {demographic_model}")
-
-        if opt_params_dict["upper_triangular_FIM"] is None:
-            del opt_params_dict["upper_triangular_FIM"]
-
-        model = model * opt_theta
-
-    # print(f'Log Likelihood Values for Moments: {ll_list}')
-    return model, opt_theta, opt_params
+    model = model * opt_theta
+    return model, opt_theta, opt_params_dict
 
 def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
     """

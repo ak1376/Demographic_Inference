@@ -8,7 +8,6 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
     '''
     Aggregates the software and momentsLD inferences for each simulation, ensuring training and validation data are kept separate.
     '''
-    
     # Load the experiment configuration
     with open(experiment_config_file, "r") as f:
         experiment_config = json.load(f)
@@ -23,26 +22,35 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
         stage: {} for stage in ["training", "validation"]
     }
 
-    # Split the inference file list into software and momentsLD inferences
-    # Assuming that the first half is software_inferences and the second half is momentsLD_inferences
-    num_sims = experiment_config["num_sims_pretrain"]
-    software_inferences = inferences_file_list[:num_sims]
-    momentsLD_inferences = inferences_file_list[num_sims:]
+    print(f'INFERENCE FILES LIST LENGTH: {len(inferences_file_list)}')
+
+    # Separate files based on their filenames
+    software_inferences = [f for f in inferences_file_list if "software_inferences" in f]
+    momentsLD_inferences = [f for f in inferences_file_list if "momentsLD_inferences" in f]
+
+    print("=============================================================")
+    print(f'Number of files in the Moments/Dadi List: {len(software_inferences)}')
+    print(f'Number of files in the MomentsLD List: {len(momentsLD_inferences)}')
+    print("=============================================================")
+
+    # Validate the number of files
+    if len(software_inferences) != experiment_config["num_sims_pretrain"]:
+        raise ValueError(f"Expected {experiment_config['num_sims_pretrain']} software_inferences files, but found {len(software_inferences)}")
+    if len(momentsLD_inferences) != experiment_config["num_sims_pretrain"]:
+        raise ValueError(f"Expected {experiment_config['num_sims_pretrain']} momentsLD_inferences files, but found {len(momentsLD_inferences)}")
 
     # Separate loop to process each stage (training/validation)
     for stage, indices in [
         ("training", training_indices),
         ("validation", validation_indices)
     ]:
-        
-        print(f'Indices for Stage: {stage} are: {indices}')
-        
         # Step 1: Initialize lists to hold simulation data
         all_simulations_data = []   # Inferred parameters
         all_targets_data = []       # Simulated parameters (targets)
 
         # Step 2: Dynamically extract and append data for each analysis type
         for idx in indices:
+            print(f'Stage: {stage}, Index: {idx}')
             sim_data = {}  # Dictionary to hold inferred parameters for each simulation
             target_data = {}  # Dictionary to hold target parameters for each simulation
 
