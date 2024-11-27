@@ -11,135 +11,108 @@ import numpy as np
 import pickle
 from scipy.stats import zscore
 import json
+import pandas as pd
 
 
 def postprocessing(experiment_config, training_features, training_targets, validation_features, validation_targets):
 
-    # Load in the training features, training targets, validation features, and validation targets
+    # Load data and config
+    training_features = pd.read_csv(training_features, index_col=0)
+    validation_features = pd.read_csv(validation_features, index_col=0)
+    training_targets = pd.read_csv(training_targets, index_col=0)
+    validation_targets = pd.read_csv(validation_targets, index_col=0)
 
-    training_features = np.load(training_features)
-    validation_features = np.load(validation_features)
-    training_targets = np.load(training_targets)
-    validation_targets = np.load(validation_targets)
-
-    # Load in the experiment config json 
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
 
-
-    # Postprocessing dict has the features in a way that we can directly input into the ML model
-    # Preprocessing dict has all the features unshaped and organized so we can do plotting and RMSE calculations
-
-    postprocessing_dict = {}
-
-    features_dict = {
-        'training': training_features,
-        'validation': validation_features
+    postprocessing_dict = {
+        'parameter_names': training_features.columns.tolist(),
+        'target_names': training_targets.columns.tolist()
     }
 
-    targets_dict = {
-        'training': training_targets,
-        'validation': validation_targets,
-    }
+    features_dict = {'training': training_features, 'validation': validation_features}
+    targets_dict = {'training': training_targets, 'validation': validation_targets}
+
+    # Define parameters to process
+    param_types = ['Na', 'N1', 'N2', 't_split', 'm']
 
     for stage in ['training', 'validation']:
-        
         features = features_dict[stage]
         targets = targets_dict[stage]
+        outliers_imputed = None
+        
 
-        print("=====================================================================================================")
-        print(f'Stage: {stage}, Maximum Target Value: {np.max(targets)}, Minimum Target Value: {np.min(targets)}')
-        print(f'Shape of Targets: {targets.shape}')
-        print("=====================================================================================================")
+        print(f"\nProcessing {stage} data:")
 
-        if experiment_config['remove_outliers'] == True:
-            # Remove outliers
-            
-            print("===> Removing outliers and imputing with median values.")
+        if experiment_config['remove_outliers']:
+            for param in param_types:
+                # Get bounds
+                lower_bound = experiment_config['lower_bound_params'].get(param)
+                upper_bound = experiment_config['upper_bound_params'].get(param)
 
-            # NOW LET'S DO OUTLIER REMOVAL AND MEDIAN IMPUTATION. 
-            reshaped = features.copy()
-            # Step 2: Calculate Z-scores for the entire array
-            z_scores = np.abs(zscore(features, axis=0))
-            # Define the threshold for outliers (Grubbs test Z-score = 3)
-            threshold = 3
-            outliers = z_scores > threshold
+                if lower_bound is None or upper_bound is None:
+                    continue
 
-            print(f"Number of outliers: {np.sum(outliers)}")
+                # Find all columns ending with this parameter
+                param_cols = [col for col in features.columns if col.endswith('_' + param)]
+                
+                for col in param_cols:
+                    # Identify outliers
+                    outlier_mask = (features[col] < lower_bound) | (features[col] > upper_bound)
+                    valid_mask = ~outlier_mask
 
-            # Step 3: Replace outliers with the median of the non-outlier values
-            # Compute the median of the values that are not outliers
-            median_value = np.median(reshaped[~outliers])
+                    if outlier_mask.any():
+                        # Use median of valid values only
+                        valid_median = features.loc[valid_mask, col].median() #type:ignore
+                        features.loc[outlier_mask, col] = valid_median
+                        # print(f"{col}: Replaced {outlier_mask.sum()} outliers. New range: [{features[col].min():.3f}, {features[col].max():.3f}]")
 
-            # Replace outliers with the median
-            reshaped[outliers] = median_value
+            outliers_imputed = features.copy()
 
-            features = reshaped.copy()
-
-        normalized_features = []
-
-        if experiment_config['normalization'] == True:
+        if experiment_config['normalization']:
             print("===> Normalizing the data.")
             
-            # Extract upper bound values based on the keys in 'parameters_to_estimate'
-            upper_bound_values = np.array([experiment_config['upper_bound_params'][key] for key in experiment_config['parameter_names']])
+            # Normalize targets column by column using corresponding bounds
+            normalized_targets = targets.copy()
+            for param in experiment_config['parameter_names']:
+                lower_bound = experiment_config['lower_bound_params'][param]
+                upper_bound = experiment_config['upper_bound_params'][param]
+                mean = 0.5 * (upper_bound + lower_bound)
+                std = (upper_bound - lower_bound) / np.sqrt(12)
+                target_col = f'simulated_params_{param}'
+                normalized_targets[target_col] = (targets[target_col] - mean) / std
+            
+            # Normalize parameter features using same bounds
+            features_copy = features.copy()
+            for param in ['Na', 'N1', 'N2', 't_split', 'm']:
+                param_cols = [col for col in features.columns if col.endswith('_' + param)]
+                lower_bound = experiment_config['lower_bound_params'][param]
+                upper_bound = experiment_config['upper_bound_params'][param]
+                mean = 0.5 * (upper_bound + lower_bound)
+                std = (upper_bound - lower_bound) / np.sqrt(12)
+                
+                for col in param_cols:
+                    features_copy[col] = (features[col] - mean) / std
 
-            # Extract lower bound values based on the keys in 'parameters_to_estimate'
-            lower_bound_values = np.array([experiment_config['lower_bound_params'][key] for key in experiment_config['parameter_names']])
+            postprocessing_dict[stage] = { #type:ignore
+                "normalization": experiment_config['normalization'],
+                "predictions": outliers_imputed if outliers_imputed is not None else features_dict[stage],
+                "normalized_predictions": features_copy,
+                "targets": targets,
+                "normalized_targets": normalized_targets
+            }
+            
+        else:
+            postprocessing_dict[stage] = { #type:ignore
+                "normalization": experiment_config['normalization'],
+                "predictions": outliers_imputed if outliers_imputed is not None else features_dict[stage],
+                "normalized_predictions": None,
+                "targets": targets,
+                "normalized_targets": None
+            }
 
-            # Calculate mean and standard deviation vectors
-            mean_vector = 0.5 * (upper_bound_values + lower_bound_values)
-            std_vector = (upper_bound_values - lower_bound_values) / np.sqrt(12)  # Correct std deviation for uniform distribution
-
-            # Normalize the targets
-            normalized_targets = (targets - mean_vector) / (std_vector)
-            print(f'Targets shape: {normalized_targets.shape}')
-            print(f'Maximum value of normalized targets: {np.max(normalized_targets)}')
-            print(f'Minimum value of normalized targets: {np.min(normalized_targets)}')
-
-            # Check for zero values in the normalized targets
-            zero_target_indices = np.where(normalized_targets == 0)
-            if zero_target_indices[0].size > 0:  # If any zero values are found
-                print("Warning: Zero values found in the normalized targets!")
-                # Extract raw target values where normalized target values are 0
-                raw_target_values = targets[zero_target_indices]
-                print("Raw target values corresponding to zero normalized targets:", raw_target_values)
-
-                # Add 1 to the normalized targets that are zero
-                normalized_targets[zero_target_indices] += 1
-                print("Added 1 to zero normalized target values.")
-            else:
-                print("No zero values found in the normalized targets.")
-
-            targets = normalized_targets.copy()
-
-            # NORMALIZE THE FEATURES TOO (FOR THE PREPROCESSING PLOTTING)
-            mean_vector = np.mean(features, axis=0)
-            std_vector = np.std(features, axis=0)
-
-            normalized_features = (features - mean_vector) / (std_vector)
-
-            # Check for zero values in the normalized features
-            zero_feature_indices = np.where(normalized_features == 0)
-            if zero_feature_indices[0].size > 0:  # If any zero values are found
-                print("Warning: Zero values found in the normalized features!")
-                # Extract raw feature values where normalized feature values are 0
-                raw_feature_values = features[zero_feature_indices]
-                print("Raw feature values corresponding to zero normalized features:", raw_feature_values)
-            else:
-                print("No zero values found in the normalized features.")  
-
-
-            targets = targets.reshape(targets.shape[0], -1)
-
-        postprocessing_dict[stage] = {
-            "normalization": experiment_config['normalization'],
-            'predictions': features,
-            "normalized_predictions": normalized_features,
-            'targets': targets,
-        }
-    
     return postprocessing_dict
+
 
 if __name__ == "__main__":
     import argparse
@@ -160,7 +133,7 @@ if __name__ == "__main__":
     with open(f'{args.sim_directory}/postprocessing_results.pkl', "wb") as f:
         pickle.dump(postprocessing_dict, f)
 
-    print(f"Postprocessing dict keys: {postprocessing_dict['training'].keys()}")
+    print(f"Postprocessing dict keys: {postprocessing_dict['training'].keys()}") #type:ignore
 
     print("Postprocessing complete!")
 
