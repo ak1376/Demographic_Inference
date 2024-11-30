@@ -6,7 +6,7 @@ import argparse
 from src.preprocess import Processor
 import tskit
 import json
-
+import os 
 def main(tree_sequence_file, experiment_config_filepath, genome_sim_directory, window_number, sim_number):
 
     ts = tskit.load(tree_sequence_file)
@@ -16,6 +16,7 @@ def main(tree_sequence_file, experiment_config_filepath, genome_sim_directory, w
 
     # Simulate process and save windows as VCF files
     directory_for_windows = f"/projects/kernlab/akapoor/Demographic_Inference/{genome_sim_directory}/sim_{sim_number}"
+    os.makedirs(directory_for_windows, exist_ok=True)
 
     Processor.run_msprime_replicates(ts, experiment_config, window_number, directory_for_windows)
     Processor.write_samples_and_rec_map(experiment_config, window_number = window_number, folderpath=directory_for_windows)

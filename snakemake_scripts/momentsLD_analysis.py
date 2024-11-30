@@ -9,7 +9,6 @@ from tqdm import tqdm
 from src.parameter_inference import run_inference_momentsLD
 import moments
 
-
 def cleanup_files(sim_directory, sim_number):
     """Clean up simulation-related files for a given simulation number."""
     simulation_results_directory = (
@@ -22,8 +21,7 @@ def cleanup_files(sim_directory, sim_number):
         f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl",
         f"{simulation_results_directory}/ts_sim_{sim_number}.trees",
         f"{simulation_results_directory}/sampled_params_{sim_number}.pkl",
-        f"{simulation_results_directory}/sampled_params_metadata_{sim_number}.txt",
-        f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"
+        f"{simulation_results_directory}/sampled_params_metadata_{sim_number}.txt"
     ]
 
     # Delete individual files
@@ -41,6 +39,12 @@ def cleanup_files(sim_directory, sim_number):
     else:
         print(f"Genome windows directory not found: {genome_windows_directory}")
 
+    # Delete the LD stats directory 
+    if os.path.exists(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"):
+        shutil.rmtree(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
+        print(f"Deleted LD inferences directory: {f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"}")
+    else:
+        print(f"LD inferences directory not found: {f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"}")
 
 def resimulate(sim_number, sim_directory, experiment_config_filepath):
     """Rerun simulation and regenerate genome windows."""
@@ -65,6 +69,7 @@ def resimulate(sim_number, sim_directory, experiment_config_filepath):
         experiment_config = json.load(f)
 
     print(f"Regenerating genome windows for simulation {sim_number}...")
+
     for window_number in range(experiment_config["num_windows"]):
         regenerate_window_command = [
             "python",
