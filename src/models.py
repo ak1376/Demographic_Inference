@@ -27,7 +27,7 @@ class LinearReg:
         """
         # Train the model on the training data
 
-        training_features = self.training_features.reshape(self.training_features.shape[0], -1)
+        # training_features = self.training_features.reshape(self.training_features.shape[0], -1)
 
         self.model.fit(self.training_features, self.training_targets)
 
@@ -170,10 +170,14 @@ class ShallowNN(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.dropout_rate = dropout_rate
-
-        # Initialize lists to store epoch losses
+        
+        # Initialize lists for storing losses
         self.train_losses_per_epoch = []
         self.val_losses_per_epoch = []
+        self.automatic_optimization = True  # Ensure automatic optimization is enabled
+        # Save hyperparameters so they're available after distributed training
+        self.save_hyperparameters()
+
 
         layers = []
 
@@ -202,6 +206,10 @@ class ShallowNN(pl.LightningModule):
         # Combine the layers into a sequential container
         self.network = nn.Sequential(*layers)
 
+        # Count number of trainable parameters
+        self.num_params = sum(p.numel() for p in self.network.parameters() if p.requires_grad)
+
+
         # Loss function
         self.criterion = nn.MSELoss()
 
@@ -212,55 +220,33 @@ class ShallowNN(pl.LightningModule):
         X, y = batch
         preds = self(X)
         loss = self.criterion(preds, y)
-
-        # Log the training loss per batch without adding to progress bar
-        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
-
+        self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 
+    
     def validation_step(self, batch, batch_idx):
         X, y = batch
         preds = self(X)
         val_loss = self.criterion(preds, y)
-
-        # Log the validation loss per batch without adding to progress bar
-        self.log('val_loss', val_loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
-
+        self.log("val_loss", val_loss, prog_bar=True, on_step=False, on_epoch=True)
         return val_loss
+    
+    def on_train_epoch_end(self):
+        # Get loss from trainer and ensure it's synced across processes
+        train_loss = self.trainer.callback_metrics.get("train_loss")
+        if train_loss is not None and self.trainer.is_global_zero:
+            self.train_losses_per_epoch.append(train_loss.item())
+            # Save to state dict to persist across processes
+            self.trainer.strategy.barrier()
 
     def on_validation_epoch_end(self):
-        # Retrieve the average training loss for the epoch
-        avg_train_loss = self.trainer.callback_metrics.get('train_loss', None)
-        # Retrieve the average validation loss for the epoch
-        avg_val_loss = self.trainer.callback_metrics.get('val_loss', None)
-
-        # Log the training loss to the progress bar first
-        if avg_train_loss is not None:
-            self.log('train_loss_epoch', avg_train_loss, prog_bar=True, logger=False, sync_dist=True)
-
-        # Then log the validation loss to the progress bar
-        if avg_val_loss is not None:
-            self.log('val_loss_epoch', avg_val_loss, prog_bar=True, logger=False, sync_dist=True)
-
-        # Update your own lists if needed
-        if avg_train_loss is not None:
-            self.train_losses_per_epoch.append(avg_train_loss.item())
-        if avg_val_loss is not None:
-            self.val_losses_per_epoch.append(avg_val_loss.item())
-
-        # Print losses if you wish
-        # current_epoch = self.trainer.current_epoch
-        # if avg_train_loss is not None and avg_val_loss is not None:
-        #     print(f"Epoch {current_epoch}: Train Loss: {avg_train_loss:.4f} | Validation Loss: {avg_val_loss:.4f}")
-        # elif avg_val_loss is not None:
-        #     print(f"Epoch {current_epoch}: Validation Loss: {avg_val_loss:.4f}")
-        # else:
-        #     print(f"Epoch {current_epoch}: No losses logged yet.")
+        val_loss = self.trainer.callback_metrics.get("val_loss")
+        if val_loss is not None and self.trainer.is_global_zero:
+            self.val_losses_per_epoch.append(val_loss.item())
+            self.trainer.strategy.barrier()
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        # scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
-        # Return both optimizer and scheduler
         return optimizer
     
     def predict_from_trained_network(self, X, eval_mode=False):

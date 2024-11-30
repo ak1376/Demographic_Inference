@@ -14,7 +14,7 @@ def visualizing_results(
         stages = ["training", "validation", "testing"]
 
     params = linear_mdl_obj['param_names']
-    num_params = len(params)
+    num_params = linear_mdl_obj['training']['targets'].shape[1]
 
     rows = math.ceil(math.sqrt(num_params))
     cols = math.ceil(num_params / rows)
@@ -98,7 +98,7 @@ def calculate_model_errors(model_obj, model_name, datasets):
     errors = {}
 
     for dataset in datasets:
-        errors[dataset] = root_mean_squared_error(
+        errors[dataset] = mean_squared_error(
             model_obj[dataset]["targets"],
             model_obj[dataset][
                 "predictions"]
@@ -123,6 +123,12 @@ def root_mean_squared_error(y_true, y_pred):
     # Ensure y_true and y_pred have the same shape
     assert y_true.shape == y_pred.shape, "Shapes of y_true and y_pred must match"
 
+    print(f'Maximum Value for y_true: {y_true.max()}')
+    print(f'Maximum Value for y_pred: {y_pred.max()}')
+
+    print(f'Minimum Value for y_true: {y_true.min()}')
+    print(f'Minimum Value for y_pred: {y_pred.min()}')
+
     # Compute relative error for all rows at once
     relative_error = (y_pred - y_true) / y_true
     squared_relative_error = np.square(relative_error)
@@ -132,6 +138,38 @@ def root_mean_squared_error(y_true, y_pred):
 
     # Return the average RRMSE across rows
     return np.mean(rrmse_per_row)
+
+def mean_squared_error(y_true, y_pred):
+    """
+    Compute the mean squared error (MSE) for each row and average the results.
+    This version uses vectorized NumPy operations for efficiency.
+
+    Parameters:
+    y_true (np.ndarray): Ground truth values (2D array, with rows representing different samples).
+    y_pred (np.ndarray): Predicted values (2D array, with rows representing different samples).
+
+    Returns:
+    tuple: (MSE for each row as a 1D array, average MSE across all rows).
+    """
+
+    # Ensure y_true and y_pred have the same shape
+    assert y_true.shape == y_pred.shape, "Shapes of y_true and y_pred must match"
+
+    print(f'Maximum Value for y_true: {y_true.max()}')
+    print(f'Maximum Value for y_pred: {y_pred.max()}')
+
+    print(f'Minimum Value for y_true: {y_true.min()}')
+    print(f'Minimum Value for y_pred: {y_pred.min()}')
+
+    # Compute squared error for all rows at once
+    squared_error = np.square(y_pred - y_true)
+
+    # Compute MSE for each row by averaging squared errors along columns (axis=1)
+    mse_per_row = np.mean(squared_error, axis=1)
+    print(mse_per_row)
+
+    # Return the MSE for each row and the average MSE across rows
+    return np.mean(mse_per_row)
 
 def save_windows_to_vcf(windows, prefix="window"):
     """

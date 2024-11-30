@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import torch
 from src.utils import visualizing_results, calculate_model_errors
 from pytorch_lightning.loggers import TensorBoardLogger
-
+import matplotlib.pyplot as plt
 
 class MLPTrainer:
     def __init__(
@@ -51,28 +51,30 @@ class MLPTrainer:
         # Set up the logger
         logger = TensorBoardLogger("tb_logs", name="my_model")
 
-        # Instantiate the PyTorch Lightning Trainer
         trainer = Trainer(
-            logger=logger,
+            logger=True,
             max_epochs=self.model_config["neural_net_hyperparameters"]["num_epochs"],
             callbacks=callbacks,
-            # log_every_n_steps=10,
             accelerator="gpu" if torch.cuda.is_available() else "cpu",
-            # enable_progress_bar=True,
-            enable_checkpointing=True,
-            devices = 3
+            devices=1,  # Changed from 3 to 1
+            enable_progress_bar=True,
+            enable_model_summary=True
         )
-
-        # Train the model
         trainer.fit(model, train_loader, val_loader)
 
-        # Store batch losses
-        self.train_losses_per_epoch = model.train_losses_per_epoch
-        self.val_losses_per_epoch = model.val_losses_per_epoch
+        # Gather losses from the main process
+        if trainer.is_global_zero:
+            train_losses = model.train_losses_per_epoch
+            val_losses = model.val_losses_per_epoch
+        else:
+            train_losses = []
+            val_losses = []
 
-        model.num_params = len(self.param_names)
+        # Make sure to store the losses after training
+        train_losses = model.train_losses_per_epoch
+        val_losses = model.val_losses_per_epoch
 
-        return model, self.train_losses_per_epoch, self.val_losses_per_epoch
+        return model, train_losses, val_losses
 
     def predict(
         self,
@@ -83,7 +85,7 @@ class MLPTrainer:
         validation_targets,
         visualize=True,
     ):
-        # Convert data to tensors
+        # Convert data to tensors 
         training_features = torch.tensor(training_data, dtype=torch.float32)
         validation_features = torch.tensor(validation_data, dtype=torch.float32)
 

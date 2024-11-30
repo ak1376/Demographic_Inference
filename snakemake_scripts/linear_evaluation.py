@@ -1,13 +1,13 @@
 import pickle 
 import joblib
 import json
-from src.utils import visualizing_results, root_mean_squared_error
+from src.utils import visualizing_results, mean_squared_error
 from src.models import LinearReg
 
-def linear_evaluation(features_and_targets_filepath, model_directory, experiment_config_path, color_shades_path, main_colors_path):
+def linear_evaluation(features_and_targets_filepath, model_directory, model_config_path, color_shades_path, main_colors_path):
     
     features_and_targets = pickle.load(open(features_and_targets_filepath, "rb"))
-    experiment_config = json.load(open(experiment_config_path, "r"))
+    model_config = json.load(open(model_config_path, "r"))
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
 
@@ -32,15 +32,15 @@ def linear_evaluation(features_and_targets_filepath, model_directory, experiment
         validation_predictions
     )
 
-    linear_mdl_obj["param_names"] = experiment_config['parameter_names']
+    linear_mdl_obj["param_names"] = model_config['neural_net_hyperparameters']['parameter_names']
 
     # Now calculate the linear model error
 
     rrmse_dict = {}
-    rrmse_dict["training"] = root_mean_squared_error(
+    rrmse_dict["training"] = mean_squared_error(
         y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
     )
-    rrmse_dict["validation"] = root_mean_squared_error(
+    rrmse_dict["validation"] = mean_squared_error(
         y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
     )
 
@@ -86,9 +86,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--experiment_config_filepath",
+        "--model_config_path",
         type=str,
-        help="Path to the experiment configuration file",
+        help="Path to the model configuration file",
     )
 
     parser.add_argument(
@@ -108,7 +108,7 @@ if __name__ == "__main__":
     linear_evaluation(
         features_and_targets_filepath=args.features_and_targets_filepath,
         model_directory=args.model_directory,
-        experiment_config_path=args.experiment_config_filepath,
+        model_config_path=args.model_config_path,
         color_shades_path=args.color_shades_file,
         main_colors_path=args.main_colors_file
     )
