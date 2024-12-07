@@ -155,11 +155,11 @@ def mean_squared_error(y_true, y_pred):
     # Ensure y_true and y_pred have the same shape
     assert y_true.shape == y_pred.shape, "Shapes of y_true and y_pred must match"
 
-    print(f'Maximum Value for y_true: {y_true.max()}')
-    print(f'Maximum Value for y_pred: {y_pred.max()}')
+    # print(f'Maximum Value for y_true: {y_true.max()}')
+    # print(f'Maximum Value for y_pred: {y_pred.max()}')
 
-    print(f'Minimum Value for y_true: {y_true.min()}')
-    print(f'Minimum Value for y_pred: {y_pred.min()}')
+    # print(f'Minimum Value for y_true: {y_true.min()}')
+    # print(f'Minimum Value for y_pred: {y_pred.min()}')
 
     # Compute squared error for all rows at once
     squared_error = np.square(y_pred - y_true)

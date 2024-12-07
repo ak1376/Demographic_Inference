@@ -119,7 +119,8 @@ def run_inference_dadi(
         lower_bound=lower_bound,
         upper_bound=upper_bound,
         algorithm=nlopt.LN_BOBYQA,
-        maxeval=10
+        maxeval=400,
+        verbose=20
     )
 
     print(f"OPT DADI PARAMETER: {opt_params}")
@@ -132,6 +133,7 @@ def run_inference_dadi(
     # opt_params_final_list = []
 
     model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
+
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
     N_ref = opt_theta / (4 * mutation_rate * length)
 
@@ -163,6 +165,8 @@ def run_inference_dadi(
 
     model = model * opt_theta
 
+    print(f'Model shape after scaling: {model.shape}')
+
     return model, opt_theta, opt_params_dict
 
 def run_inference_moments(
@@ -188,18 +192,32 @@ def run_inference_moments(
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    opt_params, ll = opt(
+    # opt_params, ll = opt(
+    #     p_guess,
+    #     sfs,
+    #     model_func,
+    #     lower_bound=lower_bound,
+    #     upper_bound=upper_bound,
+    #     log_opt=True, 
+    #     algorithm=nlopt.LN_BOBYQA,
+    #     maxeval=100
+    # )
+
+    xopt = moments.Inference.optimize_log_fmin(
         p_guess,
         sfs,
         model_func,
         lower_bound=lower_bound,
         upper_bound=upper_bound,
-        log_opt=True, 
-        algorithm=nlopt.LN_BOBYQA,
-        maxeval=10
+        verbose = 20,
+        full_output=True
     )
 
+    opt_params = xopt[0]
+    ll = xopt[1]
+
     print(f"OPT MOMENTS PARAMETER: {opt_params}")
+    print(f"LL: {ll}")
 
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)

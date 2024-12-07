@@ -42,9 +42,9 @@ def cleanup_files(sim_directory, sim_number):
     # Delete the LD stats directory 
     if os.path.exists(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"):
         shutil.rmtree(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
-        print(f"Deleted LD inferences directory: {f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"}")
+        print(f"Deleted LD inferences directory: /projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
     else:
-        print(f"LD inferences directory not found: {f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"}")
+        print(f"LD inferences directory not found: /projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
 
 def resimulate(sim_number, sim_directory, experiment_config_filepath):
     """Rerun simulation and regenerate genome windows."""
@@ -148,7 +148,7 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
     # Initial guess for optimization
     p_guess = experiment_config["optimization_initial_guess"].copy()
     p_guess.extend([10000])  # Extend with additional parameters if needed
-    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)
+    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) #type:ignore
 
     # Attempt optimization with a retry mechanism
     try:

@@ -68,7 +68,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate
                 p0= experiment_config['optimization_initial_guess'],
                 lower_bound= lower_bound,
                 upper_bound= upper_bound,
-                num_samples=20,
+                num_samples=100,
                 demographic_model=experiment_config['demographic_model'],
                 mutation_rate=experiment_config['mutation_rate'],
                 length=experiment_config['genome_length']
