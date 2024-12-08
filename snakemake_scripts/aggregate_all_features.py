@@ -8,6 +8,10 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
     '''
     Aggregates the software and momentsLD inferences for each simulation, ensuring training and validation data are kept separate.
     '''
+
+    # Set a random seed for reproducibility
+    np.random.seed(295)
+
     # Load the experiment configuration
     with open(experiment_config_file, "r") as f:
         experiment_config = json.load(f)
@@ -107,6 +111,7 @@ def main(experiment_config_file, sim_directory, inferences_file_list):
         # Store the DataFrames in the preprocessing object for later use
         preprocessing_results_obj[stage]["predictions"] = features_df
         preprocessing_results_obj[stage]["targets"] = targets_df
+        preprocessing_results_obj[stage]['indices'] = indices
         preprocessing_results_obj['parameter_names'] = list(targets_df.columns)  # type:ignore
 
         # Save DataFrames for each stage (training or validation)

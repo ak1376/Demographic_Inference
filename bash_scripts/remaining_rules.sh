@@ -70,7 +70,7 @@ snakemake \
     --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
     --rerun-incomplete \
     "${SIM_DIRECTORY}/postprocessing_results.pkl" \
-    "${SIM_DIRECTORY}/features_and_targets.pkl" \
-    "${MODEL_DIRECTORY}/linear_regression_model.pkl" \
-    "${MODEL_DIRECTORY}/snn_results.pkl" \
-    "${MODEL_DIRECTORY}/snn_model.pth"
+    "${SIM_DIRECTORY}/features_and_targets.pkl"
+    # "${MODEL_DIRECTORY}/linear_regression_model.pkl" \
+    # "${MODEL_DIRECTORY}/snn_results.pkl" \
+    # "${MODEL_DIRECTORY}/snn_model.pth"
