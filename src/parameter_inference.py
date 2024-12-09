@@ -203,7 +203,7 @@ def run_inference_moments(
     #     maxeval=100
     # )
 
-    xopt = moments.Inference.optimize_log_fmin(
+    xopt = moments.Inference.optimize_log_powell(
         p_guess,
         sfs,
         model_func,
