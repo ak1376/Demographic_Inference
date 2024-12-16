@@ -1,19 +1,19 @@
 {
     "upper_bound_params": {
-        "t_split": 5000,
-        "N1": 10000,
-        "N2": 10000,
-        "Na": 20000, 
+        "t_split": 20000,
+        "N1": 30000,
+        "N2": 30000,
+        "Na": 30000, 
         "m": 1e-4
     },
     "lower_bound_params": {
-        "t_split": 100,
-        "N1": 100,
-        "N2": 100,
-        "Na": 10000, 
+        "t_split": 500,
+        "N1": 1000,
+        "N2": 1000,
+        "Na": 1000, 
         "m": 1e-8
     },
-    "num_sims_pretrain": 5000,
+    "num_sims_pretrain": 1000,
     "num_sims_inference": 1,
     "num_samples": {
         "N1": 20,
@@ -60,7 +60,7 @@
         1e-4,
         1e-4,
         1e-4,
-        1e-12
+        0.01
     ],
     "upper_bound_optimization": [
         null,
