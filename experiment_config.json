@@ -13,7 +13,7 @@
         "Na": 1000, 
         "m": 1e-8
     },
-    "num_sims_pretrain": 5000,
+    "num_sims_pretrain": 1000,
     "num_sims_inference": 1,
     "num_samples": {
         "N1": 20,
@@ -60,7 +60,7 @@
         1e-4,
         1e-4,
         1e-4,
-        1e-4
+        0.01
     ],
     "upper_bound_optimization": [
         null,

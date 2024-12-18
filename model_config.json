@@ -1,23 +1,22 @@
 {
     "neural_net_hyperparameters": {
-        "input_size": 45,
-        "hidden_size": 1000,
-        "output_size": 5,
+        "input_size": 20,
+        "hidden_size": 10,
+        "output_size": 4,
         "num_epochs": 500,
         "learning_rate": 3e-4,
-        "num_layers": 3,
+        "num_layers": 2,
         "dropout_rate": 0,
         "weight_decay": 0,
-        "BatchNorm": true,
+        "BatchNorm": false,
         "EarlyStopping": false,
-        "batch_size": 35,
+        "batch_size": 64,
         "patience": 50,
         "parameter_names": [
             "Na",
             "N1",
             "N2",
-            "t_split", 
-            "m"
+            "t_split"
         ]
     }
 }
