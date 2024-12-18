@@ -56,7 +56,7 @@ rule all:
     input:
         f"{SIM_DIRECTORY}/postprocessing_results.pkl",
         f"{SIM_DIRECTORY}/features_and_targets.pkl",
-        f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
+        # f"{MODEL_DIRECTORY}/linear_regression_model.pkl",
         # f"{MODEL_DIRECTORY}/snn_results.pkl",
         # f"{MODEL_DIRECTORY}/snn_model.pth"
         # f"{MODEL_DIRECTORY}/xgb_model_obj.pkl",
@@ -167,7 +167,7 @@ rule calculate_LD_stats:
         PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference/ python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/ld_stats.py \
             --vcf_filepath "$vcf_filepath" \
             --pop_file_path {input.pop_file_path} \
-            --flat_map_file {input.flat_map_file} \
+            --flat_map_path {input.flat_map_file} \
             --sim_directory /projects/kernlab/akapoor/Demographic_Inference/LD_inferences \
             --sim_number {wildcards.sim_number} \
             --window_number {wildcards.window_number}
@@ -211,10 +211,6 @@ rule obtain_MomentsLD_feature:
 
 rule obtain_feature:
     input:
-        flat_map_files = lambda wildcards: [
-            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{wildcards.sim_number}/window_{i}/flat_map.txt"
-            for i in range(json.load(open(CONFIG_FILEPATH))["num_windows"])
-        ],
         sampled_params_pkl = rules.run_simulation.output.sampled_params_pkl,
         SFS = rules.run_simulation.output.sfs_file
     output:

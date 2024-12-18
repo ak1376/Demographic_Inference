@@ -5,25 +5,20 @@
 #SBATCH --error=logs/genome_windows_%A_%a.err
 #SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=128G
+#SBATCH --mem=256G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
-# Define the batch size
 BATCH_SIZE=100
 TOTAL_TASKS=500000
 
-# Start timer for the entire job
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     overall_start_time=$(date +%s)
     echo "Overall start time: $overall_start_time"
 fi
 
-# Extract config information
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
-
-# Extract values from JSON config
 DEMOGRAPHIC_MODEL=$(jq -r '.demographic_model' $EXPERIMENT_CONFIG_FILE)
 SEED=$(jq -r '.seed' $EXPERIMENT_CONFIG_FILE)
 NUM_SIMS_PRETRAIN=$(jq -r '.num_sims_pretrain' $EXPERIMENT_CONFIG_FILE)
@@ -40,7 +35,6 @@ fi
 SIM_DIRECTORY="${DEMOGRAPHIC_MODEL}_seed_${SEED}/sims/sims_pretrain_${NUM_SIMS_PRETRAIN}_sims_inference_${NUM_SIMS_INFERENCE}_seed_${SEED}_num_replicates_${K}_top_values_${TOP_VALUES_K}"
 echo "Sim directory: $SIM_DIRECTORY"
 
-# Calculate batch indices
 BATCH_START=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))
 BATCH_END=$(((SLURM_ARRAY_TASK_ID + 1) * BATCH_SIZE - 1))
 
@@ -49,34 +43,27 @@ if [ "$BATCH_END" -ge "$TOTAL_TASKS" ]; then
 fi
 
 mkdir -p logs
-
 current_dir=$(pwd)
 echo "Current Directory: ${current_dir}"
 
-# Process tasks in parallel
 for TASK_ID in $(seq $BATCH_START $BATCH_END); do
-
-    # Calculate sim_number and window_number
     SIM_NUMBER=$((TASK_ID / NUM_WINDOWS))
     WINDOW_NUMBER=$((TASK_ID % NUM_WINDOWS))
 
-    # Define the directory path and create it if necessary
     SIM_DIR="/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_${SIM_NUMBER}"
     WINDOW_DIR="${SIM_DIR}/window_${WINDOW_NUMBER}"
     mkdir -p "$WINDOW_DIR"
-    
-    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER in $WINDOW_DIR"
 
-    # Set PYTHONPATH and Python script path explicitly
+    echo "Processing sim_number: $SIM_NUMBER, window_number: $WINDOW_NUMBER in $WINDOW_DIR"
     export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference
 
-    # Run Snakemake from the window directory
     pushd "$WINDOW_DIR" || { echo "Failed to change directory to $WINDOW_DIR"; exit 1; }
     snakemake \
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory "$WINDOW_DIR" \
         --rerun-incomplete \
         --latency-wait 120 \
+        --nolock \
         "${WINDOW_DIR}/samples.txt" \
         "${WINDOW_DIR}/flat_map.txt" \
         "${WINDOW_DIR}/individual_file_metadata.txt" \
@@ -90,30 +77,14 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         exit 1
     fi
     popd || { echo "Failed to return to previous directory"; exit 1; }
-
-    # If this is the last window for a simulation, run combine_metadata
-    if [ "$WINDOW_NUMBER" -eq $((NUM_WINDOWS - 1)) ]; then
-        echo "Running combine_metadata for simulation ${SIM_NUMBER}"
-        pushd "$SIM_DIR" || { echo "Failed to change directory to $SIM_DIR"; exit 1; }
-        snakemake \
-            --nolock \
-            --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
-            --directory "$SIM_DIR" \
-            --shadow-prefix "$SIM_DIR/.snakemake" \
-            --rerun-incomplete \
-            "${SIM_DIR}/metadata.txt"
-        if [ $? -ne 0 ]; then
-            echo "Failed to run combine_metadata for simulation ${SIM_NUMBER}"
-            popd
-            exit 1
-        fi
-        popd || { echo "Failed to return to previous directory"; exit 1; }
-    fi
 done
 
 wait
 
-# Calculate total time if this is the last batch
+# After all array tasks complete (which means all windows are processed), 
+# run another separate job (not part of this array) to combine_metadata for each simulation.
+# This can be done in a separate script or by adding job dependencies in SLURM.
+
 TOTAL_BATCHES=$((TOTAL_TASKS / BATCH_SIZE + (TOTAL_TASKS % BATCH_SIZE > 0 ? 1 : 0)))
 if [ "$SLURM_ARRAY_TASK_ID" -eq $((TOTAL_BATCHES - 1)) ]; then
     overall_end_time=$(date +%s)

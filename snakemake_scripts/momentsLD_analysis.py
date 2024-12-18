@@ -9,7 +9,7 @@ from tqdm import tqdm
 from src.parameter_inference import run_inference_momentsLD
 import moments
 
-def cleanup_files(sim_directory, sim_number):
+def cleanup_files(sim_number):
     """Clean up simulation-related files for a given simulation number."""
     simulation_results_directory = (
         "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results"
@@ -46,7 +46,7 @@ def cleanup_files(sim_directory, sim_number):
     else:
         print(f"LD inferences directory not found: /projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
 
-def resimulate(sim_number, sim_directory, experiment_config_filepath):
+def resimulate(sim_number, experiment_config_filepath):
     """Rerun simulation and regenerate genome windows."""
     print(f"Resimulating for simulation {sim_number}...")
 
@@ -157,8 +157,8 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
         )
     except Exception:
         # Cleanup and resimulate in case of an error
-        cleanup_files(sim_directory, sim_number)
-        resimulate(sim_number, sim_directory, experiment_config_filepath)
+        cleanup_files(sim_number)
+        resimulate(sim_number, experiment_config_filepath)
 
         # Retry optimization after resimulation
         opt_params_momentsLD, ll_list_momentsLD = reoptimize_with_retries(
