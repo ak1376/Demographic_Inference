@@ -17,10 +17,10 @@ import pandas as pd
 def postprocessing(experiment_config, training_features, training_targets, validation_features, validation_targets):
 
     # Load data and config
-    training_features = pd.read_csv(training_features, index_col=0)
-    validation_features = pd.read_csv(validation_features, index_col=0)
-    training_targets = pd.read_csv(training_targets, index_col=0)
-    validation_targets = pd.read_csv(validation_targets, index_col=0)
+    training_features = pd.read_csv(training_features)
+    validation_features = pd.read_csv(validation_features)
+    training_targets = pd.read_csv(training_targets)
+    validation_targets = pd.read_csv(validation_targets)
 
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
@@ -34,7 +34,7 @@ def postprocessing(experiment_config, training_features, training_targets, valid
     targets_dict = {'training': training_targets, 'validation': validation_targets}
 
     # Define parameters to process
-    param_types = ['Na', 'N1', 'N2', 't_split', 'm']
+    param_types = ['Na', 'N1', 'N2', 't_split']
 
     for stage in ['training', 'validation']:
         features = features_dict[stage]
@@ -44,37 +44,12 @@ def postprocessing(experiment_config, training_features, training_targets, valid
 
         print(f"\nProcessing {stage} data:")
 
-        if experiment_config['remove_outliers']:
-            for param in param_types:
-                # Get bounds
-                lower_bound = experiment_config['lower_bound_params'].get(param)
-                upper_bound = experiment_config['upper_bound_params'].get(param)
-
-                if lower_bound is None or upper_bound is None:
-                    continue
-
-                # Find all columns ending with this parameter
-                param_cols = [col for col in features.columns if col.endswith('_' + param)]
-                
-                for col in param_cols:
-                    # Identify outliers
-                    outlier_mask = (features[col] < lower_bound) | (features[col] > upper_bound)
-                    valid_mask = ~outlier_mask
-
-                    if outlier_mask.any():
-                        # Use median of valid values only
-                        valid_median = features.loc[valid_mask, col].median() #type:ignore
-                        features.loc[outlier_mask, col] = valid_median
-                        # print(f"{col}: Replaced {outlier_mask.sum()} outliers. New range: [{features[col].min():.3f}, {features[col].max():.3f}]")
-
-            outliers_imputed = features.copy()
-
         if experiment_config['normalization']:
             print("===> Normalizing the data.")
             
             # Normalize targets column by column using corresponding bounds
             normalized_targets = targets.copy()
-            for param in experiment_config['parameter_names']:
+            for param in param_types:
                 lower_bound = experiment_config['lower_bound_params'][param]
                 upper_bound = experiment_config['upper_bound_params'][param]
                 mean = 0.5 * (upper_bound + lower_bound)
@@ -84,7 +59,7 @@ def postprocessing(experiment_config, training_features, training_targets, valid
             
             # Normalize parameter features using same bounds
             features_copy = features.copy()
-            for param in ['Na', 'N1', 'N2', 't_split', 'm']:
+            for param in ['Na', 'N1', 'N2', 't_split']:
                 param_cols = [col for col in features.columns if col.endswith('_' + param)]
                 lower_bound = experiment_config['lower_bound_params'][param]
                 upper_bound = experiment_config['upper_bound_params'][param]
