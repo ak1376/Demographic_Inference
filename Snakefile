@@ -252,26 +252,24 @@ rule aggregate_top_k_results:
         --sim_number {wildcards.sim_number} \
         """
 
-# Rule to gather both software_inferences and momentsLD_inferences
-def gather_all_inferences(wildcards):
-    software_inferences = expand(
+# Rule to gather software_inferences
+def gather_software_inferences(wildcards):
+    return expand(
         f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/software_inferences_sim_{{sim_number}}.pkl",
         sim_number=range(0, experiment_config['num_sims_pretrain'])
     )
-    
-    momentsLD_inferences = expand(
+
+# Rule to gather momentsLD_inferences
+def gather_momentsLD_inferences(wildcards):
+    return expand(
         f"/projects/kernlab/akapoor/Demographic_Inference/final_LD_inferences/momentsLD_inferences_sim_{{sim_number}}.pkl",
         sim_number=range(0, experiment_config['num_sims_pretrain'])
     )
 
-    print(f'Total Length (software inferences + momentsLD inferences): {len(software_inferences)} + {len(momentsLD_inferences)}')
-
-    return software_inferences + momentsLD_inferences
-
-
 rule aggregate_features:
     input:
-        inferences = gather_all_inferences,
+        software_inferences = gather_software_inferences,
+        momentsLD_inferences = gather_momentsLD_inferences,
         experiment_config_filepath = CONFIG_FILEPATH
     output:
         preprocessing_results = f"{SIM_DIRECTORY}/preprocessing_results_obj.pkl",
@@ -287,7 +285,8 @@ rule aggregate_features:
         PYTHONPATH={CWD} python {CWD}/snakemake_scripts/aggregate_all_features.py \
             {input.experiment_config_filepath} \
             {params.sim_directory} \
-            {input.inferences:q}
+            --software_inferences_dir {input.software_inferences:q} \
+            --MomentsLD_inferences_dir {input.momentsLD_inferences:q}
         """
 
 

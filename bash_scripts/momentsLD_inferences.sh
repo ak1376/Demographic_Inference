@@ -59,6 +59,8 @@ for SIM_NUMBER in $(seq $BATCH_START $BATCH_END); do
     # Run momentsLD inference through final_LD_inferences
     snakemake \
         --nolock \
+        --reason \
+        --verbose \
         --snakefile "${BASE_DIR}/Snakefile" \
         --directory "${FINAL_LD_DIR}" \
         --rerun-incomplete \
