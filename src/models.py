@@ -1,4 +1,4 @@
-import xgboost as xgb
+# import xgboost as xgb
 import numpy as np
 from src.utils import root_mean_squared_error
 import torch
@@ -46,116 +46,116 @@ class LinearReg:
         linear_mdl_obj["validation"] = {}
 
         linear_mdl_obj["training"]["predictions"] = training_predictions
-        linear_mdl_obj["training"]["targets"] = preprocessing_results_obj["training"]["targets"]
+        linear_mdl_obj["training"]["targets"] = np.asarray(preprocessing_results_obj["training"]["targets"])
         
         # Because the targets for each analysis are the same.
 
         linear_mdl_obj["validation"]["predictions"] = validation_predictions
-        linear_mdl_obj["validation"]["targets"] = preprocessing_results_obj["validation"]["targets"]
+        linear_mdl_obj["validation"]["targets"] = np.asarray(preprocessing_results_obj["validation"]["targets"])
 
 
         return linear_mdl_obj
 
-class XGBoost:
-    def __init__(
-        self,
-        objective="reg:squarederror",
-        n_estimators=200,  # Increased for smaller learning rate
-        learning_rate=0.05,  # Reduced to prevent overfitting
-        max_depth=3,  # Reduced for simpler trees
-        verbosity=2,
-        alpha=0.01,  # L1 regularization
-        lambd=1,  # L2 regularization (lambda is a reserved keyword, hence using lambd)
-        subsample=0.8,  # Row subsampling to prevent overfitting
-        colsample_bytree=0.8,  # Column subsampling to prevent overfitting
-        min_child_weight=5,  # More conservative learning
-        train_percentage=0.8,
-    ):
-        self.objective = objective
-        self.n_estimators = n_estimators
-        self.learning_rate = learning_rate
-        self.max_depth = max_depth
-        self.verbosity = verbosity
-        self.alpha = alpha
-        self.lambd = lambd
-        self.subsample = subsample
-        self.colsample_bytree = colsample_bytree
-        self.min_child_weight = min_child_weight
-        self.train_percentage = train_percentage
-        self.models = []  # To store the individual XGBRegressor models for each target
-        self.eval_results = []  # To store evaluation results for each target
+# class XGBoost:
+#     def __init__(
+#         self,
+#         objective="reg:squarederror",
+#         n_estimators=200,  # Increased for smaller learning rate
+#         learning_rate=0.05,  # Reduced to prevent overfitting
+#         max_depth=3,  # Reduced for simpler trees
+#         verbosity=2,
+#         alpha=0.01,  # L1 regularization
+#         lambd=1,  # L2 regularization (lambda is a reserved keyword, hence using lambd)
+#         subsample=0.8,  # Row subsampling to prevent overfitting
+#         colsample_bytree=0.8,  # Column subsampling to prevent overfitting
+#         min_child_weight=5,  # More conservative learning
+#         train_percentage=0.8,
+#     ):
+#         self.objective = objective
+#         self.n_estimators = n_estimators
+#         self.learning_rate = learning_rate
+#         self.max_depth = max_depth
+#         self.verbosity = verbosity
+#         self.alpha = alpha
+#         self.lambd = lambd
+#         self.subsample = subsample
+#         self.colsample_bytree = colsample_bytree
+#         self.min_child_weight = min_child_weight
+#         self.train_percentage = train_percentage
+#         self.models = []  # To store the individual XGBRegressor models for each target
+#         self.eval_results = []  # To store evaluation results for each target
 
-    def train_and_validate(
-        self, X_train, y_train, X_test=None, y_test=None
-    ):
-        """
-        Train the model and track training/validation losses per epoch.
-        """
-        # Ensure that test data is provided
-        if X_test is None or y_test is None:
-            raise ValueError("X_test and y_test must be provided")
+#     def train_and_validate(
+#         self, X_train, y_train, X_test=None, y_test=None
+#     ):
+#         """
+#         Train the model and track training/validation losses per epoch.
+#         """
+#         # Ensure that test data is provided
+#         if X_test is None or y_test is None:
+#             raise ValueError("X_test and y_test must be provided")
 
-        # Clear previous models and evaluation results
-        self.models = []
-        self.eval_results = []
+#         # Clear previous models and evaluation results
+#         self.models = []
+#         self.eval_results = []
 
-        # Train one XGBRegressor for each target (each column in y_train/y_test)
-        for i in range(y_train.shape[1]):
-            estimator = xgb.XGBRegressor(
-                objective=self.objective,
-                n_estimators=self.n_estimators,
-                learning_rate=self.learning_rate,
-                max_depth=self.max_depth,
-                verbosity=self.verbosity,
-                alpha=self.alpha,  # L1 regularization
-                lambd=self.lambd,  # L2 regularization (lambda)
-                subsample=self.subsample,  # Row subsampling
-                colsample_bytree=self.colsample_bytree,  # Column subsampling
-                min_child_weight=self.min_child_weight,  # Minimum child weight
-                eval_metric="rmse"  # Metric for evaluation
-            )
+#         # Train one XGBRegressor for each target (each column in y_train/y_test)
+#         for i in range(y_train.shape[1]):
+#             estimator = xgb.XGBRegressor(
+#                 objective=self.objective,
+#                 n_estimators=self.n_estimators,
+#                 learning_rate=self.learning_rate,
+#                 max_depth=self.max_depth,
+#                 verbosity=self.verbosity,
+#                 alpha=self.alpha,  # L1 regularization
+#                 lambd=self.lambd,  # L2 regularization (lambda)
+#                 subsample=self.subsample,  # Row subsampling
+#                 colsample_bytree=self.colsample_bytree,  # Column subsampling
+#                 min_child_weight=self.min_child_weight,  # Minimum child weight
+#                 eval_metric="rmse"  # Metric for evaluation
+#             )
             
-            # Fit one target at a time
-            estimator.fit(
-                X_train,
-                y_train[:, i],
-                eval_set=[(X_train, y_train[:, i]), (X_test, y_test[:, i])],
-                verbose=True  # Set to True if you want to see training progress
-            )
+#             # Fit one target at a time
+#             estimator.fit(
+#                 X_train,
+#                 y_train[:, i],
+#                 eval_set=[(X_train, y_train[:, i]), (X_test, y_test[:, i])],
+#                 verbose=True  # Set to True if you want to see training progress
+#             )
 
-            # Store the model and its eval results
-            self.models.append(estimator)
-            self.eval_results.append(estimator.evals_result())
+#             # Store the model and its eval results
+#             self.models.append(estimator)
+#             self.eval_results.append(estimator.evals_result())
 
-        # Make predictions on both train and test data
-        y_pred_train = np.column_stack([model.predict(X_train) for model in self.models])
-        y_pred_test = np.column_stack([model.predict(X_test) for model in self.models])
+#         # Make predictions on both train and test data
+#         y_pred_train = np.column_stack([model.predict(X_train) for model in self.models])
+#         y_pred_test = np.column_stack([model.predict(X_test) for model in self.models])
 
-        # Calculate training and validation errors
-        train_error = root_mean_squared_error(y_train, y_pred_train)
-        validation_error = root_mean_squared_error(y_test, y_pred_test)
+#         # Calculate training and validation errors
+#         train_error = root_mean_squared_error(y_train, y_pred_train)
+#         validation_error = root_mean_squared_error(y_test, y_pred_test)
 
-        return train_error, validation_error, y_pred_train, y_pred_test
+#         return train_error, validation_error, y_pred_train, y_pred_test
 
-    def get_epoch_losses(self):
-        """
-        Get training and validation losses for each epoch.
-        Returns two lists: training losses and validation losses for each output regressor.
-        """
-        if self.eval_results:
-            train_losses_per_target = []
-            val_losses_per_target = []
+#     def get_epoch_losses(self):
+#         """
+#         Get training and validation losses for each epoch.
+#         Returns two lists: training losses and validation losses for each output regressor.
+#         """
+#         if self.eval_results:
+#             train_losses_per_target = []
+#             val_losses_per_target = []
 
-            # Extract RMSE values for each target's model
-            for result in self.eval_results:
-                train_losses = result['validation_0']['rmse']
-                val_losses = result['validation_1']['rmse']
-                train_losses_per_target.append(train_losses)
-                val_losses_per_target.append(val_losses)
+#             # Extract RMSE values for each target's model
+#             for result in self.eval_results:
+#                 train_losses = result['validation_0']['rmse']
+#                 val_losses = result['validation_1']['rmse']
+#                 train_losses_per_target.append(train_losses)
+#                 val_losses_per_target.append(val_losses)
 
-            return train_losses_per_target, val_losses_per_target
-        else:
-            raise ValueError("No evaluation results available. Train the model first.")        
+#             return train_losses_per_target, val_losses_per_target
+#         else:
+#             raise ValueError("No evaluation results available. Train the model first.")        
 
 # Hook function to inspect BatchNorm outputs
 def inspect_batchnorm_output(module, input, output):

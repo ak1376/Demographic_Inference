@@ -5,6 +5,7 @@ import torch
 from src.utils import visualizing_results, calculate_model_errors
 from pytorch_lightning.loggers import TensorBoardLogger
 import matplotlib.pyplot as plt
+import numpy as np
 
 class MLPTrainer:
     def __init__(
@@ -17,6 +18,10 @@ class MLPTrainer:
         self.param_names = param_names
 
     def train(self, model, X_train, y_train, X_val, y_val):
+        X_train = np.asarray(X_train)
+        y_train = np.asarray(y_train)
+        X_val = np.asarray(X_val)
+        y_val = np.asarray(y_val)
         # Prepare datasets and dataloaders
         train_dataset = TensorDataset(
             torch.tensor(X_train, dtype=torch.float32),
