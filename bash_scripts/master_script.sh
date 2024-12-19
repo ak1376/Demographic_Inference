@@ -81,7 +81,12 @@ genome_id=$(submit_job "bash_scripts/genome_windows.sh" "$sim_id")
 genome_start=$(date +%s)
 wait_for_job_array_completion "$genome_id" "Genome Windows" "$genome_start"
 
-ld_stats_id=$(submit_job "bash_scripts/LD_stats_windows.sh" "$genome_id")
+# Add combine_metadata.sh step here
+combine_metadata_id=$(submit_job "bash_scripts/combine_metadata.sh" "$genome_id")
+combine_metadata_start=$(date +%s)
+wait_for_job_array_completion "$combine_metadata_id" "Combine Metadata" "$combine_metadata_start"
+
+ld_stats_id=$(submit_job "bash_scripts/LD_stats_windows.sh" "$combine_metadata_id")
 ld_stats_start=$(date +%s)
 wait_for_job_array_completion "$ld_stats_id" "LD Stats Window" "$ld_stats_start"
 

@@ -43,7 +43,7 @@ MOMENTS_LD_ANALYSIS=$(capitalize_bool $MOMENTS_LD_ANALYSIS)
 # Set up the simulation directory
 SIM_DIRECTORY="${DEMOGRAPHIC_MODEL}_dadi_analysis_${DADI_ANALYSIS}_moments_analysis_${MOMENTS_ANALYSIS}_momentsLD_analysis_${MOMENTS_LD_ANALYSIS}_seed_${SEED}/sims/sims_pretrain_${NUM_SIMS_PRETRAIN}_sims_inference_${NUM_SIMS_INFERENCE}_seed_${SEED}_num_replicates_${K}_top_values_${TOP_VALUES_K}"
 
-# Expand file wildcards
+# Expand file wildcards separately
 SOFTWARE_INFERENCES=("/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/"*.pkl)
 MOMENTSLD_INFERENCES=("/projects/kernlab/akapoor/Demographic_Inference/final_LD_inferences/"*.pkl)
 
@@ -69,11 +69,12 @@ if [ ${#MOMENTSLD_INFERENCES[@]} -eq 0 ]; then
     exit 1
 fi
 
-# Run the aggregation script
+# Run the aggregation script, keeping the lists separate
 python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggregate_all_features.py \
     "${EXPERIMENT_CONFIG_FILE}" \
     "${SIM_DIRECTORY}" \
-    "${SOFTWARE_INFERENCES[@]}" "${MOMENTSLD_INFERENCES[@]}"
+    --software_inferences_dir "${SOFTWARE_INFERENCES[@]}" \
+    --momentsLD_inferences_dir "${MOMENTSLD_INFERENCES[@]}"
 
 if [ $? -eq 0 ]; then
     echo "Feature aggregation completed successfully."

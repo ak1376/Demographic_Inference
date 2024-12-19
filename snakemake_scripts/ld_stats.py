@@ -20,6 +20,7 @@ def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, 
         ld_stats = get_LD_stats(vcf_filepath, r_bins, flat_map_path, pop_file_path)
 
         # Save LD stats to a file
+        os.makedirs(f"{sim_directory}/sim_{sim_number}/window_{window_number}/", exist_ok = True)
         output_file = f"{sim_directory}/sim_{sim_number}/window_{window_number}/ld_stats_window.{window_number}.pkl"
         with open(output_file, "wb") as f:
             pickle.dump(ld_stats, f)
@@ -64,7 +65,13 @@ def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, 
         new_flat_map_path = f"{genome_window_dir}/window_{window_number}/flat_map.txt"
 
         print(f"Retrying LD stats calculation for regenerated window {window_number}, sim {sim_number}")
-        ld_stat_creation(new_vcf_filepath, new_flat_map_path, pop_file_path, sim_directory, sim_number, window_number)
+        os.makedirs(f"{sim_directory}/sim_{sim_number}/window_{window_number}/", exist_ok = True)
+        ld_stat_creation(vcf_filepath= new_vcf_filepath, 
+        flat_map_path = new_flat_map_path, 
+        pop_file_path = pop_file_path, 
+        sim_directory = sim_directory, 
+        sim_number = sim_number, 
+        window_number = window_number)
 
     except Exception as e:
         print(f"Unexpected error: {e} for window {window_number}, sim {sim_number}. Type: {type(e)}")
@@ -74,7 +81,7 @@ def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate LD statistics for specified simulation windows.")
     parser.add_argument("--vcf_filepath", type=str, required=True, help="Path to the VCF file containing simulated data")
-    parser.add_argument("--flat_map_file", type=str, required=True, help="Path to the flat map file")
+    parser.add_argument("--flat_map_path", type=str, required=True, help="Path to the flat map file")
     parser.add_argument("--pop_file_path", type=str, required=True, help="Path to the population file")
     parser.add_argument("--sim_directory", type=str, required=True, help="Path to the simulation directory")
     parser.add_argument("--sim_number", type=int, required=True, help="Simulation number")
@@ -84,7 +91,7 @@ if __name__ == "__main__":
     # Run the LD statistics creation function
     ld_stat_creation(
         vcf_filepath=args.vcf_filepath,
-        flat_map_path=args.flat_map_file,
+        flat_map_path=args.flat_map_path,
         pop_file_path=args.pop_file_path,
         sim_directory=args.sim_directory,
         sim_number=args.sim_number,

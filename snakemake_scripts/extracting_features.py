@@ -8,8 +8,8 @@ def getting_the_features(postprocessing_results_filepath, sim_directory):
     print(postprocessing_results_obj.keys())
 
     features = {
-        "training": {"features": postprocessing_results_obj['training']['predictions'], "targets": postprocessing_results_obj['training']['targets']},
-        "validation": {"features": postprocessing_results_obj['validation']['predictions'], "targets": postprocessing_results_obj['validation']['targets']},
+        "training": {"features": postprocessing_results_obj['training']['predictions'], "targets": postprocessing_results_obj['training']['normalized_targets']},
+        "validation": {"features": postprocessing_results_obj['validation']['predictions'], "targets": postprocessing_results_obj['validation']['normalized_targets']},
     }
 
     print(f'Training features shape: {features["training"]["features"].shape}')
