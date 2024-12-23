@@ -79,7 +79,7 @@ def resimulate(sim_number, experiment_config_filepath):
             "--experiment_config_filepath",
             experiment_config_filepath,
             "--genome_sim_directory",
-            '/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows',
+            'sampled_genome_windows',
             "--window_number",
             str(window_number),
             "--sim_number",
