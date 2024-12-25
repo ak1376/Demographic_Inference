@@ -19,11 +19,11 @@ def str2bool(v):
 
 # I want to do dadi and moments inference but separately for each replicate. Note to self: need to define another function that will aggregate the results of each replicate and then choose the top k ones. 
 
-def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate_number):
+def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_number, replicate_number):
 
     # Ensure required directories exist
-    dadi_dir = f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/dadi/replicate_{replicate_number}"
-    moments_dir = f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/moments/replicate_{replicate_number}"
+    dadi_dir = f"{sim_directory}/sim_{sim_number}/dadi/replicate_{replicate_number}"
+    moments_dir = f"{sim_directory}/sim_{sim_number}/moments/replicate_{replicate_number}"
 
     os.makedirs(dadi_dir, exist_ok=True)
     os.makedirs(moments_dir, exist_ok=True)
@@ -108,10 +108,10 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_number, replicate
 
     
     # save the results in a pickle file
-    with open(f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/dadi/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
+    with open(f"{sim_directory}/sim_{sim_number}/dadi/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
         pickle.dump(dadi_results, f)
 
-    with open(f"/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/moments/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
+    with open(f"{sim_directory}/sim_{sim_number}/moments/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
         pickle.dump(moments_results, f)
 
 
@@ -129,6 +129,7 @@ if __name__ == "__main__":
         SFS=args.sfs_file,
         sampled_params=args.sampled_params_pkl,
         experiment_config=args.experiment_config_filepath,
+        sim_directory = args.sim_directory,
         sim_number=args.sim_number, 
         replicate_number=args.replicate_number  # Pass replicate number here
     )
