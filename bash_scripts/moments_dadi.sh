@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-2999  # Adjust based on TOTAL_TASKS / BATCH_SIZE
+#SBATCH --array=0-299  # Adjust based on TOTAL_TASKS / BATCH_SIZE
 #SBATCH --output=logs/moments_dadi_batch_%A_%a.out
 #SBATCH --error=logs/moments_dadi_batch_%A_%a.err
 #SBATCH --time=24:00:00

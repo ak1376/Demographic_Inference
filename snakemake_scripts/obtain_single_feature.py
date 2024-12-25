@@ -21,9 +21,14 @@ def str2bool(v):
 
 def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_number, replicate_number):
 
+    print(f'The simulation directory is: {sim_directory}')
+
     # Ensure required directories exist
     dadi_dir = f"{sim_directory}/sim_{sim_number}/dadi/replicate_{replicate_number}"
     moments_dir = f"{sim_directory}/sim_{sim_number}/moments/replicate_{replicate_number}"
+
+    print(f'The dadi dir is {dadi_dir}')
+    print(f'The moments dir is {moments_dir}')
 
     os.makedirs(dadi_dir, exist_ok=True)
     os.makedirs(moments_dir, exist_ok=True)
@@ -68,7 +73,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
                 p0= experiment_config['optimization_initial_guess'],
                 lower_bound= lower_bound,
                 upper_bound= upper_bound,
-                num_samples=100,
+                num_samples=30,
                 demographic_model=experiment_config['demographic_model'],
                 mutation_rate=experiment_config['mutation_rate'],
                 length=experiment_config['genome_length']
@@ -108,10 +113,10 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
 
     
     # save the results in a pickle file
-    with open(f"{sim_directory}/sim_{sim_number}/dadi/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
+    with open(f"{dadi_dir}/replicate_{replicate_number}.pkl", "wb") as f:
         pickle.dump(dadi_results, f)
 
-    with open(f"{sim_directory}/sim_{sim_number}/moments/replicate_{replicate_number}/replicate_{replicate_number}.pkl", "wb") as f:
+    with open(f"{moments_dir}/replicate_{replicate_number}.pkl", "wb") as f:
         pickle.dump(moments_results, f)
 
 

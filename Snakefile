@@ -216,6 +216,7 @@ rule obtain_feature:
     output:
         software_inferences = "/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/sim_{sim_number}/{analysis}/replicate_{replicate_number}/replicate_{replicate_number}.pkl"
     params:
+        sim_directory = "/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features",
         analysis = lambda wildcards: "dadi" if wildcards.analysis == "dadi" else "moments"
     shell:
         """
@@ -223,7 +224,7 @@ rule obtain_feature:
         --sfs_file {input.SFS} \
         --sampled_params_pkl {input.sampled_params_pkl} \
         --experiment_config_filepath {CONFIG_FILEPATH} \
-        --sim_directory {SIM_DIRECTORY} \
+        --sim_directory {params.sim_directory} \
         --sim_number {wildcards.sim_number} \
         --replicate_number {wildcards.replicate_number}
         """
