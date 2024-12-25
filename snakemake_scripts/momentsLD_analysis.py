@@ -79,7 +79,7 @@ def resimulate(sim_number, experiment_config_filepath):
             "--experiment_config_filepath",
             experiment_config_filepath,
             "--genome_sim_directory",
-            '/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows',
+            'sampled_genome_windows',
             "--window_number",
             str(window_number),
             "--sim_number",
@@ -155,8 +155,9 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
         opt_params_momentsLD, ll_list_momentsLD = reoptimize_with_retries(
             combined_ld_stats, p_guess, experiment_config, sim_number
         )
-    except Exception:
-        # Cleanup and resimulate in case of an error
+    except Exception as e:
+        # Print the exception details
+        print(f"Exception occurred: {e}")
         cleanup_files(sim_number)
         resimulate(sim_number, experiment_config_filepath)
 

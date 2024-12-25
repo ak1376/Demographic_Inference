@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=moments_ld_array
-#SBATCH --array=0-4999  # For 100 simulations
+#SBATCH --array=0-499  # For 100 simulations
 #SBATCH --output=logs/moments_ld_%A_%a.out
 #SBATCH --error=logs/moments_ld_%A_%a.err
 #SBATCH --time=24:00:00
@@ -25,7 +25,7 @@ echo "Current directory: $(pwd)"
 
 # Define batch size and total simulations
 BATCH_SIZE=1
-TOTAL_SIMS=5000
+TOTAL_SIMS=500
 
 # Calculate batch start and end
 BATCH_START=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))
@@ -59,8 +59,6 @@ for SIM_NUMBER in $(seq $BATCH_START $BATCH_END); do
     # Run momentsLD inference through final_LD_inferences
     snakemake \
         --nolock \
-        --reason \
-        --verbose \
         --snakefile "${BASE_DIR}/Snakefile" \
         --directory "${FINAL_LD_DIR}" \
         --rerun-incomplete \
