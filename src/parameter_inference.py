@@ -7,6 +7,11 @@ from moments.Godambe import _get_godambe
 import nlopt
 import src.demographic_models as demographic_models
 from src.optimize import opt
+import time
+import multiprocessing
+
+TIMEOUT_SECONDS = 20 * 60  # 20 minutes = 1200 seconds
+
 
 # Define your function with Ray's remote decorator
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
@@ -80,37 +85,19 @@ def compute_ld_stats_sequential(flat_map_path, pop_file_path, metadata_path, r_b
     
     return ld_stats_list
 
-def run_inference_dadi(
+def _optimize_dadi(
+    queue,
+    p_guess,
     sfs,
-    p0,
-    num_samples,
-    demographic_model,
-    lower_bound=[0.001, 0.001, 0.001, 0.001],
-    upper_bound=[1, 1, 1, 1],
-    mutation_rate=1.26e-8,
-    length=1e8,
+    func_ex,
+    pts_ext,
+    lower_bound,
+    upper_bound
 ):
     """
-    This should do the parameter inference for dadi
+    This function just wraps dadi.Inference.opt so we can run
+    it in a separate process. We'll push results into 'queue'.
     """
-    if demographic_model == "bottleneck_model":
-        model_func = dadi.Demographics1D.three_epoch
-
-    elif demographic_model == "split_isolation_model":
-        model_func = demographic_models.split_isolation_model_dadi
-
-    else:
-        raise ValueError(f"Unsupported demographic model: {demographic_model}")
-
-    func_ex = dadi.Numerics.make_extrap_log_func(model_func)
-    pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
-
-
-    p_guess = moments.Misc.perturb_params(
-        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
-    )
-
-    # Optimization with dadi
     opt_params, ll_value = dadi.Inference.opt(
         p_guess,
         sfs,
@@ -122,50 +109,125 @@ def run_inference_dadi(
         maxeval=400,
         verbose=20
     )
+    # Put results in a queue for the parent process to retrieve
+    queue.put((opt_params, ll_value))
+
+def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound):
+    """
+    This function wraps moments.Inference.optimize_log_powell
+    so we can run it in a separate process. We'll push results
+    (opt_params, ll) into 'queue'.
+    """
+    # full_output=True => returns (best_params, best_ll, ...)
+    xopt = moments.Inference.optimize_log_powell(
+        p_guess,
+        sfs,
+        model_func,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        verbose=20,
+        full_output=True
+    )
+    # xopt[0] = opt_params, xopt[1] = ll
+    queue.put((xopt[0], xopt[1]))  # pass (opt_params, ll) back to the parent
+
+
+def run_inference_dadi(
+    sfs,
+    p0,
+    num_samples,
+    demographic_model,
+    lower_bound=[0.001, 0.001, 0.001, 0.001],
+    upper_bound=[1, 1, 1, 1],
+    mutation_rate=1.26e-8,
+    length=1e8,
+):
+    """
+    This should do the parameter inference for dadi,
+    but will terminate if optimization exceeds 20 min.
+    """
+    # Pick the model function
+    if demographic_model == "bottleneck_model":
+        model_func = dadi.Demographics1D.three_epoch
+    elif demographic_model == "split_isolation_model":
+        model_func = demographic_models.split_isolation_model_dadi
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
+    # Prepare for extrapolation
+    func_ex = dadi.Numerics.make_extrap_log_func(model_func)
+    pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
+
+    # Perturb initial guess
+    p_guess = moments.Misc.perturb_params(
+        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
+    )
+
+    # --- Run the dadi optimization in a separate process ---
+    queue = multiprocessing.Queue()
+    process = multiprocessing.Process(
+        target=_optimize_dadi,
+        args=(queue, p_guess, sfs, func_ex, pts_ext, lower_bound, upper_bound)
+    )
+    process.start()
+
+    # Wait up to TIMEOUT_SECONDS
+    process.join(TIMEOUT_SECONDS)
+
+    if process.is_alive():
+        # If it's still running after 20 minutes, kill it
+        print("dadi optimization took longer than 20 minutes. Terminating...")
+        process.terminate()
+        process.join()  # ensure it finishes
+
+        # Return nans
+        return None, None, {
+            "N0": np.nan,
+            "Nb": np.nan,
+            "N_recover": np.nan,
+            "t_bottleneck_start": np.nan,
+            "t_bottleneck_end": np.nan,
+            "ll": np.nan,
+            "Na": np.nan,
+            "N1": np.nan,
+            "N2": np.nan,
+            "t_split": np.nan,
+            "m": np.nan,
+        }
+
+    # Otherwise, retrieve the results from the queue
+    opt_params, ll_value = queue.get()
 
     print(f"OPT DADI PARAMETER: {opt_params}")
 
-    # # Find the indices of the top top_k_values (those with the highest likelihood)
-    # top_k_indices = np.argsort(ll_list)[-top_values_k:]
-    # top_k_indices = np.array(top_k_indices, dtype=int)  # Convert to numpy integer array
-
-    # opt_params_dict_list_top_values = [opt_params_dict_list[i] for i in top_k_indices]
-    # opt_params_final_list = []
-
+    # Build the model with the optimized parameters
     model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
-
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
     N_ref = opt_theta / (4 * mutation_rate * length)
 
-    # Initialize opt_params_dict properly in all cases
-    opt_params_dict = {}
-
+    # Build the opt_params_dict depending on model
     if demographic_model == "bottleneck_model":
         opt_params_dict = {
             "N0": N_ref,
             "Nb": opt_params[0] * N_ref,
             "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
+            "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * N_ref,
             "t_bottleneck_end": opt_params[2] * 2 * N_ref,
-            "ll": ll_value
+            "ll": ll_value,
         }
-
     elif demographic_model == "split_isolation_model":
         opt_params_dict = {
             "Na": N_ref,
-            "N1": opt_params[0]*N_ref,
-            "N2": opt_params[1]*N_ref,
-            "t_split": opt_params[2]*2*N_ref,
-            "m": opt_params[3]*2*N_ref, 
-            "ll": ll_value 
+            "N1": opt_params[0] * N_ref,
+            "N2": opt_params[1] * N_ref,
+            "t_split": opt_params[2] * 2 * N_ref,
+            "m": opt_params[3] * 2 * N_ref,
+            "ll": ll_value,
         }
 
-    else:
-        raise ValueError(f"Unsupported demographic model: {demographic_model}")
-
-    model = model * opt_theta
-
-    print(f'Model shape after scaling: {model.shape}')
+    # Scale the model by theta
+    model *= opt_theta
+    print(f"Model shape after scaling: {model.shape}")
 
     return model, opt_theta, opt_params_dict
 
@@ -180,11 +242,16 @@ def run_inference_moments(
     length=1e7,
 ):
     """
-    This should do the parameter inference for moments
+    Run parameter inference for Moments in a separate process. 
+    If the optimization takes more than 20 minutes, kill it 
+    and return np.nan for all parameters (including the FIM).
     """
+    # 1) Perturb initial guess
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
+
+    # 2) Pick the correct demographic model
     if demographic_model == "bottleneck_model":
         model_func = moments.Demographics1D.three_epoch
     elif demographic_model == "split_isolation_model":
@@ -192,43 +259,65 @@ def run_inference_moments(
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    # opt_params, ll = opt(
-    #     p_guess,
-    #     sfs,
-    #     model_func,
-    #     lower_bound=lower_bound,
-    #     upper_bound=upper_bound,
-    #     log_opt=True, 
-    #     algorithm=nlopt.LN_BOBYQA,
-    #     maxeval=100
-    # )
-
-    xopt = moments.Inference.optimize_log_powell(
-        p_guess,
-        sfs,
-        model_func,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        verbose = 20,
-        full_output=True
+    # 3) Create a Queue and Process for the optimization
+    queue = multiprocessing.Queue()
+    process = multiprocessing.Process(
+        target=_optimize_moments,
+        args=(queue, p_guess, sfs, model_func, lower_bound, upper_bound)
     )
 
-    opt_params = xopt[0]
-    ll = xopt[1]
+    # 4) Start the process and wait up to 20 minutes
+    process.start()
+    process.join(TIMEOUT_SECONDS)
 
+    if process.is_alive():
+        # 4a) If still running after 20 minutes, kill it
+        print("moments optimization took longer than 20 minutes. Terminating...")
+        process.terminate()
+        process.join()
+
+        # Return np.nan for everything, including FIM if needed
+        if demographic_model == "bottleneck_model":
+            opt_params_dict = {
+                "N0": np.nan,
+                "Nb": np.nan,
+                "N_recover": np.nan,
+                "t_bottleneck_start": np.nan,
+                "t_bottleneck_end": np.nan,
+                "ll": np.nan,
+            }
+            if use_FIM:
+                opt_params_dict["upper_triangular_FIM"] = np.nan
+            return None, None, opt_params_dict
+
+        elif demographic_model == "split_isolation_model":
+            opt_params_dict = {
+                "Na": np.nan,
+                "N1": np.nan,
+                "N2": np.nan,
+                "t_split": np.nan,
+                "m": np.nan,
+                "ll": np.nan,
+            }
+            if use_FIM:
+                opt_params_dict["upper_triangular_FIM"] = np.nan
+            return None, None, opt_params_dict
+
+    # 5) Otherwise, retrieve the results from the queue
+    opt_params, ll = queue.get()
     print(f"OPT MOMENTS PARAMETER: {opt_params}")
     print(f"LL: {ll}")
 
+    # 6) Build the final model
     model = model_func(opt_params, sfs.sample_sizes)
     opt_theta = moments.Inference.optimal_sfs_scaling(model, sfs)
+
+    # 7) Compute N_ref
     N_ref = opt_theta / (4 * mutation_rate * length)
 
-    # Initialize opt_params_dict and upper_triangular outside the if/else blocks
-    opt_params_dict = {}
+    # 8) Optionally compute the Hessian / FIM
     upper_triangular = None
-
     if use_FIM:
-        # Let's extract the hessian
         H = _get_godambe(
             model_func,
             all_boot=[],
@@ -238,40 +327,40 @@ def run_inference_moments(
             log=False,
             just_hess=True,
         )
-        FIM = -1 * H
-        # Get the indices of the upper triangular part (including the diagonal)
-        upper_tri_indices = np.triu_indices(FIM.shape[0])  # type: ignore
-        # Extract the upper triangular elements
-        upper_triangular = FIM[upper_tri_indices]  # type: ignore
+        FIM = -1 * H  # typical sign for Hessian
+        upper_tri_indices = np.triu_indices(FIM.shape[0])
+        upper_triangular = FIM[upper_tri_indices]
 
-    # Create the opt_params_dict regardless of use_FIM value
+    # 9) Build the param dictionary 
+    #    (separately for each demographic_model)
     if demographic_model == "bottleneck_model":
         opt_params_dict = {
             "N0": N_ref,
             "Nb": opt_params[0] * N_ref,
             "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_start": (opt_params[2]+opt_params[3]) * 2 * N_ref,
+            "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * N_ref,
             "t_bottleneck_end": opt_params[2] * 2 * N_ref,
-            "upper_triangular_FIM": upper_triangular,
-            "ll": ll
+            "ll": ll,
         }
+        if use_FIM:
+            opt_params_dict["upper_triangular_FIM"] = upper_triangular
+
     elif demographic_model == "split_isolation_model":
         opt_params_dict = {
             "Na": N_ref,
-            "N1": opt_params[0]*N_ref,
-            "N2": opt_params[1]*N_ref,
-            "t_split": opt_params[2]*2*N_ref,
-            "m": opt_params[3]*2*N_ref,
-            "upper_triangular_FIM": upper_triangular,
-            "ll": ll
+            "N1": opt_params[0] * N_ref,
+            "N2": opt_params[1] * N_ref,
+            "t_split": opt_params[2] * 2 * N_ref,
+            "m": opt_params[3] * 2 * N_ref,
+            "ll": ll,
         }
-    else:
-        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+        if use_FIM:
+            opt_params_dict["upper_triangular_FIM"] = upper_triangular
 
-    if opt_params_dict["upper_triangular_FIM"] is None:
-        del opt_params_dict["upper_triangular_FIM"]
+    # 10) Scale the model by opt_theta
+    model *= opt_theta
 
-    model = model * opt_theta
+    # 11) Return the final outputs
     return model, opt_theta, opt_params_dict
 
 def run_inference_momentsLD(ld_stats, demographic_model, p_guess):

@@ -103,9 +103,5 @@ aggregate_features_id=$(submit_job "bash_scripts/aggregate_features.sh" "$moment
 aggregate_features_start=$(date +%s)
 wait_for_job_array_completion "$aggregate_features_id" "Aggregate Features" "$aggregate_features_start"
 
-remaining_id=$(submit_job "bash_scripts/remaining_rules.sh" "$aggregate_features_id")
-remaining_start=$(date +%s)
-wait_for_job_array_completion "$remaining_id" "Remaining Rules" "$remaining_start"
-
 echo "Job statistics have been written to logs/job_stats.txt"
 column -t -s, logs/job_stats.txt

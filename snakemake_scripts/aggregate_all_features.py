@@ -6,6 +6,11 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
+# -- 1) Import experimental feature and IterativeImputer for MICE --
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
+
+
 def main(experiment_config_file, sim_directory, software_inferences_dir, momentsLD_inferences_dir):
 
     # Load configuration
@@ -40,7 +45,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
                 row[f"dadi_rep{replicate}_{param}"] = dadi_val
                 row[f"moments_rep{replicate}_{param}"] = moments_val
 
-                # Check for outliers
+                # Check for out-of-bounds
                 lower = experiment_config['lower_bound_params'][param]
                 upper = experiment_config['upper_bound_params'][param]
 
@@ -60,8 +65,10 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
                             row[f"moments_rep{replicate}_FIM_element_{i}"] = fim_val
 
         software_predictions_data.append(row)
-        targets_data.append({f"simulated_params_{param}": sim_data['simulated_params'][param] 
-                            for param in parameters})
+        targets_data.append({
+            f"simulated_params_{param}": sim_data['simulated_params'][param] 
+            for param in parameters
+        })
 
     # Process MomentsLD inference files
     for idx, filepath in enumerate(momentsLD_inferences_dir):
@@ -69,16 +76,13 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
             momentsLD_sim_data = pickle.load(f)
 
         row = {}
-
         for param in parameters:
             val = momentsLD_sim_data['opt_params_momentsLD'][0][param]
-
             row[f"momentsLD_{param}"] = val
 
             # Check for outliers
             lower = experiment_config['lower_bound_params'][param]
             upper = experiment_config['upper_bound_params'][param]
-
             if not (lower <= val <= upper):
                 outlier_counts['momentsLD'][param] += 1
                 outlier_values['momentsLD'][param].append(val)
@@ -104,7 +108,10 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
 
     print(f'Shape of the combined predictions df before NA removal: {combined_predictions_df.shape}')
 
-    # Drop any row that has at least one NaN value
+    # ------------------------------------------------------------
+    # Keep the original step: Drop any row that has at least one NaN
+    # (These are genuine missing entries, not out-of-bounds)
+    # ------------------------------------------------------------
     combined_predictions_df = combined_predictions_df.dropna()
     valid_indices = combined_predictions_df.dropna().index
     combined_predictions_df = combined_predictions_df.loc[valid_indices].reset_index(drop=True)
@@ -112,10 +119,9 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
 
     print(f'Shape of the combined predictions df AFTER NA removal: {combined_predictions_df.shape}')
 
-    # Filter based on bounds for all methods and parameters
-    mask = pd.Series(True, index=combined_predictions_df.index)
-
-    # Filter for each parameter and method
+    # ---------------------------------------------------------------------
+    # STEP: Mark out-of-bounds (OOB) as NaN, so that MICE can impute them
+    # ---------------------------------------------------------------------
     methods = ['momentsLD', 'dadi_rep1', 'dadi_rep2', 'moments_rep1', 'moments_rep2']
 
     for param in parameters:
@@ -124,17 +130,50 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
 
         for method in methods:
             col_name = f"{method}_{param}"
-            param_mask = (combined_predictions_df[col_name] >= lower) & (combined_predictions_df[col_name] <= upper)
-            mask &= param_mask
+            if col_name in combined_predictions_df.columns:
+                out_of_bounds_mask = (
+                    (combined_predictions_df[col_name] < lower) |
+                    (combined_predictions_df[col_name] > upper)
+                )
+                combined_predictions_df.loc[out_of_bounds_mask, col_name] = np.nan
 
+    # -------------------------------------------------------------------
+    # MICE: Use IterativeImputer to impute OOB (now NaN) values
+    # -------------------------------------------------------------------
+    imputer = IterativeImputer(
+        random_state=42,  # reproducibility
+        max_iter=10       # you can adjust iterations if runtime is high
+    )
+    imputed_array = imputer.fit_transform(combined_predictions_df)
+    # Convert back to DataFrame with the same columns
+    combined_predictions_df = pd.DataFrame(imputed_array, columns=combined_predictions_df.columns)
+
+    # -------------------------------------------------------------------
+    # Keep the FINAL NaN check from original code
+    # (In case MICE could not impute some extreme scenario)
+    # -------------------------------------------------------------------
+    valid_indices = combined_predictions_df.dropna().index
+    combined_predictions_df = combined_predictions_df.dropna().reset_index(drop=True)
+    targets_df = targets_df.loc[valid_indices].reset_index(drop=True)
+
+    # -------------------------------------------------------------------
+    # NEW: Remove any rows that remain OOB *after* imputation
+    # -------------------------------------------------------------------
+    mask = pd.Series(True, index=combined_predictions_df.index)
+    for param in parameters:
+        lower = experiment_config['lower_bound_params'][param]
+        upper = experiment_config['upper_bound_params'][param]
+        for method in methods:
+            col_name = f"{method}_{param}"
+            if col_name in combined_predictions_df.columns:
+                # in-bounds means >= lower AND <= upper
+                in_bounds_mask = ((combined_predictions_df[col_name] >= lower)
+                                  & (combined_predictions_df[col_name] <= upper))
+                mask &= in_bounds_mask
+
+    # Apply mask to drop any row that has at least one OOB
     combined_predictions_df = combined_predictions_df[mask].reset_index(drop=True)
     targets_df = targets_df[mask].reset_index(drop=True)
-
-    # Final NaN check
-    combined_predictions_df = combined_predictions_df.dropna()
-    valid_indices = combined_predictions_df.dropna().index
-    combined_predictions_df = combined_predictions_df.loc[valid_indices].reset_index(drop=True)
-    targets_df = targets_df.loc[valid_indices].reset_index(drop=True)
 
     # Z-score the FIM elements
     fim_columns = [col for col in combined_predictions_df.columns if 'FIM_element' in col]
@@ -168,13 +207,22 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
         "parameter_names": parameters
     }
 
-    preprocessing_results_obj['training']['predictions'].to_csv(f'{sim_directory}/training_features.csv', index=False)
-    preprocessing_results_obj['training']['targets'].to_csv(f'{sim_directory}/training_targets.csv', index=False)
-    preprocessing_results_obj['validation']['predictions'].to_csv(f'{sim_directory}/validation_features.csv', index=False)
-    preprocessing_results_obj['validation']['targets'].to_csv(f'{sim_directory}/validation_targets.csv', index=False)
+    preprocessing_results_obj['training']['predictions'].to_csv(
+        f'{sim_directory}/training_features.csv', index=False
+    )
+    preprocessing_results_obj['training']['targets'].to_csv(
+        f'{sim_directory}/training_targets.csv', index=False
+    )
+    preprocessing_results_obj['validation']['predictions'].to_csv(
+        f'{sim_directory}/validation_features.csv', index=False
+    )
+    preprocessing_results_obj['validation']['targets'].to_csv(
+        f'{sim_directory}/validation_targets.csv', index=False
+    )
 
     with open(f'{sim_directory}/preprocessing_results_obj.pkl', 'wb') as file:
         pickle.dump(preprocessing_results_obj, file)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
