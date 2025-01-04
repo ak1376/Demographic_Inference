@@ -7,6 +7,7 @@
 #SBATCH --mem=32G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
+#SBATCH --requeue
 
 # Load necessary modules or activate environment if required
 # Example:

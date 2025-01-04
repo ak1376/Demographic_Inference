@@ -51,11 +51,14 @@ wait_for_job_array_completion() {
     local start_time="$3"
 
     echo "Waiting for completion of job array $job_id ($job_name)..."
+    
+    # Add sleep here to allow SLURM to process job completions
+    sleep 5
+    
     while squeue -j "$job_id" -h -o "%T" | grep -q .; do
         sleep 30
     done
 
-    # Capture end time and calculate elapsed time
     local end_time=$(date +%s)
     local elapsed=$((end_time - start_time))
     echo "$job_name,$job_id,$start_time,$end_time,$elapsed" >> logs/job_stats.txt

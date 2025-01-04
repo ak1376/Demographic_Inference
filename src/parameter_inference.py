@@ -300,7 +300,9 @@ def run_inference_moments(
                 "ll": np.nan,
             }
             if use_FIM:
-                opt_params_dict["upper_triangular_FIM"] = np.nan
+                num_params = len(p0)
+                num_diag_elements = (num_params * (num_params + 1)) // 2  # formula for upper triangle including diagonal
+                opt_params_dict["upper_triangular_FIM"] = np.full((num_diag_elements,), np.nan)
             return None, None, opt_params_dict
 
     # 5) Otherwise, retrieve the results from the queue
