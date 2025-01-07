@@ -3,6 +3,7 @@ import gzip
 import os
 import json
 import argparse
+from src.preprocess import Processor
 
 def extract_window(vcf_file, output_dir, experiment_config, window_number):
     """
@@ -18,7 +19,9 @@ def extract_window(vcf_file, output_dir, experiment_config, window_number):
         str: Path to the output VCF file.
     """
     # Ensure output directory exists
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir_window = os.path.join(output_dir, f'window_{window_number}')
+    print(f'The output dir for this window is : {output_dir}')
+    os.makedirs(output_dir_window, exist_ok=True)
 
     # Step 1: Identify the contigs and lengths
     contigs = {}
@@ -36,14 +39,21 @@ def extract_window(vcf_file, output_dir, experiment_config, window_number):
     with open(experiment_config, "r") as f:
         config = json.load(f)
 
-    window_size = config["window_length"]
+    window_size = int(config["window_length"])  # Ensure window_size is an integer
     random_contig = random.choice(list(contigs.keys()))
-    contig_length = contigs[random_contig]
-    start = random.randint(1, contig_length - window_size)
+    contig_length = int(contigs[random_contig])  # Ensure contig_length is an integer
+
+    # Prevent errors if the contig length is smaller than the window size
+    if contig_length <= window_size:
+        raise ValueError(f"Contig {random_contig} is too short ({contig_length} bp) for window size {window_size}.")
+
+    start = random.randint(1, contig_length - window_size)  # This will now work
     end = start + window_size
 
+    print(f"Extracting window: {random_contig}:{start}-{end}")
+
     # Step 3: Extract the variants in the window
-    output_vcf = os.path.join(output_dir, f"window.{window_number}.vcf.gz")
+    output_vcf = os.path.join(output_dir_window, f"window.{window_number}.vcf.gz")
     with gzip.open(vcf_file, "rt") as f_in, gzip.open(output_vcf, "wt") as f_out:
         for line in f_in:
             if line.startswith("#"):
@@ -60,6 +70,9 @@ def extract_window(vcf_file, output_dir, experiment_config, window_number):
                     f_out.write(line)
 
     print(f"Random window saved to: {output_vcf}")
+
+    Processor.write_samples_and_rec_map(config, window_number, output_dir)
+
     return output_vcf
 
 if __name__ == "__main__":

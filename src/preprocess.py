@@ -105,14 +105,12 @@ class Processor:
 
         # Open and write the sample file
         with open(samples_file, "w+") as fout:
-            fout.write("sample\tpop\n")
+            fout.write("sample\tpop\n")  # Write the header
 
-            # Dynamically define samples based on the num_samples dictionary
-            sample_idx = 0  # Initialize sample index
-            for pop_name, sample_size in experiment_config['num_samples'].items():
-                for _ in range(sample_size):
-                    fout.write(f"tsk_{sample_idx}\t{pop_name}\n")
-                    sample_idx += 1
+            # Iterate over populations and sample sizes
+            for pop_name, sample_size in experiment_config["num_samples"].items():
+                for i in range(1, sample_size + 1):
+                    fout.write(f"{pop_name}_{i}\t{pop_name}\n")
 
         # Write the recombination map file
         with open(flat_map_file, "w+") as fout:

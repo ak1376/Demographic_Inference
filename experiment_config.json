@@ -16,8 +16,8 @@
     "num_sims_pretrain": 500,
     "num_sims_inference": 1,
     "num_samples": {
-        "N1": 20,
-        "N2": 20
+        "east": 22,
+        "west": 18
     },
     "dadi_analysis": true,
     "moments_analysis": true,
