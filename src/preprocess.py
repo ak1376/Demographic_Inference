@@ -142,6 +142,14 @@ class Processor:
         return sampled_params
 
     def simulate_chromosome(self, experiment_config, sampled_params, demographic_model, length=1e7, mutation_rate=5.7e-9, recombination_rate = 3.386e-9, **kwargs):
+        
+        # Make sure you are calling the right demes names 
+        samples = {pop_name: num_samples for pop_name, num_samples in experiment_config['num_samples'].items()}
+
+        
+
+        
+        
         g = demographic_model(sampled_params)
 
         demog = msprime.Demography.from_demes(g)
@@ -151,8 +159,6 @@ class Processor:
         #     msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
         #     for pop_name, sample_size in num_samples.items()
         # ]
-
-        samples = {"N1": experiment_config['num_samples']['N1'], "N2": experiment_config['num_samples']['N2']}
 
         # Simulate ancestry for two populations (joint simulation)
         ts = msprime.sim_ancestry(

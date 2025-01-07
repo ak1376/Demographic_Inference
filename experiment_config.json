@@ -1,15 +1,15 @@
 {
     "upper_bound_params": {
         "t_split": 20000,
-        "N1": 30000,
-        "N2": 30000,
+        "east": 30000,
+        "west": 30000,
         "Na": 30000, 
         "m": 1e-4
     },
     "lower_bound_params": {
         "t_split": 500,
-        "N1": 1000,
-        "N2": 1000,
+        "east": 1000,
+        "west": 1000,
         "Na": 1000, 
         "m": 1e-8
     },
@@ -38,8 +38,8 @@
     "demographic_model": "split_isolation_model",
     "parameter_names": [
         "Na",
-        "N1",
-        "N2",
+        "east",
+        "west",
         "t_split", 
         "m"
     ],
@@ -50,8 +50,8 @@
         0.02
     ],
     "parameters_to_estimate": [
-        "N1",
-        "N2",
+        "east",
+        "west",
         "t_split",
         "m",
         "Na"
