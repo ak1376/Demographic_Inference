@@ -87,106 +87,149 @@ class LinearReg:
 
         return linear_mdl_obj
 
-# class XGBoost:
-#     def __init__(
-#         self,
-#         objective="reg:squarederror",
-#         n_estimators=200,  # Increased for smaller learning rate
-#         learning_rate=0.05,  # Reduced to prevent overfitting
-#         max_depth=3,  # Reduced for simpler trees
-#         verbosity=2,
-#         alpha=0.01,  # L1 regularization
-#         lambd=1,  # L2 regularization (lambda is a reserved keyword, hence using lambd)
-#         subsample=0.8,  # Row subsampling to prevent overfitting
-#         colsample_bytree=0.8,  # Column subsampling to prevent overfitting
-#         min_child_weight=5,  # More conservative learning
-#         train_percentage=0.8,
-#     ):
-#         self.objective = objective
-#         self.n_estimators = n_estimators
-#         self.learning_rate = learning_rate
-#         self.max_depth = max_depth
-#         self.verbosity = verbosity
-#         self.alpha = alpha
-#         self.lambd = lambd
-#         self.subsample = subsample
-#         self.colsample_bytree = colsample_bytree
-#         self.min_child_weight = min_child_weight
-#         self.train_percentage = train_percentage
-#         self.models = []  # To store the individual XGBRegressor models for each target
-#         self.eval_results = []  # To store evaluation results for each target
+class RandomForest:
+    def __init__(
+        self,
+        training_features,
+        training_targets,
+        validation_features,
+        validation_targets,
+        **kwargs
+    ):
+        """
+        A random forest regression wrapper that follows the style of the LinearReg class.
+        Additional **kwargs can include parameters for the RandomForestRegressor such as:
+            n_estimators, criterion, max_depth, min_samples_split, min_samples_leaf, 
+            max_features, bootstrap, oob_score, n_jobs, random_state, etc.
+        """
+        from sklearn.ensemble import RandomForestRegressor
 
-#     def train_and_validate(
-#         self, X_train, y_train, X_test=None, y_test=None
-#     ):
-#         """
-#         Train the model and track training/validation losses per epoch.
-#         """
-#         # Ensure that test data is provided
-#         if X_test is None or y_test is None:
-#             raise ValueError("X_test and y_test must be provided")
+        self.training_features = training_features
+        self.training_targets = training_targets
+        self.validation_features = validation_features
+        self.validation_targets = validation_targets
+        
+        # List of valid RandomForestRegressor parameters you want to allow
+        valid_params = [
+            "n_estimators", "criterion", "max_depth", "min_samples_split",
+            "min_samples_leaf", "min_weight_fraction_leaf", "max_features",
+            "max_leaf_nodes", "min_impurity_decrease", "bootstrap", "oob_score",
+            "n_jobs", "random_state", "verbose", "warm_start", "ccp_alpha",
+            "max_samples"
+        ]
+        
+        # Filter out only the valid parameters
+        rf_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
+        print(f"Initializing RandomForestRegressor with kwargs={rf_kwargs}")
+        
+        # Initialize the RandomForestRegressor
+        self.model = RandomForestRegressor(**rf_kwargs)
 
-#         # Clear previous models and evaluation results
-#         self.models = []
-#         self.eval_results = []
+    def train_and_validate(self):
+        """
+        Train the random forest model, then return the training and validation predictions.
+        """
+        self.model.fit(self.training_features, self.training_targets)
 
-#         # Train one XGBRegressor for each target (each column in y_train/y_test)
-#         for i in range(y_train.shape[1]):
-#             estimator = xgb.XGBRegressor(
-#                 objective=self.objective,
-#                 n_estimators=self.n_estimators,
-#                 learning_rate=self.learning_rate,
-#                 max_depth=self.max_depth,
-#                 verbosity=self.verbosity,
-#                 alpha=self.alpha,  # L1 regularization
-#                 lambd=self.lambd,  # L2 regularization (lambda)
-#                 subsample=self.subsample,  # Row subsampling
-#                 colsample_bytree=self.colsample_bytree,  # Column subsampling
-#                 min_child_weight=self.min_child_weight,  # Minimum child weight
-#                 eval_metric="rmse"  # Metric for evaluation
-#             )
-            
-#             # Fit one target at a time
-#             estimator.fit(
-#                 X_train,
-#                 y_train[:, i],
-#                 eval_set=[(X_train, y_train[:, i]), (X_test, y_test[:, i])],
-#                 verbose=True  # Set to True if you want to see training progress
-#             )
+        training_predictions = self.model.predict(self.training_features)
+        validation_predictions = self.model.predict(self.validation_features)
 
-#             # Store the model and its eval results
-#             self.models.append(estimator)
-#             self.eval_results.append(estimator.evals_result())
+        # Reshape if necessary (for consistency with multi-column targets).
+        training_predictions = training_predictions.reshape(-1, 1) if len(training_predictions.shape) == 1 else training_predictions
+        validation_predictions = validation_predictions.reshape(-1, 1) if len(validation_predictions.shape) == 1 else validation_predictions
 
-#         # Make predictions on both train and test data
-#         y_pred_train = np.column_stack([model.predict(X_train) for model in self.models])
-#         y_pred_test = np.column_stack([model.predict(X_test) for model in self.models])
+        return training_predictions, validation_predictions
 
-#         # Calculate training and validation errors
-#         train_error = root_mean_squared_error(y_train, y_pred_train)
-#         validation_error = root_mean_squared_error(y_test, y_pred_test)
+    def organizing_results(self, preprocessing_results_obj, training_predictions, validation_predictions):
+        """
+        Organize results in a dictionary similar to the LinearReg's organizing_results.
+        """
+        rf_mdl_obj = {}
+        rf_mdl_obj["model"] = self.model
 
-#         return train_error, validation_error, y_pred_train, y_pred_test
+        rf_mdl_obj["training"] = {}
+        rf_mdl_obj["validation"] = {}
 
-#     def get_epoch_losses(self):
-#         """
-#         Get training and validation losses for each epoch.
-#         Returns two lists: training losses and validation losses for each output regressor.
-#         """
-#         if self.eval_results:
-#             train_losses_per_target = []
-#             val_losses_per_target = []
+        rf_mdl_obj["training"]["predictions"] = training_predictions
+        rf_mdl_obj["training"]["targets"] = np.asarray(preprocessing_results_obj["training"]["targets"])
 
-#             # Extract RMSE values for each target's model
-#             for result in self.eval_results:
-#                 train_losses = result['validation_0']['rmse']
-#                 val_losses = result['validation_1']['rmse']
-#                 train_losses_per_target.append(train_losses)
-#                 val_losses_per_target.append(val_losses)
+        rf_mdl_obj["validation"]["predictions"] = validation_predictions
+        rf_mdl_obj["validation"]["targets"] = np.asarray(preprocessing_results_obj["validation"]["targets"])
 
-#             return train_losses_per_target, val_losses_per_target
-#         else:
-#             raise ValueError("No evaluation results available. Train the model first.")        
+        return rf_mdl_obj
+
+class XGBoostReg:
+    def __init__(
+        self,
+        training_features,
+        training_targets,
+        validation_features,
+        validation_targets,
+        **kwargs
+    ):
+        """
+        An XGBoost regression wrapper that follows the style of the LinearReg class.
+        Additional **kwargs can include parameters for XGBRegressor such as:
+            objective, n_estimators, learning_rate, max_depth, verbosity, alpha, 
+            reg_lambda, subsample, colsample_bytree, min_child_weight, eval_metric, etc.
+        """
+        import xgboost as xgb
+        
+        self.training_features = training_features
+        self.training_targets = training_targets
+        self.validation_features = validation_features
+        self.validation_targets = validation_targets
+        
+        # List of valid XGBRegressor parameters you want to allow
+        valid_params = [
+            "objective", "n_estimators", "learning_rate", "max_depth", "verbosity",
+            "alpha", "lambda", "subsample", "colsample_bytree", "min_child_weight",
+            "eval_metric", "booster", "tree_method", "gamma", "reg_lambda"
+        ]
+        
+        # Filter out only the valid parameters
+        xgb_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
+        print(f"Initializing XGBRegressor with kwargs={xgb_kwargs}")
+
+        # For XGBoost, note that 'lambda' is often spelled 'reg_lambda' in newer versions,
+        # so you may need to handle that rename if a user passes 'lambda=':
+        if 'lambda' in xgb_kwargs:
+            xgb_kwargs['reg_lambda'] = xgb_kwargs.pop('lambda')
+
+        self.model = xgb.XGBRegressor(**xgb_kwargs)
+
+    def train_and_validate(self):
+        """
+        Train the XGBoost regressor, then return the training and validation predictions.
+        """
+        self.model.fit(self.training_features, self.training_targets)
+        
+        training_predictions = self.model.predict(self.training_features)
+        validation_predictions = self.model.predict(self.validation_features)
+
+        # Reshape if necessary (for consistency with multi-column targets).
+        training_predictions = training_predictions.reshape(-1, 1) if len(training_predictions.shape) == 1 else training_predictions
+        validation_predictions = validation_predictions.reshape(-1, 1) if len(validation_predictions.shape) == 1 else validation_predictions
+
+        return training_predictions, validation_predictions
+
+    def organizing_results(self, preprocessing_results_obj, training_predictions, validation_predictions):
+        """
+        Organize results in a dictionary similar to the LinearReg's organizing_results.
+        """
+        xgb_mdl_obj = {}
+        xgb_mdl_obj["model"] = self.model
+
+        xgb_mdl_obj["training"] = {}
+        xgb_mdl_obj["validation"] = {}
+
+        xgb_mdl_obj["training"]["predictions"] = training_predictions
+        xgb_mdl_obj["training"]["targets"] = np.asarray(preprocessing_results_obj["training"]["targets"])
+
+        xgb_mdl_obj["validation"]["predictions"] = validation_predictions
+        xgb_mdl_obj["validation"]["targets"] = np.asarray(preprocessing_results_obj["validation"]["targets"])
+
+        return xgb_mdl_obj
 
 # Hook function to inspect BatchNorm outputs
 def inspect_batchnorm_output(module, input, output):
