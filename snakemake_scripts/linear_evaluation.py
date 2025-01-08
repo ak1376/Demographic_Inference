@@ -5,7 +5,7 @@ from src.utils import visualizing_results, mean_squared_error
 from src.models import LinearReg
 import os
 
-def linear_evaluation(features_and_targets_filepath, model_config_path, color_shades_path, main_colors_path, experiment_config_filepath = None, model_directory = None):
+def linear_evaluation(features_and_targets_filepath, model_config_path, color_shades_path, main_colors_path, experiment_config_filepath = None, model_directory = None,  regression_type = "standard", alpha = 0.0, l1_ratio = 0.5):
 
     if model_directory is None:
         experiment_config = json.load(open(experiment_config_filepath, "r"))
@@ -53,6 +53,9 @@ def linear_evaluation(features_and_targets_filepath, model_config_path, color_sh
         training_targets=features_and_targets["training"]["targets"],
         validation_features=features_and_targets["validation"]["features"],
         validation_targets=features_and_targets["validation"]["targets"],
+        regression_type=regression_type, 
+        alpha=alpha,
+        l1_ratio=l1_ratio
     )
 
     training_predictions, validation_predictions = (
@@ -146,6 +149,27 @@ if __name__ == "__main__":
         help="Path to the model directory (optional)."
     )
 
+    parser.add_argument(
+        "--regression_type",
+        type=str,
+        default="standard",
+        help="Type of regression to perform (standard, ridge, lasso, elastic net)."
+    )
+
+    parser.add_argument(
+    "--alpha",
+    type=float,
+    default=0.0,  # Set to 0.0 to reflect no regularization by default
+    help="Regularization strength for Ridge, Lasso, or ElasticNet. Set to 0.0 for no regularization (standard linear regression)."
+    )
+
+    parser.add_argument(
+        "--l1_ratio",
+        type=float,
+        default=0.5,  # Default for ElasticNet; irrelevant for other types unless alpha > 0
+        help="Mixing parameter for ElasticNet (only used if regression_type='elasticnet'). 0 <= l1_ratio <= 1. Irrelevant if alpha=0.0."
+    )
+
     args = parser.parse_args()
 
     linear_evaluation(
@@ -154,5 +178,8 @@ if __name__ == "__main__":
         color_shades_path=args.color_shades_file,
         main_colors_path=args.main_colors_file,
         experiment_config_filepath = args.experiment_config_filepath,
-        model_directory = args.model_directory
+        model_directory = args.model_directory,
+        regression_type = args.regression_type, 
+        alpha = args.alpha,
+        l1_ratio = args.l1_ratio
     )

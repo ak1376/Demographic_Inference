@@ -10,14 +10,45 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 class LinearReg:
-    def __init__(self, training_features, training_targets, validation_features, validation_targets):
+    def __init__(self, training_features, training_targets, validation_features, validation_targets, 
+                 regression_type="standard", **kwargs):
 
         self.training_features = training_features
         self.training_targets = training_targets
         self.validation_features = validation_features
         self.validation_targets = validation_targets
 
-        self.model = LinearRegression()
+        self.model = None
+
+        # Filter kwargs for Ridge
+        if regression_type == "ridge":
+            from sklearn.linear_model import Ridge
+            ridge_kwargs = {k: v for k, v in kwargs.items() if k in ["alpha", "fit_intercept", "normalize", "solver", "random_state"]}
+            print(f"Initializing Ridge with kwargs={ridge_kwargs}")
+            self.model = Ridge(**ridge_kwargs)
+
+        # Filter kwargs for Lasso
+        elif regression_type == "lasso":
+            from sklearn.linear_model import Lasso
+            lasso_kwargs = {k: v for k, v in kwargs.items() if k in ["alpha", "fit_intercept", "normalize", "precompute", "max_iter", "tol", "warm_start", "positive", "random_state"]}
+            print(f"Initializing Lasso with kwargs={lasso_kwargs}")
+            self.model = Lasso(**lasso_kwargs)
+
+        # Filter kwargs for ElasticNet
+        elif regression_type == "elasticnet":
+            from sklearn.linear_model import ElasticNet
+            elasticnet_kwargs = {k: v for k, v in kwargs.items() if k in ["alpha", "l1_ratio", "fit_intercept", "normalize", "precompute", "max_iter", "tol", "warm_start", "positive", "random_state"]}
+            print(f"Initializing ElasticNet with kwargs={elasticnet_kwargs}")
+            self.model = ElasticNet(**elasticnet_kwargs)
+
+        # Standard Linear Regression
+        elif regression_type == "standard":
+            from sklearn.linear_model import LinearRegression
+            print(f"Initializing LinearRegression with kwargs={kwargs}")
+            self.model = LinearRegression(**kwargs)
+
+        else:
+            raise ValueError("Invalid regression type. Please choose from 'standard', 'ridge', 'lasso', or 'elasticnet'.")
 
     def train_and_validate(self):
         """
