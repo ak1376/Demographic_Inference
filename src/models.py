@@ -7,6 +7,8 @@ from torch.optim.adam import Adam
 from sklearn.linear_model import LinearRegression
 import pytorch_lightning as pl
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import matplotlib.pyplot as plt
+from sklearn.multioutput import MultiOutputRegressor
 
 
 class LinearReg:
@@ -44,8 +46,10 @@ class LinearReg:
         # Standard Linear Regression
         elif regression_type == "standard":
             from sklearn.linear_model import LinearRegression
-            print(f"Initializing LinearRegression with kwargs={kwargs}")
-            self.model = LinearRegression(**kwargs)
+            # LinearRegression does not accept 'alpha' or 'l1_ratio', so we exclude them
+            linear_kwargs = {k: v for k, v in kwargs.items() if k in ["fit_intercept", "normalize", "copy_X", "n_jobs", "positive"]}
+            print(f"Initializing LinearRegression with kwargs={linear_kwargs}")
+            self.model = LinearRegression(**linear_kwargs)
 
         else:
             raise ValueError("Invalid regression type. Please choose from 'standard', 'ridge', 'lasso', or 'elasticnet'.")
@@ -97,10 +101,9 @@ class RandomForest:
         **kwargs
     ):
         """
-        A random forest regression wrapper that follows the style of the LinearReg class.
+        A random forest regression wrapper.
         Additional **kwargs can include parameters for the RandomForestRegressor such as:
-            n_estimators, criterion, max_depth, min_samples_split, min_samples_leaf, 
-            max_features, bootstrap, oob_score, n_jobs, random_state, etc.
+            n_estimators, criterion, max_depth, min_samples_split, etc.
         """
         from sklearn.ensemble import RandomForestRegressor
 
@@ -109,7 +112,6 @@ class RandomForest:
         self.validation_features = validation_features
         self.validation_targets = validation_targets
         
-        # List of valid RandomForestRegressor parameters you want to allow
         valid_params = [
             "n_estimators", "criterion", "max_depth", "min_samples_split",
             "min_samples_leaf", "min_weight_fraction_leaf", "max_features",
@@ -118,45 +120,90 @@ class RandomForest:
             "max_samples"
         ]
         
-        # Filter out only the valid parameters
         rf_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
         print(f"Initializing RandomForestRegressor with kwargs={rf_kwargs}")
         
-        # Initialize the RandomForestRegressor
-        self.model = RandomForestRegressor(**rf_kwargs)
+        self.model = MultiOutputRegressor(RandomForestRegressor(**rf_kwargs))
 
     def train_and_validate(self):
         """
-        Train the random forest model, then return the training and validation predictions.
+        Fit the RandomForestRegressor and return predictions on training and validation sets.
         """
         self.model.fit(self.training_features, self.training_targets)
 
         training_predictions = self.model.predict(self.training_features)
         validation_predictions = self.model.predict(self.validation_features)
 
-        # Reshape if necessary (for consistency with multi-column targets).
-        training_predictions = training_predictions.reshape(-1, 1) if len(training_predictions.shape) == 1 else training_predictions
-        validation_predictions = validation_predictions.reshape(-1, 1) if len(validation_predictions.shape) == 1 else validation_predictions
+        # Reshape if 1D
+        if training_predictions.ndim == 1:
+            training_predictions = training_predictions.reshape(-1, 1)
+        if validation_predictions.ndim == 1:
+            validation_predictions = validation_predictions.reshape(-1, 1)
 
         return training_predictions, validation_predictions
 
-    def organizing_results(self, preprocessing_results_obj, training_predictions, validation_predictions):
+    def organizing_results(self, preprocessing_results_obj, train_preds, val_preds):
         """
-        Organize results in a dictionary similar to the LinearReg's organizing_results.
+        Returns a dictionary with model, predictions, and targets.
         """
-        rf_mdl_obj = {}
-        rf_mdl_obj["model"] = self.model
+        import numpy as np
 
-        rf_mdl_obj["training"] = {}
-        rf_mdl_obj["validation"] = {}
-
-        rf_mdl_obj["training"]["predictions"] = training_predictions
-        rf_mdl_obj["training"]["targets"] = np.asarray(preprocessing_results_obj["training"]["targets"])
-
-        rf_mdl_obj["validation"]["predictions"] = validation_predictions
-        rf_mdl_obj["validation"]["targets"] = np.asarray(preprocessing_results_obj["validation"]["targets"])
-
+        rf_mdl_obj = {
+            "model": self.model,
+            "training": {
+                "predictions": train_preds,
+                "targets": np.asarray(preprocessing_results_obj["training"]["targets"]),
+            },
+            "validation": {
+                "predictions": val_preds,
+                "targets": np.asarray(preprocessing_results_obj["validation"]["targets"]),
+            },
+        }
         return rf_mdl_obj
+
+    def plot_feature_importances(self, feature_names, target_names, max_num_features=None, save_path="feature_importances.png"):
+        """
+        Saves a grid plot of feature importances for each output of the trained RandomForestRegressor.
+
+        :param feature_names: List of feature names corresponding to each column.
+        :param max_num_features: If set, only plot that many top features.
+        :param save_path: The file path where the plot will be saved (default: 'feature_importances_grid.png').
+        """
+        num_outputs = len(self.model.estimators_)  # Number of outputs (single-output estimators)
+        n_cols = 3  # Number of columns in the grid
+        n_rows = (num_outputs + n_cols - 1) // n_cols  # Calculate number of rows needed
+
+        # Create a grid of subplots
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
+        axes = axes.flatten()  # Flatten axes for easy indexing
+
+        for output_idx, single_estimator in enumerate(self.model.estimators_):
+            importances = single_estimator.feature_importances_
+            sorted_idx = np.argsort(importances)[::-1]
+
+            if max_num_features is not None:
+                sorted_idx = sorted_idx[:max_num_features]
+
+            sorted_importances = importances[sorted_idx]
+            sorted_names = [feature_names[i] for i in sorted_idx]
+
+            # Plot feature importances for the current output
+            ax = axes[output_idx]
+            ax.bar(range(len(sorted_importances)), sorted_importances, align="center")
+            ax.set_xticks(range(len(sorted_importances)))
+            ax.set_xticklabels(sorted_names, rotation=45, ha="right")
+            ax.set_xlabel("Features")
+            ax.set_ylabel("Importance")
+            ax.set_title(f"Feature Importances (Output {target_names[output_idx]})")
+
+        # Hide unused subplots
+        for ax in axes[len(self.model.estimators_):]:
+            ax.axis("off")
+
+        # Save the grid plot
+        plt.suptitle("Feature Importances Across Outputs", fontsize=16)
+        plt.savefig(save_path)
+        plt.close()
 
 class XGBoostReg:
     def __init__(
@@ -168,10 +215,9 @@ class XGBoostReg:
         **kwargs
     ):
         """
-        An XGBoost regression wrapper that follows the style of the LinearReg class.
+        XGBoost regressor wrapper.
         Additional **kwargs can include parameters for XGBRegressor such as:
-            objective, n_estimators, learning_rate, max_depth, verbosity, alpha, 
-            reg_lambda, subsample, colsample_bytree, min_child_weight, eval_metric, etc.
+            objective, n_estimators, learning_rate, max_depth, verbosity, alpha, etc.
         """
         import xgboost as xgb
         
@@ -180,56 +226,100 @@ class XGBoostReg:
         self.validation_features = validation_features
         self.validation_targets = validation_targets
         
-        # List of valid XGBRegressor parameters you want to allow
         valid_params = [
             "objective", "n_estimators", "learning_rate", "max_depth", "verbosity",
             "alpha", "lambda", "subsample", "colsample_bytree", "min_child_weight",
-            "eval_metric", "booster", "tree_method", "gamma", "reg_lambda"
+            "eval_metric", "booster", "tree_method", "gamma", "reg_lambda", "reg_alpha"
         ]
         
-        # Filter out only the valid parameters
         xgb_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
         print(f"Initializing XGBRegressor with kwargs={xgb_kwargs}")
 
-        # For XGBoost, note that 'lambda' is often spelled 'reg_lambda' in newer versions,
-        # so you may need to handle that rename if a user passes 'lambda=':
+        # If user passed 'lambda', rename to 'reg_lambda'
         if 'lambda' in xgb_kwargs:
             xgb_kwargs['reg_lambda'] = xgb_kwargs.pop('lambda')
 
-        self.model = xgb.XGBRegressor(**xgb_kwargs)
+        self.model = MultiOutputRegressor(xgb.XGBRegressor(**xgb_kwargs))
 
     def train_and_validate(self):
         """
-        Train the XGBoost regressor, then return the training and validation predictions.
+        Fit XGBRegressor and return predictions on training and validation sets.
         """
         self.model.fit(self.training_features, self.training_targets)
         
-        training_predictions = self.model.predict(self.training_features)
-        validation_predictions = self.model.predict(self.validation_features)
+        train_preds = self.model.predict(self.training_features)
+        val_preds = self.model.predict(self.validation_features)
 
-        # Reshape if necessary (for consistency with multi-column targets).
-        training_predictions = training_predictions.reshape(-1, 1) if len(training_predictions.shape) == 1 else training_predictions
-        validation_predictions = validation_predictions.reshape(-1, 1) if len(validation_predictions.shape) == 1 else validation_predictions
+        if train_preds.ndim == 1:
+            train_preds = train_preds.reshape(-1, 1)
+        if val_preds.ndim == 1:
+            val_preds = val_preds.reshape(-1, 1)
 
-        return training_predictions, validation_predictions
+        return train_preds, val_preds
 
-    def organizing_results(self, preprocessing_results_obj, training_predictions, validation_predictions):
-        """
-        Organize results in a dictionary similar to the LinearReg's organizing_results.
-        """
-        xgb_mdl_obj = {}
-        xgb_mdl_obj["model"] = self.model
+    def organizing_results(self, preprocessing_results_obj, train_preds, val_preds):
+        import numpy as np
 
-        xgb_mdl_obj["training"] = {}
-        xgb_mdl_obj["validation"] = {}
-
-        xgb_mdl_obj["training"]["predictions"] = training_predictions
-        xgb_mdl_obj["training"]["targets"] = np.asarray(preprocessing_results_obj["training"]["targets"])
-
-        xgb_mdl_obj["validation"]["predictions"] = validation_predictions
-        xgb_mdl_obj["validation"]["targets"] = np.asarray(preprocessing_results_obj["validation"]["targets"])
-
+        xgb_mdl_obj = {
+            "model": self.model,
+            "training": {
+                "predictions": train_preds,
+                "targets": np.asarray(preprocessing_results_obj["training"]["targets"]),
+            },
+            "validation": {
+                "predictions": val_preds,
+                "targets": np.asarray(preprocessing_results_obj["validation"]["targets"]),
+            },
+        }
         return xgb_mdl_obj
+
+    def plot_feature_importances(self, feature_names, target_names=None, max_num_features=None, save_path="xgb_feature_importances.png"):
+        """
+        Saves a grid plot of feature importances for each output of the trained XGBoostRegressor.
+
+        :param feature_names: List of feature names corresponding to each column.
+        :param target_names: List of target names for labeling the outputs (optional).
+        :param max_num_features: If set, only plot that many top features for each output.
+        :param save_path: The file path where the plot will be saved (default: 'xgb_feature_importances.png').
+        """
+        num_outputs = len(self.model.estimators_)  # Number of outputs (single-output estimators)
+        n_cols = 3  # Number of columns in the grid
+        n_rows = (num_outputs + n_cols - 1) // n_cols  # Calculate the number of rows needed
+
+        # Create a grid of subplots
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
+        axes = axes.flatten()  # Flatten axes for easy indexing
+
+        for output_idx, single_estimator in enumerate(self.model.estimators_):
+            importances = single_estimator.feature_importances_
+            sorted_idx = np.argsort(importances)[::-1]
+
+            if max_num_features is not None:
+                sorted_idx = sorted_idx[:max_num_features]
+
+            sorted_importances = importances[sorted_idx]
+            sorted_names = [feature_names[i] for i in sorted_idx]
+
+            # Plot feature importances for the current output
+            ax = axes[output_idx]
+            ax.bar(range(len(sorted_importances)), sorted_importances, align="center", color="orange")
+            ax.set_xticks(range(len(sorted_importances)))
+            ax.set_xticklabels(sorted_names, rotation=45, ha="right")
+            ax.set_xlabel("Features")
+            ax.set_ylabel("Importance")
+            title = f"Feature Importances (Output {output_idx})"
+            if target_names:
+                title = f"Feature Importances ({target_names[output_idx]})"
+            ax.set_title(title)
+
+        # Hide unused subplots
+        for ax in axes[len(self.model.estimators_):]:
+            ax.axis("off")
+
+        # Save the grid plot
+        plt.suptitle("XGBoost Feature Importances Across Outputs", fontsize=16)
+        plt.savefig(save_path)
+        plt.close()
 
 # Hook function to inspect BatchNorm outputs
 def inspect_batchnorm_output(module, input, output):

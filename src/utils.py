@@ -30,6 +30,14 @@ def visualizing_results(
 
         # Loop through each stage and parameter combination
         for j, stage in enumerate(stages):
+            # Ensure predictions are NumPy arrays
+            if not isinstance(linear_mdl_obj[stage]["predictions"], np.ndarray):
+                linear_mdl_obj[stage]["predictions"] = linear_mdl_obj[stage]["predictions"].to_numpy()
+
+            # Ensure targets are NumPy arrays
+            if not isinstance(linear_mdl_obj[stage]["targets"], np.ndarray):
+                linear_mdl_obj[stage]["targets"] = linear_mdl_obj[stage]["targets"].to_numpy()
+
             predictions = linear_mdl_obj[stage]["predictions"][:, i]  # Only for the current parameter
             targets = linear_mdl_obj[stage]["targets"][:, i]  # Only for the current parameter
 

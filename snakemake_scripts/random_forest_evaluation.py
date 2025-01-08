@@ -48,6 +48,7 @@ def random_forest_evaluation(
     main_colors_path,
     experiment_config_filepath=None,
     model_directory=None,
+    feature_names=None,              # <- NEW
     **rf_kwargs
 ):
     """
@@ -125,6 +126,18 @@ def random_forest_evaluation(
     # 2) Load data and configs
     # ------------------------
     features_and_targets = pickle.load(open(features_and_targets_filepath, "rb"))
+    # Suppose we store feature_names in the data or pass via argument
+    if feature_names is None:
+        # If none provided, make some up or check if they're in the pickle
+        if "feature_names" in features_and_targets:
+            feature_names = features_and_targets["feature_names"]
+        else:
+            X_train = features_and_targets["training"]["features"]
+            y_train = features_and_targets['training']['targets']
+            feature_names = X_train.columns.tolist()
+            target_names = y_train.columns.tolist()
+
+
     model_config = json.load(open(model_config_path, "r"))
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
@@ -148,10 +161,10 @@ def random_forest_evaluation(
         
         # Define the parameter distributions you want to search over
         param_dist = {
-            "n_estimators": [50, 100, 200, 300],
-            "max_depth": [None, 10, 20, 30],
-            "min_samples_split": [2, 5, 10],
-            "random_state": [42, 123, 2023],
+            "n_estimators": [20, 50, 100, 200, 300, 500],
+            "max_depth": [None, 10, 20, 30, 40, 50],
+            "min_samples_split": [2, 5, 10, 15, 20],
+            "random_state": [42, 123, 2023, 295],
             # You can add more params here as needed
         }
 
@@ -250,10 +263,11 @@ def random_forest_evaluation(
         color_shades=color_shades,
         main_colors=main_colors
     )
+    
+    random_forest_mdl.plot_feature_importances(feature_names, target_names, max_num_features=10, save_path=f'{model_directory}/random_forest_feature_importances.png')
 
     # Save the entire trained wrapper (including scikit-learn model) with joblib
     joblib.dump(random_forest_mdl, f"{model_directory}/random_forest_model.pkl")
-
     print("Random Forest model trained and saved. LFG!")
 
 
