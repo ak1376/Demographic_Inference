@@ -12,7 +12,7 @@
 export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference
 
 # Define paths
-EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
+EXPERIMENT_CONFIG_FILE='/projects/kernlab/akapoor/Demographic_Inference/experiment_config.json'
 
 # Extract the values from the JSON config
 DEMOGRAPHIC_MODEL=$(jq -r '.demographic_model' $EXPERIMENT_CONFIG_FILE)

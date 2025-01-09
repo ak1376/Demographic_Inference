@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=batched_genome_windows
-#SBATCH --array=0-4999          
+#SBATCH --array=0-999          
 #SBATCH --output=logs/genome_windows_%A_%a.out
 #SBATCH --error=logs/genome_windows_%A_%a.err
 #SBATCH --time=12:00:00
@@ -10,8 +10,8 @@
 #SBATCH --account=kernlab
 #SBATCH --requeue
 
-BATCH_SIZE=100
-TOTAL_TASKS=500000
+BATCH_SIZE=10
+TOTAL_TASKS=10000
 
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     overall_start_time=$(date +%s)
@@ -62,7 +62,6 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory "$WINDOW_DIR" \
         --rerun-incomplete \
-        --latency-wait 120 \
         --nolock \
         "${WINDOW_DIR}/samples.txt" \
         "${WINDOW_DIR}/flat_map.txt" \

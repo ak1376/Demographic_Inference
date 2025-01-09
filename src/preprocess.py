@@ -110,7 +110,7 @@ class Processor:
             # Iterate over populations and sample sizes
             for pop_name, sample_size in experiment_config["num_samples"].items():
                 for i in range(1, sample_size + 1):
-                    fout.write(f"{pop_name}_{i}\t{pop_name}\n")
+                    fout.write(f"tsk_{i}\t{pop_name}\n")
 
         # Write the recombination map file
         with open(flat_map_file, "w+") as fout:

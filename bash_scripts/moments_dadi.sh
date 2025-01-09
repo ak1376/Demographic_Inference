@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-2999  # Adjust based on TOTAL_TASKS / BATCH_SIZE
+#SBATCH --array=0-599  # Adjust based on TOTAL_TASKS / BATCH_SIZE
 #SBATCH --output=logs/moments_dadi_batch_%A_%a.out
 #SBATCH --error=logs/moments_dadi_batch_%A_%a.err
 #SBATCH --time=24:00:00
@@ -33,7 +33,7 @@ ANALYSES=("dadi" "moments")
 NUM_ANALYSES=${#ANALYSES[@]}  # Number of analyses
 
 # Define batch size
-BATCH_SIZE=10  # Number of tasks to run in each job
+BATCH_SIZE=1  # Number of tasks to run in each job
 TOTAL_TASKS=$((NUM_SIMS_PRETRAIN * NUM_REPLICATES * NUM_ANALYSES))  # Total tasks
 NUM_BATCHES=$(((TOTAL_TASKS + BATCH_SIZE - 1) / BATCH_SIZE))  # Calculate total batches
 

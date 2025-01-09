@@ -19,7 +19,7 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
         vcf_file,
         rec_map_file=flat_map_path,
         pop_file=pop_file_path,
-        pops=["east", "west"], # TODO: Change later
+        pops=["N1", "N2"], # TODO: Change later
         r_bins=r_bins,
         report=False,
         use_genotypes = False

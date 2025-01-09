@@ -17,7 +17,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     with open(experiment_config_file, "r") as f:
         experiment_config = json.load(f)
 
-    parameters = ["Na", "N1", "N2", "t_split"]
+    parameters = ["Na", "N1", "N2", "t_split"] # TODO: CHANGE LATER!!!!!!!!!!!
     replicates = experiment_config['top_values_k']
 
     # Containers for predictions and targets
