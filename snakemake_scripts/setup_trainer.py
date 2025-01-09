@@ -1,9 +1,12 @@
+# setup_trainer.py
+
 import pickle
 import argparse
-from src.models import ShallowNN
-from src.utils import plot_loss_curves
 import json
 import torch
+
+from src.models import ShallowNN
+from src.utils import plot_loss_curves
 from src.train import MLPTrainer
 
 
@@ -18,67 +21,62 @@ def str2bool(v):
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
-def main(
-    experiment_directory, model_config_file, features_file, color_shades, main_colors
-):
-    # Load model config
+def main(experiment_directory, model_config_file, features_file, color_shades, main_colors):
+    # Load model config (JSON)
     with open(model_config_file, "r") as f:
         model_config = json.load(f)
 
-    # Load features
+    # Load preprocessed data (Pickle)
     with open(features_file, "rb") as f:
         features = pickle.load(f)
 
-    # Load the list back
+    # Load color palettes/shades
     with open(color_shades, "rb") as f:
         color_shades = pickle.load(f)
-
     with open(main_colors, "rb") as f:
         main_colors = pickle.load(f)
 
+    # Unpack hyperparameters
+    nn_hyperparams = model_config["neural_net_hyperparameters"]
+
+    # Instantiate the ShallowNN model
     mdl = ShallowNN(
-        input_size=model_config["neural_net_hyperparameters"]["input_size"],
-        hidden_sizes=model_config["neural_net_hyperparameters"]["hidden_size"],
-        num_layers=model_config["neural_net_hyperparameters"]["num_layers"],
-        output_size=model_config["neural_net_hyperparameters"]["output_size"],
-        learning_rate=model_config["neural_net_hyperparameters"]["learning_rate"],
-        weight_decay=model_config["neural_net_hyperparameters"]["weight_decay"],
-        dropout_rate=model_config["neural_net_hyperparameters"]["dropout_rate"],
-        BatchNorm=model_config["neural_net_hyperparameters"]["BatchNorm"],
+        input_size=nn_hyperparams["input_size"],
+        hidden_sizes=nn_hyperparams["hidden_size"],
+        num_layers=nn_hyperparams["num_layers"],
+        output_size=nn_hyperparams["output_size"],
+        learning_rate=nn_hyperparams["learning_rate"],
+        weight_decay=nn_hyperparams["weight_decay"],
+        dropout_rate=nn_hyperparams["dropout_rate"],
+        BatchNorm=nn_hyperparams["BatchNorm"],
     )
 
-    
+    # Create our trainer object
     trainer = MLPTrainer(
         experiment_directory,
         model_config,
         color_shades,
         main_colors,
-        param_names=model_config['neural_net_hyperparameters']["parameter_names"],
+        param_names=nn_hyperparams["parameter_names"],
     )
 
-    # print(f'Shape of the tensors')
-    # print(f'Training features: {features["training"]["features"].shape}')
-    # print(f'Training targets: {features["training"]["targets"].shape}')
-    # print(f'Validation features: {features["validation"]["features"].shape}')
-    # print(f'Validation targets: {features["validation"]["targets"].shape}')
+    # Optional: print debug info
+    # print("Max Values in the dataset:")
+    # print(f"  Training features max: {features['training']['features'].max()}")
+    # print(f"  Training targets max:  {features['training']['targets'].max()}")
+    # print(f"  Validation features max: {features['validation']['features'].max()}")
+    # print(f"  Validation targets max:  {features['validation']['targets'].max()}")
 
-    print(f'Max Values')
-    print(f'Training features: {features["training"]["features"].max()}')
-    print(f'Training targets: {features["training"]["targets"].max()}')
-    print(f'Validation features: {features["validation"]["features"].max()}')
-    print(f'Validation targets: {features["validation"]["targets"].max()}')
-
-
-
+    # Train
     snn_model, train_losses, val_losses = trainer.train(
-        model = mdl,
-        X_train = features["training"]["features"],
-        y_train = features["training"]["targets"],
-        X_val = features["validation"]["features"],
-        y_val = features["validation"]["targets"],
+        model=mdl,
+        X_train=features["training"]["features"],
+        y_train=features["training"]["targets"],
+        X_val=features["validation"]["features"],
+        y_val=features["validation"]["targets"],
     )
 
-
+    # Predict + Visualization
     snn_results = trainer.predict(
         model=snn_model,
         training_data=features["training"]["features"],
@@ -87,15 +85,22 @@ def main(
         validation_targets=features["validation"]["targets"],
         visualize=True,
     )
+
     # Save the trained model
     torch.save(snn_model.state_dict(), f"{experiment_directory}/snn_model.pth")
 
+    # Attach loss history to results
     snn_results["train_losses"] = train_losses
     snn_results["val_losses"] = val_losses
 
+    # Plot and save loss curves
+    plot_loss_curves(
+        train_losses=train_losses,
+        val_losses=val_losses,
+        save_path=f"{experiment_directory}/loss_curves.png"
+    )
 
-    plot_loss_curves(train_losses = train_losses, val_losses = val_losses, save_path = f'{experiment_directory}/loss_curves.png')
-
+    # Save final results (Pickle)
     with open(f"{experiment_directory}/snn_results.pkl", "wb") as f:
         pickle.dump(snn_results, f)
 
