@@ -6,6 +6,9 @@
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akapoor@uoregon.edu
+#SBATCH --verbose
 
 # Ensure logs directory exists
 mkdir -p logs

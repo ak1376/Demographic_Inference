@@ -7,6 +7,9 @@
 #SBATCH --mem=16G
 #SBATCH --partition=kern,preempt
 #SBATCH --account=kernlab
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akapoor@uoregon.edu
+#SBATCH --verbose
 
 # Load necessary modules or set up the environment
 export PYTHONPATH=/projects/kernlab/akapoor/Demographic_Inference

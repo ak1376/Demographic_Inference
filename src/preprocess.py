@@ -96,21 +96,23 @@ class Processor:
 
     @staticmethod
     def write_samples_and_rec_map(experiment_config, window_number, folderpath):
-
+        # Create the window-specific subdirectory
         folderpath = os.path.join(folderpath, f"window_{window_number}")
+        os.makedirs(folderpath, exist_ok=True)
 
         # Define the file paths
-        samples_file = os.path.join(folderpath, f"samples.txt")
-        flat_map_file = os.path.join(folderpath, f"flat_map.txt")
+        samples_file = os.path.join(folderpath, "samples.txt")
+        flat_map_file = os.path.join(folderpath, "flat_map.txt")
 
-        # Open and write the sample file
-        with open(samples_file, "w+") as fout:
-            fout.write("sample\tpop\n")  # Write the header
-
-            # Iterate over populations and sample sizes
+        # Write the samples.txt file
+        with open(samples_file, "w") as fout:
+            fout.write("sample\tpop\n")
+            sample_counter = 0
+            # For each population, write that pop name for <sample_size> samples
             for pop_name, sample_size in experiment_config["num_samples"].items():
-                for i in range(1, sample_size + 1):
-                    fout.write(f"tsk_{i}\t{pop_name}\n")
+                for _ in range(sample_size):
+                    fout.write(f"tsk_{sample_counter}\t{pop_name}\n")
+                    sample_counter += 1
 
         # Write the recombination map file
         with open(flat_map_file, "w+") as fout:

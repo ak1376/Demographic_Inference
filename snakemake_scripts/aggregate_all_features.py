@@ -137,6 +137,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
                 )
                 combined_predictions_df.loc[out_of_bounds_mask, col_name] = np.nan
 
+    print(f'The names of the columns are: {combined_predictions_df.columns}')
     # -------------------------------------------------------------------
     # MICE: Use IterativeImputer to impute OOB (now NaN) values
     # -------------------------------------------------------------------
@@ -145,6 +146,11 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
         max_iter=10       # you can adjust iterations if runtime is high
     )
     imputed_array = imputer.fit_transform(combined_predictions_df)
+
+    # I want to see if there are any columns with all NaNs (which should not be happening)
+    all_nan_cols = combined_predictions_df.columns[combined_predictions_df.isna().all()]
+    print(f'All nan columns: {all_nan_cols}')
+
     # Convert back to DataFrame with the same columns
     combined_predictions_df = pd.DataFrame(imputed_array, columns=combined_predictions_df.columns)
 

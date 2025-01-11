@@ -7,7 +7,10 @@
 #SBATCH --mem=32G                       
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
-#SBATCH --requeue     
+#SBATCH --requeue 
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akapoor@uoregon.edu
+#SBATCH --verbose    
 
 # Set config file paths
 EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'

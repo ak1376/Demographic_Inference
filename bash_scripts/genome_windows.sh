@@ -9,9 +9,12 @@
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akapoor@uoregon.edu
+#SBATCH --verbose
 
-BATCH_SIZE=10
-TOTAL_TASKS=10000
+BATCH_SIZE=1
+TOTAL_TASKS=1000
 
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     overall_start_time=$(date +%s)

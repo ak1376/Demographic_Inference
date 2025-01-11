@@ -386,8 +386,8 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # Perform optimization
-    opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
-        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter=20
+    opt_params, ll = moments.LD.Inference.optimize_log_fmin(  # type: ignore
+        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter=400
     )
 
     # Rescale parameters to physical units

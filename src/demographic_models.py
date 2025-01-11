@@ -33,17 +33,17 @@ def split_isolation_model_simulation(sampled_params):
     # Unpack the sampled parameters
     Na, N1, N2, m, t_split = (
         sampled_params["Na"],  # Effective population size of the ancestral population
-        sampled_params["east"],  # Size of population 1 after split
-        sampled_params["west"],  # Size of population 2 after split
+        sampled_params["N1"],  # Size of population 1 after split
+        sampled_params["N2"],  # Size of population 2 after split
         sampled_params["m"],   # Migration rate between populations
         sampled_params["t_split"],  # Time of the population split (in generations)
     )
 
     b = demes.Builder()
     b.add_deme("Na", epochs=[dict(start_size=Na, end_time=t_split)])
-    b.add_deme("east", ancestors=["Na"], epochs=[dict(start_size=N1)])
-    b.add_deme("west", ancestors=["Na"], epochs=[dict(start_size=N2)])
-    b.add_migration(demes=["east", "west"], rate=m)
+    b.add_deme("N1", ancestors=["Na"], epochs=[dict(start_size=N1)])
+    b.add_deme("N2", ancestors=["Na"], epochs=[dict(start_size=N2)])
+    b.add_migration(demes=["N1", "N2"], rate=m)
     g = b.resolve()
     return g
 

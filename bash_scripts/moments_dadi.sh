@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=feature_processing
-#SBATCH --array=0-599  # Adjust based on TOTAL_TASKS / BATCH_SIZE
+#SBATCH --array=0-59  # Adjust based on TOTAL_TASKS / BATCH_SIZE
 #SBATCH --output=logs/moments_dadi_batch_%A_%a.out
 #SBATCH --error=logs/moments_dadi_batch_%A_%a.err
 #SBATCH --time=24:00:00
@@ -9,6 +9,9 @@
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akapoor@uoregon.edu
+#SBATCH --verbose
 
 # Load base variables
 BASE_DIR="/projects/kernlab/akapoor/Demographic_Inference"

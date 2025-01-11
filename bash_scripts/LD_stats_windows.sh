@@ -9,6 +9,9 @@
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akapoor@uoregon.edu
+#SBATCH --verbose
 
 # Base directories
 BASE_DIR="/projects/kernlab/akapoor/Demographic_Inference"
@@ -16,8 +19,8 @@ SIM_DIR_BASE="${BASE_DIR}/LD_inferences"
 SNAKEMAKE_DIR="${BASE_DIR}"  # Root Snakemake directory
 
 # Define the batch size and total tasks
-BATCH_SIZE=10
-TOTAL_TASKS=10000
+BATCH_SIZE=1
+TOTAL_TASKS=1000
 
 # Calculate simulation and window numbers for the current task
 for TASK_ID in $(seq $((SLURM_ARRAY_TASK_ID * BATCH_SIZE)) $(((SLURM_ARRAY_TASK_ID + 1) * BATCH_SIZE - 1))); do

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=moments_ld_array
-#SBATCH --array=0-99  # For 100 simulations
+#SBATCH --array=0-9  # For 100 simulations
 #SBATCH --output=logs/moments_ld_%A_%a.out
 #SBATCH --error=logs/moments_ld_%A_%a.err
 #SBATCH --time=24:00:00
@@ -9,6 +9,9 @@
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akapoor@uoregon.edu
+#SBATCH --verbose
 
 # Base directory
 BASE_DIR="/projects/kernlab/akapoor/Demographic_Inference"
