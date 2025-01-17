@@ -13,6 +13,30 @@ from sklearn.impute import IterativeImputer
 
 def main(experiment_config_file, sim_directory, software_inferences_dir, momentsLD_inferences_dir):
 
+    # MomentsLD may still fail on certain simulations, even after multiple attempts at regeneration. I want to drop the software_inferences elements from the directory (i.e. not use those in analysis)
+    # Extract indices from each list
+    software_indices = {
+        int(path.split("_sim_")[-1].split(".pkl")[0]) for path in software_inferences_dir
+    }
+    momentsLD_indices = {
+        int(path.split("_sim_")[-1].split(".pkl")[0]) for path in momentsLD_inferences_dir
+    }
+
+    # Find the intersection of indices
+    common_indices = software_indices.intersection(momentsLD_indices)
+
+    # Subset each list based on the intersection
+    software_inferences_dir = [
+        path for path in software_inferences_dir if int(path.split("_sim_")[-1].split(".pkl")[0]) in common_indices
+    ]
+
+    momentsLD_inferences_dir = [
+        path for path in momentsLD_inferences_dir if int(path.split("_sim_")[-1].split(".pkl")[0]) in common_indices
+    ]
+
+    print(f'Length of the Moments/Dadi: {len(software_inferences_dir)}')
+    print(f'Length of the MomentsLD:: {len(momentsLD_inferences_dir)}')
+
     # Load configuration
     with open(experiment_config_file, "r") as f:
         experiment_config = json.load(f)

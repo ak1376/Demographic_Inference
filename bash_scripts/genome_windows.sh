@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=batched_genome_windows
-#SBATCH --array=0-999          
+#SBATCH --array=0-9999          
 #SBATCH --output=logs/genome_windows_%A_%a.out
 #SBATCH --error=logs/genome_windows_%A_%a.err
 #SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=256G
+#SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
@@ -13,8 +13,8 @@
 #SBATCH --mail-user=akapoor@uoregon.edu
 #SBATCH --verbose
 
-BATCH_SIZE=1
-TOTAL_TASKS=1000
+BATCH_SIZE=50
+TOTAL_TASKS=500000
 
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     overall_start_time=$(date +%s)

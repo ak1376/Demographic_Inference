@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=moments_ld_array
-#SBATCH --array=0-9  # For 100 simulations
+#SBATCH --array=0-4999  # For 100 simulations
 #SBATCH --output=logs/moments_ld_%A_%a.out
 #SBATCH --error=logs/moments_ld_%A_%a.err
 #SBATCH --time=24:00:00
