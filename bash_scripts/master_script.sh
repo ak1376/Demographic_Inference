@@ -3,6 +3,7 @@
 #SBATCH --output=logs/pipeline_main.out
 #SBATCH --error=logs/pipeline_main.err
 #SBATCH --time=72:00:00  # Increase overall time for the pipeline
+#SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu
 #SBATCH --account=kernlab
 #SBATCH --requeue
@@ -47,7 +48,7 @@ submit_job() {
     fi
 }
 
-# Function to wait for job array completion and log time
+# Function to wait for job array completion and log time and memory
 wait_for_job_array_completion() {
     local job_id="$1"
     local job_name="$2"
@@ -64,13 +65,18 @@ wait_for_job_array_completion() {
 
     local end_time=$(date +%s)
     local elapsed=$((end_time - start_time))
-    echo "$job_name,$job_id,$start_time,$end_time,$elapsed" >> logs/job_stats.txt
 
-    echo "$job_name completed: Start Time = $start_time, End Time = $end_time, Elapsed = $elapsed seconds"
+    # Query memory usage for all tasks in the job array
+    local max_memory=$(sacct -j "${job_id}" --format=JobID,MaxRSS --noheader | \
+        awk '{if ($2 ~ /K$/) sum += $2 / 1024; else if ($2 ~ /M$/) sum += $2; else if ($2 ~ /G$/) sum += $2 * 1024} END {print sum " MB"}')
+
+    echo "$job_name,$job_id,$start_time,$end_time,$elapsed,$max_memory" >> logs/job_stats.txt
+
+    echo "$job_name completed: Start Time = $start_time, End Time = $end_time, Elapsed = $elapsed seconds, Max Memory = $max_memory"
 }
 
 # Initialize the stats log file with a header
-echo "JobName,JobID,StartTime,EndTime,Elapsed" > logs/job_stats.txt
+echo "JobName,JobID,StartTime,EndTime,Elapsed,MaxMemory" > logs/job_stats.txt
 
 # Submit jobs and start tracking times
 echo "Submitting all jobs and capturing start times..."
@@ -87,7 +93,6 @@ genome_id=$(submit_job "bash_scripts/genome_windows.sh" "$sim_id")
 genome_start=$(date +%s)
 wait_for_job_array_completion "$genome_id" "Genome Windows" "$genome_start"
 
-# Add combine_metadata.sh step here
 combine_metadata_id=$(submit_job "bash_scripts/combine_metadata.sh" "$genome_id")
 combine_metadata_start=$(date +%s)
 wait_for_job_array_completion "$combine_metadata_id" "Combine Metadata" "$combine_metadata_start"
@@ -104,7 +109,6 @@ moments_dadi_id=$(submit_job "bash_scripts/moments_dadi.sh" "$momentsld_id")
 moments_dadi_start=$(date +%s)
 wait_for_job_array_completion "$moments_dadi_id" "Moments/Dadi" "$moments_dadi_start"
 
-# Submit aggregate_features.sh after moments_dadi.sh
 aggregate_features_id=$(submit_job "bash_scripts/aggregate_features.sh" "$moments_dadi_id")
 aggregate_features_start=$(date +%s)
 wait_for_job_array_completion "$aggregate_features_id" "Aggregate Features" "$aggregate_features_start"

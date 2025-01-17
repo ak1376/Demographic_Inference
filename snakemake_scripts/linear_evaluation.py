@@ -4,8 +4,10 @@ import json
 from src.utils import visualizing_results, mean_squared_error
 from src.models import LinearReg
 import os
+from sklearn.model_selection import GridSearchCV
+from sklearn.linear_model import Ridge, Lasso, ElasticNet
 
-def linear_evaluation(features_and_targets_filepath, model_config_path, color_shades_path, main_colors_path, experiment_config_filepath = None, model_directory = None,  regression_type = "standard", alpha = 0.0, l1_ratio = 0.5):
+def linear_evaluation(features_and_targets_filepath, model_config_path, color_shades_path, main_colors_path, experiment_config_filepath = None, model_directory = None, regression_type = "standard", alpha = 0.0, l1_ratio = 0.5):
 
     if model_directory is None:
         experiment_config = json.load(open(experiment_config_filepath, "r"))
@@ -46,8 +48,31 @@ def linear_evaluation(features_and_targets_filepath, model_config_path, color_sh
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
 
-    ## LINEAR REGRESSION
+    # Hyperparameter optimization for ridge, lasso, or elastic net
+    if regression_type in ["ridge", "lasso", "elasticnet"]:
+        X_train = features_and_targets["training"]["features"]
+        y_train = features_and_targets["training"]["targets"]
 
+        if regression_type == "ridge":
+            model = Ridge()
+            param_grid = {"alpha": [0.1, 1.0, 10.0, 100.0]}
+        elif regression_type == "lasso":
+            model = Lasso()
+            param_grid = {"alpha": [0.1, 1.0, 10.0, 100.0]}
+        elif regression_type == "elasticnet":
+            model = ElasticNet()
+            param_grid = {"alpha": [0.1, 1.0, 10.0, 100.0], "l1_ratio": [0.1, 0.5, 0.9]}
+
+        grid_search = GridSearchCV(model, param_grid, scoring="neg_mean_squared_error", cv=5)
+        grid_search.fit(X_train, y_train)
+
+        print(f"Best parameters for {regression_type}: {grid_search.best_params_}")
+
+        # Update alpha and l1_ratio based on the best parameters
+        alpha = grid_search.best_params_.get("alpha", alpha)
+        l1_ratio = grid_search.best_params_.get("l1_ratio", l1_ratio)
+
+    ## LINEAR REGRESSION
     linear_mdl = LinearReg(
         training_features=features_and_targets["training"]["features"],
         training_targets=features_and_targets["training"]["targets"],
