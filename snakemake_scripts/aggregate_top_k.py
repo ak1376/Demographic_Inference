@@ -75,7 +75,7 @@ def main(dadi_files, moments_files, sfs_file, params_file, top_k, sim_number):
     
     # Save aggregated results
     base_directory = os.getcwd()
-    with open(base_directory, 'moments_dadi_features/software_inferences_sim_{sim_number}.pkl', "wb") as f:
+    with open(base_directory, f'moments_dadi_features/software_inferences_sim_{sim_number}.pkl', "wb") as f:
         pickle.dump(aggregated_data, f)
 
 if __name__ == "__main__":
