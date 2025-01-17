@@ -74,7 +74,8 @@ def main(dadi_files, moments_files, sfs_file, params_file, top_k, sim_number):
     aggregated_data["ll_all_replicates_moments"] = moments_top_k["lls"]
     
     # Save aggregated results
-    with open(f'/projects/kernlab/akapoor/Demographic_Inference/moments_dadi_features/software_inferences_sim_{sim_number}.pkl', "wb") as f:
+    base_directory = os.getcwd()
+    with open(base_directory, 'moments_dadi_features/software_inferences_sim_{sim_number}.pkl', "wb") as f:
         pickle.dump(aggregated_data, f)
 
 if __name__ == "__main__":

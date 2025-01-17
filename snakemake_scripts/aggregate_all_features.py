@@ -17,7 +17,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     with open(experiment_config_file, "r") as f:
         experiment_config = json.load(f)
 
-    parameters = ["Na", "N1", "N2", "t_split"] # TODO: CHANGE LATER!!!!!!!!!!!
+    parameters = ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"] # TODO: CHANGE LATER!!!!!!!!!!!
     replicates = experiment_config['top_values_k']
 
     # Containers for predictions and targets
@@ -152,7 +152,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     print(f'All nan columns: {all_nan_cols}')
 
     # Convert back to DataFrame with the same columns
-    combined_predictions_df = pd.DataFrame(imputed_array, columns=combined_predictions_df.columns)
+    combined_predictions_df = pd.DataFrame(imputed_array, columns=combined_predictions_df.columns) #TODO: Fix this issue
 
     # -------------------------------------------------------------------
     # Keep the FINAL NaN check from original code

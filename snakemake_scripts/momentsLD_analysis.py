@@ -121,6 +121,7 @@ def reoptimize_with_retries(combined_ld_stats, p_guess, experiment_config, sim_n
             p_guess=p_guess,
         )
         print("Optimization completed successfully.")
+        print(f'The optimal parameters are: {opt_params_momentsLD}')
         return opt_params_momentsLD, ll_list_momentsLD
 
     try:

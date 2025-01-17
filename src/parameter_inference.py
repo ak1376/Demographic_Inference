@@ -15,11 +15,21 @@ TIMEOUT_SECONDS = 20 * 60  # 20 minutes = 1200 seconds
 
 # Define your function with Ray's remote decorator
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
+
+    # Read the file and extract unique populations
+    with open(pop_file_path, "r") as file:
+        # Skip the header
+        lines = file.readlines()[1:]
+        # Extract the population column
+        populations = [line.strip().split("\t")[1] for line in lines]
+        # Get unique populations
+        unique_populations = list(set(populations))
+
     ld_stats = moments.LD.Parsing.compute_ld_statistics( #type:ignore
         vcf_file,
         rec_map_file=flat_map_path,
         pop_file=pop_file_path,
-        pops=["N1", "N2"], # TODO: Change later
+        pops=unique_populations,
         r_bins=r_bins,
         report=False,
         use_genotypes = False
@@ -390,15 +400,12 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
         p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter=400
     )
 
-    # Rescale parameters to physical units
-    physical_units = moments.LD.Util.rescale_params(  # type: ignore
-        opt_params, ["nu", "nu", "T", "m", "Ne"]
-    )
     ll_list.append(ll)
 
     opt_params_dict = {}
     if demographic_model == "bottleneck_model":
         opt_params_dict = {
+            "N0": opt_params[4],
             "Nb": opt_params[0] * opt_params[4],
             "N_recover": opt_params[1] * opt_params[4],
             "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * opt_params[4],
@@ -427,6 +434,6 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
         print(f"  Migration rate   :  {physical_units[3]:.6f}")
         print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
 
-        opt_params_dict_list.append(opt_params_dict)
+    opt_params_dict_list.append(opt_params_dict)
 
     return opt_params_dict_list, ll_list

@@ -1,23 +1,22 @@
 {
     "upper_bound_params": {
-        "t_split": 20000,
-        "east": 30000,
-        "west": 30000,
-        "Na": 30000, 
-        "m": 1e-4
+        "N0": 10000,
+        "Nb": 5000,
+        "N_recover": 7000,
+        "t_bottleneck_start": 2000,
+        "t_bottleneck_end": 1000
     },
     "lower_bound_params": {
-        "t_split": 500,
-        "east": 1000,
-        "west": 1000,
-        "Na": 1000, 
-        "m": 1e-8
+        "N0": 8000,
+        "Nb": 4000,
+        "N_recover": 6000,
+        "t_bottleneck_start": 1500,
+        "t_bottleneck_end": 800
     },
-    "num_sims_pretrain": 500,
+    "num_sims_pretrain": 20,
     "num_sims_inference": 1,
     "num_samples": {
-        "east": 22,
-        "west": 18
+        "N": 20
     },
     "dadi_analysis": true,
     "moments_analysis": true,
@@ -32,41 +31,38 @@
     "normalization": true,
     "remove_outliers": true,
     "use_FIM": true,
-    "k": 3,
+    "k": 2,
     "top_values_k": 2,
-    "training_percentage": 0.8,
-    "demographic_model": "split_isolation_model",
+    "training_percentage": 0.5,
+    "demographic_model": "bottleneck_model",
     "parameter_names": [
-        "Na",
-        "east",
-        "west",
-        "t_split", 
-        "m"
+        "N0",
+        "Nb",
+        "N_recover",
+        "t_bottleneck_start",
+        "t_bottleneck_end"
     ],
     "optimization_initial_guess": [
-        0.11,
-        0.8,
-        0.05,
-        0.02
+        0.25, 0.75, 0.1, 0.05
     ],
     "parameters_to_estimate": [
-        "east",
-        "west",
-        "t_split",
-        "m",
-        "Na"
+        "N0",
+        "Nb",
+        "N_recover",
+        "t_bottleneck_start",
+        "t_bottleneck_end"
     ],
     "lower_bound_optimization": [
         1e-4,
         1e-4,
         1e-4,
-        0.01
+        1e-4
     ],
     "upper_bound_optimization": [
         null,
         null,
         null,
-        0.8
+        null
     ],
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",

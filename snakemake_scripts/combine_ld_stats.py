@@ -21,7 +21,8 @@ def combine_ld_stats(ld_stats_files, sim_number):
             ld_stats[ii] = file_stats
     
     # Save the combined results
-    combined_file_path = os.path.join('/projects/kernlab/akapoor/Demographic_Inference/combined_LD_inferences', f'sim_{sim_number}', f'combined_LD_stats_sim_{sim_number}.pkl')
+    base_directory = os.getcwd()
+    combined_file_path = os.path.join(base_directory, f'sim_{sim_number}', f'combined_LD_stats_sim_{sim_number}.pkl')
     with open(combined_file_path, 'wb') as f:
         pickle.dump(ld_stats, f)
 
