@@ -14,7 +14,7 @@
 # module load jq
 
 # Set the simulation directory and experiment configuration path
-EXPERIMENT_CONFIG_FILE='/home/akapoor/kernlab/Demographic_Inference/experiment_config.json'
+EXPERIMENT_CONFIG_FILE='/projects/kernlab/akapoor/Demographic_Inference/experiment_config.json'
 
 # Extract the values from the JSON config using jq
 DEMOGRAPHIC_MODEL=$(jq -r '.demographic_model' $EXPERIMENT_CONFIG_FILE)
@@ -56,13 +56,16 @@ echo "SIM_DIRECTORY: $SIM_DIRECTORY"
 # Ensure that the working directory is correct
 cd /projects/kernlab/akapoor/Demographic_Inference  # Adjust this to your Snakemake working directory
 
-# Run Snakemake with the specified outputs
+# Add this after your other variable definitions
+BASE_DIR='/projects/kernlab/akapoor/Demographic_Inference'
+
+# Then modify your snakemake command to use the full path
 snakemake \
-    ${SIM_DIRECTORY}/config.json \
-    ${SIM_DIRECTORY}/inference_config_file.json \
-    ${SIM_DIRECTORY}/color_shades.pkl \
-    ${SIM_DIRECTORY}/main_colors.pkl \
-    --cores 1  # Adjust cores as needed
+    "${BASE_DIR}/${SIM_DIRECTORY}/config.json" \
+    "${BASE_DIR}/${SIM_DIRECTORY}/inference_config_file.json" \
+    "${BASE_DIR}/${SIM_DIRECTORY}/color_shades.pkl" \
+    "${BASE_DIR}/${SIM_DIRECTORY}/main_colors.pkl" \
+    --cores 1
 
 # Check if Snakemake ran successfully
 if [ $? -ne 0 ]; then

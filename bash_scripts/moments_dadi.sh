@@ -49,6 +49,13 @@ if [ "$BATCH_END" -ge "$TOTAL_TASKS" ]; then
     BATCH_END=$((TOTAL_TASKS - 1))
 fi
 
+echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
+echo "BATCH_SIZE: $BATCH_SIZE"
+echo "TOTAL_TASKS: $TOTAL_TASKS"
+echo "NUM_SIMS_PRETRAIN: $NUM_SIMS_PRETRAIN"
+echo "NUM_REPLICATES: $NUM_REPLICATES"
+echo "NUM_ANALYSES: $NUM_ANALYSES"
+
 echo "Processing tasks from $BATCH_START to $BATCH_END"
 
 # Process each task in this batch

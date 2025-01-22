@@ -1,6 +1,7 @@
 import argparse
 import pickle
 import heapq
+import os
 
 def load_results_from_files(dadi_files, moments_files, sfs_file, params_file):
     # Initialize the results dictionary
@@ -75,7 +76,8 @@ def main(dadi_files, moments_files, sfs_file, params_file, top_k, sim_number):
     
     # Save aggregated results
     base_directory = os.getcwd()
-    with open(base_directory, f'moments_dadi_features/software_inferences_sim_{sim_number}.pkl', "wb") as f:
+    output_path = os.path.join(base_directory, f'software_inferences_sim_{sim_number}.pkl')
+    with open(output_path, "wb") as f:
         pickle.dump(aggregated_data, f)
 
 if __name__ == "__main__":

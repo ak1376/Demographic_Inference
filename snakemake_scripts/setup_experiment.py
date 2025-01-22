@@ -5,8 +5,7 @@ import json
 from src.utils import create_color_scheme
 
 def save_config(experiment_directory, experiment_config):
-# def save_config(experiment_directory, experiment_config, model_config):
-    # Save the full config
+
     with open(f"{experiment_directory}/config.json", "w") as json_file:
         json.dump(experiment_config, json_file, indent=4)
 

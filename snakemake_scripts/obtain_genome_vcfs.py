@@ -7,24 +7,31 @@ from src.preprocess import Processor
 import tskit
 import json
 import os 
-def main(tree_sequence_file, experiment_config_filepath, genome_sim_directory, window_number, sim_number):
 
+def main(tree_sequence_file, experiment_config_filepath, genome_sim_directory, window_number, sim_number):
+    print(f"Debug: Starting main function")
+    print(f"Debug: tree_sequence_file = {tree_sequence_file}")
+    print(f"Debug: genome_sim_directory = {genome_sim_directory}")
+    
     ts = tskit.load(tree_sequence_file)
+    print(f"Debug: Successfully loaded tree sequence")
 
     with open(experiment_config_filepath, "r") as f:
         experiment_config = json.load(f)
+    print(f"Debug: Successfully loaded config")
 
-    # Simulate process and save windows as VCF files
+    # Use the sim_X directory as the parent directory
+    # This is where we were going wrong before
+    parent_dir = genome_sim_directory  # This is already /projects/.../sim_0
+    print(f"Debug: Parent directory = {parent_dir}")
+    
+    print(f"Debug: About to run msprime_replicates")
+    Processor.run_msprime_replicates(ts, experiment_config, window_number, parent_dir)
+    print(f"Debug: Completed msprime_replicates")
 
-    # Ensure the base directory is absolute
-    base_directory = os.getcwd()
-
-    # Construct the directory for saving VCF windows dynamically
-    directory_for_windows = os.path.join(base_directory, genome_sim_directory, f"sim_{sim_number}")
-    os.makedirs(directory_for_windows, exist_ok=True)  # Ensure the directory exists
-
-    Processor.run_msprime_replicates(ts, experiment_config, window_number, directory_for_windows)
-    Processor.write_samples_and_rec_map(experiment_config, window_number = window_number, folderpath=directory_for_windows)
+    print(f"Debug: About to write samples and rec map")
+    Processor.write_samples_and_rec_map(experiment_config, window_number=window_number, folderpath=parent_dir)
+    print(f"Debug: Completed writing samples and rec map")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

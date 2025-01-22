@@ -81,6 +81,30 @@ python /projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/aggrega
 
 if [ $? -eq 0 ]; then
     echo "Feature aggregation completed successfully."
+
+    # # Create timestamp for the backup
+    # TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+    # BACKUP_NAME="inference_backup_${TIMESTAMP}.zip"
+    
+    # echo "Creating backup archive ${BACKUP_NAME}..."
+    
+    # # Create zip archive of the directories
+    # zip -r "${BACKUP_NAME}" \
+    #     combined_LD_inferences/ \
+    #     final_LD_inferences/ \
+    #     LD_inferences/ \
+    #     logs/ \
+    #     moments_dadi_features/ \
+    #     sampled_genome_windows/ \
+    #     simulated_parameters_and_inferences/
+    
+    # # Check if zip was successful
+    # if [ $? -eq 0 ]; then
+    #     echo "Backup created successfully at ${BACKUP_NAME}"  
+    #  else
+    #     echo "Error: Backup creation failed. Keeping original directories."
+    #     exit 1
+    # fi
 else
     echo "Feature aggregation failed."
     exit 1

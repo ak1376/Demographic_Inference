@@ -66,6 +66,7 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --directory "$WINDOW_DIR" \
         --rerun-incomplete \
         --nolock \
+        --latency-wait 60 \
         "${WINDOW_DIR}/samples.txt" \
         "${WINDOW_DIR}/flat_map.txt" \
         "${WINDOW_DIR}/individual_file_metadata.txt" \

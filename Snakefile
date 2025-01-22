@@ -2,12 +2,16 @@ import os
 import json
 
 # Define the base directory for the project
-BASE_DIR = '/sietch_colab/akapoor/Demographic_Inference'
+BASE_DIR = '/projects/kernlab/akapoor/Demographic_Inference'
 
 # Define file paths relative to BASE_DIR
 CONFIG_FILEPATH = os.path.join(BASE_DIR, 'experiment_config.json')
 MODEL_CONFIG_FILEPATH = os.path.join(BASE_DIR, 'model_config.json')
 MODEL_CONFIG_XGBOOST_FILEPATH = os.path.join(BASE_DIR, 'model_config_xgb.json')
+
+print("Debugging Filepaths")
+print(f'Config Filepath: {CONFIG_FILEPATH}')
+print(f'Model Config Filepath: {MODEL_CONFIG_FILEPATH}')
 
 # Load configuration files
 with open(CONFIG_FILEPATH, 'r') as f:
@@ -109,7 +113,6 @@ rule run_simulation:
         --sim_number {wildcards.sim_number}
         """
 
-# Rule: Genome windows
 rule genome_windows:
     input:
         tree_sequence_file=rules.run_simulation.output.tree_sequence_file
@@ -120,16 +123,29 @@ rule genome_windows:
         vcf_file=f"{BASE_DIR}/sampled_genome_windows/sim_{{sim_number}}/window_{{window_number}}/window.{{window_number}}.vcf.gz"
     params:
         window_number=lambda wildcards: wildcards.window_number,
-        CONFIG_FILEPATH=CONFIG_FILEPATH
+        CONFIG_FILEPATH=CONFIG_FILEPATH,
+        output_dir=lambda wildcards: f"{BASE_DIR}/sampled_genome_windows/sim_{wildcards.sim_number}"
     shell:
         """
-        mkdir -p {BASE_DIR}/sampled_genome_windows/sim_{wildcards.sim_number}
+        set -x  # Print commands as they execute
+        set -e  # Exit on any error
+        
+        echo "Creating directory: {params.output_dir}"
+        mkdir -p {params.output_dir}
+        
+        echo "Running Python script"
         PYTHONPATH={BASE_DIR} python {BASE_DIR}/snakemake_scripts/obtain_genome_vcfs.py \
-        --tree_sequence_file {input.tree_sequence_file} \
-        --experiment_config_filepath {params.CONFIG_FILEPATH} \
-        --genome_sim_directory sampled_genome_windows \
-        --window_number {wildcards.window_number} \
-        --sim_number {wildcards.sim_number}
+            --tree_sequence_file {input.tree_sequence_file} \
+            --experiment_config_filepath {params.CONFIG_FILEPATH} \
+            --genome_sim_directory {params.output_dir} \
+            --window_number {params.window_number} \
+            --sim_number {wildcards.sim_number} 2>&1
+            
+        echo "Checking if files exist:"
+        ls -l {output.samples_file} || echo "samples_file missing"
+        ls -l {output.flat_map_file} || echo "flat_map_file missing"
+        ls -l {output.metadata_file} || echo "metadata_file missing"
+        ls -l {output.vcf_file} || echo "vcf_file missing"
         """
 
 

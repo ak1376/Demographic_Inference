@@ -34,7 +34,8 @@ def postprocessing(experiment_config, training_features, training_targets, valid
     targets_dict = {'training': training_targets, 'validation': validation_targets}
 
     # Define parameters to process
-    param_types = ['Na', 'N1', 'N2', 't_split']
+    # param_types = ['Na', 'N1', 'N2', 't_split']
+    param_types = experiment_config['parameters_to_estimate']
 
     for stage in ['training', 'validation']:
         features = features_dict[stage]
@@ -59,7 +60,7 @@ def postprocessing(experiment_config, training_features, training_targets, valid
             
             # Normalize parameter features using same bounds
             features_copy = features.copy()
-            for param in ['Na', 'N1', 'N2', 't_split']:
+            for param in param_types:
                 param_cols = [col for col in features.columns if col.endswith('_' + param)]
                 lower_bound = experiment_config['lower_bound_params'][param]
                 upper_bound = experiment_config['upper_bound_params'][param]

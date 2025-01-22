@@ -4,6 +4,26 @@ import os
 import pickle
 import argparse
 import src.demographic_models as demographic_models
+import tskit  # Add this import
+
+def safe_save_tree_sequence(ts, final_filename):
+    """Ensure atomic write of tree sequence"""
+    temp_filename = final_filename + '.tmp'
+    try:
+        # Write to temporary file first
+        ts.dump(temp_filename)
+        # Verify the file
+        test_ts = tskit.load(temp_filename)
+        if test_ts.num_trees > 0:
+            # Move temp file to final location atomically
+            os.rename(temp_filename, final_filename)
+            return True
+    except Exception as e:
+        print(f"Error saving tree sequence: {e}")
+    finally:
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+    return False
 
 
 def main(experiment_config, sim_directory, sim_number):
@@ -54,17 +74,15 @@ def main(experiment_config, sim_directory, sim_number):
         ts, mode="pretrain", num_samples=experiment_config["num_samples"], length = experiment_config["genome_length"]
     )
 
-
-    # Save the SFS in a .pkl file
+    # Save the SFS
     SFS_filename = f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl"
-
     with open(SFS_filename, "wb") as f:
         pickle.dump(SFS, f)
 
-    # Save the tree sequence in a .trees file
-
+    # Save the tree sequence using the new safe method
     ts_filename = f"{simulation_results_directory}/ts_sim_{sim_number}.trees"
-    ts.dump(ts_filename)
+    if not safe_save_tree_sequence(ts, ts_filename):
+        raise RuntimeError(f"Failed to save tree sequence for simulation {sim_number}")
 
     # Save the unique identifier in a .pkl file
 
