@@ -7,6 +7,32 @@ import os
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer
+from sklearn.ensemble import IsolationForest
+from scipy import stats
+
+
+def remove_outliers_isolation_forest(df, contamination=0.05, random_state=42):
+    """
+    Remove outliers using Isolation Forest.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the data.
+        contamination (float): The proportion of outliers in the data set.
+        random_state (int): Random state for reproducibility.
+
+    Returns:
+        pd.DataFrame: DataFrame with outliers removed.
+        pd.Series: Mask indicating which rows are kept.
+    """
+    print("\nApplying Isolation Forest for outlier detection...")
+    iso_forest = IsolationForest(contamination=contamination, random_state=random_state)
+    iso_forest.fit(df)
+    predictions = iso_forest.predict(df)
+    mask = predictions == 1  # 1 for inliers, -1 for outliers
+    n_outliers = (predictions == -1).sum()
+    print(f"Isolation Forest detected {n_outliers} outliers out of {len(df)} samples.")
+    return df[mask], mask
+
 
 def main(experiment_config_file, sim_directory, software_inferences_dir, momentsLD_inferences_dir):
     print("Starting preprocessing pipeline...")
@@ -22,8 +48,14 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     common_indices = software_indices.intersection(momentsLD_indices)
 
     # Filter paths by common indices
-    software_inferences_dir = [path for path in software_inferences_dir if int(path.split("_sim_")[-1].split(".pkl")[0]) in common_indices]
-    momentsLD_inferences_dir = [path for path in momentsLD_inferences_dir if int(path.split("_sim_")[-1].split(".pkl")[0]) in common_indices]
+    software_inferences_dir = [
+        path for path in software_inferences_dir
+        if int(path.split("_sim_")[-1].split(".pkl")[0]) in common_indices
+    ]
+    momentsLD_inferences_dir = [
+        path for path in momentsLD_inferences_dir
+        if int(path.split("_sim_")[-1].split(".pkl")[0]) in common_indices
+    ]
     print(f"Filtered software inference files: {len(software_inferences_dir)}")
     print(f"Filtered momentsLD inference files: {len(momentsLD_inferences_dir)}")
 
@@ -34,7 +66,9 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     print("Configuration loaded.")
 
     parameters = ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
-    replicates = experiment_config['top_values_k']
+    replicates = experiment_config.get('top_values_k', 1)  # Default to 1 if not specified
+    lower_bounds = experiment_config.get('lower_bound_params', {})
+    upper_bounds = experiment_config.get('upper_bound_params', {})
     print(f"Parameters: {parameters}")
     print(f"Replicates: {replicates}")
 
@@ -42,7 +76,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     momentsLD_predictions_data = []
     targets_data = []
 
-    # Process software inference files (raw values retained)
+    # Process software inference files
     print("\nProcessing software inference files...")
     for idx, filepath in enumerate(software_inferences_dir):
         print(f"Processing file {idx + 1}/{len(software_inferences_dir)}: {filepath}")
@@ -52,18 +86,15 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
         row = {}
         for replicate in range(1, replicates + 1):
             for param in parameters:
-                # Get raw values (no clipping)
-                dadi_val = sim_data['opt_params_dadi'][replicate - 1][param]
-                moments_val = sim_data['opt_params_moments'][replicate - 1][param]
-
+                dadi_val = sim_data['opt_params_dadi'][replicate - 1].get(param, np.nan)
+                moments_val = sim_data['opt_params_moments'][replicate - 1].get(param, np.nan)
                 row[f"dadi_rep{replicate}_{param}"] = dadi_val
                 row[f"moments_rep{replicate}_{param}"] = moments_val
 
-                # Extract and handle FIM if exists
                 if experiment_config.get('use_FIM', False):
                     fim = sim_data['opt_params_moments'][replicate - 1].get('upper_triangular_FIM', [])
-                    # Check if FIM is not iterable or contains NaN(s)
-                    if not isinstance(fim, (list, tuple, np.ndarray)) or np.isnan(fim).any():
+                    # Validate FIM
+                    if not isinstance(fim, (list, tuple, np.ndarray)) or (isinstance(fim, (list, tuple, np.ndarray)) and any(np.isnan(fim))):
                         print(f"  Invalid FIM detected for {filepath}. Replacing with NaNs.")
                         fim_length = (len(parameters) * (len(parameters) - 1)) // 2
                         fim = [np.nan] * fim_length
@@ -71,11 +102,11 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
                         row[f"moments_rep{replicate}_FIM_element_{i}"] = fim_val
 
         software_predictions_data.append(row)
-        targets_data.append({f"simulated_params_{param}": sim_data['simulated_params'][param] for param in parameters})
+        targets_data.append({f"simulated_params_{param}": sim_data['simulated_params'].get(param, np.nan) for param in parameters})
 
     print("Finished processing software inference files.")
 
-    # Process MomentsLD inference files (raw values retained)
+    # Process MomentsLD inference files
     print("\nProcessing MomentsLD inference files...")
     for idx, filepath in enumerate(momentsLD_inferences_dir):
         print(f"Processing file {idx + 1}/{len(momentsLD_inferences_dir)}: {filepath}")
@@ -84,56 +115,78 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
 
         row = {}
         for param in parameters:
-            # Get raw value (no clipping)
-            val = momentsLD_sim_data['opt_params_momentsLD'][0][param]
-            row[f"momentsLD_{param}"] = val
+            row[f"momentsLD_{param}"] = momentsLD_sim_data['opt_params_momentsLD'][0].get(param, np.nan)
 
         momentsLD_predictions_data.append(row)
 
     print("Finished processing MomentsLD inference files.")
 
-    # Create DataFrames
+    # Combine results into DataFrames
     print("\nCombining results into DataFrames...")
     software_df = pd.DataFrame(software_predictions_data)
     momentsLD_df = pd.DataFrame(momentsLD_predictions_data)
     targets_df = pd.DataFrame(targets_data)
-    print(f"Software DataFrame shape: {software_df.shape}")
-    print(f"MomentsLD DataFrame shape: {momentsLD_df.shape}")
-    print(f"Targets DataFrame shape: {targets_df.shape}")
 
-    # Combine the software and momentsLD data
     combined_predictions_df = pd.concat([software_df, momentsLD_df], axis=1)
     print(f"Combined DataFrame shape: {combined_predictions_df.shape}")
 
     # Handle missing values using KNN Imputer
     print("\nHandling missing values using KNN Imputer...")
     imputer = KNNImputer(n_neighbors=5)
-    combined_predictions_df[:] = imputer.fit_transform(combined_predictions_df)
+    combined_predictions_df_imputed = pd.DataFrame(imputer.fit_transform(combined_predictions_df),
+                                                  columns=combined_predictions_df.columns)
     print("Missing value handling complete.")
 
+    # Optionally, ensure imputed values respect bounds by clipping
+    # This step can help prevent outliers introduced by imputation
+    print("\nClipping imputed values to parameter bounds...")
+    for param in parameters:
+        matching_columns = [col for col in combined_predictions_df_imputed.columns if param in col]
+        lower = lower_bounds.get(param, -np.inf)
+        upper = upper_bounds.get(param, np.inf)
+        for col in matching_columns:
+            combined_predictions_df_imputed[col] = combined_predictions_df_imputed[col].clip(lower, upper)
+    print("Clipping complete.")
+
+    # Remove extreme outliers using Isolation Forest
+    clean_predictions_df, mask = remove_outliers_isolation_forest(combined_predictions_df_imputed, contamination=0.05)
+    clean_targets_df = targets_df[mask].reset_index(drop=True)
+
+    n_removed = len(combined_predictions_df_imputed) - len(clean_predictions_df)
+    print(f"Removed {n_removed} outlier samples ({(n_removed / len(combined_predictions_df_imputed)) * 100:.2f}% of data)")
+
+    # Check if any samples remain
+    if clean_predictions_df.empty:
+        print("No samples remain after outlier removal. Exiting...")
+        return
+
     # Normalize FIM columns (if present)
-    fim_columns = [col for col in combined_predictions_df.columns if 'FIM_element' in col]
+    fim_columns = [col for col in clean_predictions_df.columns if 'FIM_element' in col]
     if fim_columns:
         print("\nNormalizing FIM elements...")
         scaler = StandardScaler()
-        combined_predictions_df[fim_columns] = scaler.fit_transform(combined_predictions_df[fim_columns])
+        clean_predictions_df[fim_columns] = scaler.fit_transform(clean_predictions_df[fim_columns])
         print("FIM normalization complete.")
 
     # Split data into training and validation sets
     print("\nSplitting data into training and validation sets...")
-    train_indices, val_indices = train_test_split(range(len(combined_predictions_df)), test_size=0.2, random_state=42)
+    train_indices, val_indices = train_test_split(
+        range(len(clean_predictions_df)), test_size=0.2, random_state=42
+    )
+
+    # Create preprocessing results object
     preprocessing_results_obj = {
         "training": {
-            "predictions": combined_predictions_df.iloc[train_indices].reset_index(drop=True),
-            "targets": targets_df.iloc[train_indices].reset_index(drop=True),
-            "indices": train_indices,
+            "predictions": clean_predictions_df.iloc[train_indices].reset_index(drop=True),
+            "targets": clean_targets_df.iloc[train_indices].reset_index(drop=True),
+            "indices": list(train_indices),
         },
         "validation": {
-            "predictions": combined_predictions_df.iloc[val_indices].reset_index(drop=True),
-            "targets": targets_df.iloc[val_indices].reset_index(drop=True),
-            "indices": val_indices,
+            "predictions": clean_predictions_df.iloc[val_indices].reset_index(drop=True),
+            "targets": clean_targets_df.iloc[val_indices].reset_index(drop=True),
+            "indices": list(val_indices),
         },
-        "parameter_names": parameters
+        "parameter_names": parameters,
     }
 
     # Save results
@@ -142,21 +195,20 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     training_target_path = os.path.join(sim_directory, 'training_targets.csv')
     validation_pred_path = os.path.join(sim_directory, 'validation_features.csv')
     validation_target_path = os.path.join(sim_directory, 'validation_targets.csv')
-    print(f"Saving training predictions to: {training_pred_path}")
-    print(f"Saving training targets to: {training_target_path}")
-    print(f"Saving validation predictions to: {validation_pred_path}")
-    print(f"Saving validation targets to: {validation_target_path}")
-    
+
     preprocessing_results_obj['training']['predictions'].to_csv(training_pred_path, index=False)
     preprocessing_results_obj['training']['targets'].to_csv(training_target_path, index=False)
     preprocessing_results_obj['validation']['predictions'].to_csv(validation_pred_path, index=False)
     preprocessing_results_obj['validation']['targets'].to_csv(validation_target_path, index=False)
+
     with open(os.path.join(sim_directory, 'preprocessing_results_obj.pkl'), 'wb') as file:
         pickle.dump(preprocessing_results_obj, file)
+
     print("\nProcessing complete.")
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Preprocess simulation data by removing outliers and splitting into train/validation sets.")
     parser.add_argument("experiment_config_file", type=str, help="Path to the experiment config file")
     parser.add_argument("sim_directory", type=str, help="Path to the simulation directory")
     parser.add_argument("--software_inferences_dir", nargs='+', required=True, help="List of software inference files")

@@ -129,7 +129,7 @@ def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound)
     (opt_params, ll) into 'queue'.
     """
     # full_output=True => returns (best_params, best_ll, ...)
-    xopt = moments.Inference.optimize_log_powell(
+    xopt = moments.Inference.optimize_log_lbfgsb(
         p_guess,
         sfs,
         model_func,
@@ -145,7 +145,7 @@ def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound)
 def run_inference_dadi(
     sfs,
     p0,
-    num_samples,
+    num_samples, # TODO: delete this argument
     demographic_model,
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
@@ -166,7 +166,9 @@ def run_inference_dadi(
 
     # Prepare for extrapolation
     func_ex = dadi.Numerics.make_extrap_log_func(model_func)
-    pts_ext = [num_samples + 20, num_samples + 30, num_samples + 40]
+    # Retrive the sample sizes from the data
+    ns = sfs.sample_sizes
+    pts_ext = [max(ns) + 120, max(ns) + 130, max(ns) + 140]
 
     # Perturb initial guess
     p_guess = moments.Misc.perturb_params(
