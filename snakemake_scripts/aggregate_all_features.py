@@ -11,27 +11,27 @@ from sklearn.ensemble import IsolationForest
 from scipy import stats
 
 
-def remove_outliers_isolation_forest(df, contamination=0.05, random_state=42):
-    """
-    Remove outliers using Isolation Forest.
+# def remove_outliers_isolation_forest(df, contamination=0.05, random_state=42):
+#     """
+#     Remove outliers using Isolation Forest.
 
-    Args:
-        df (pd.DataFrame): DataFrame containing the data.
-        contamination (float): The proportion of outliers in the data set.
-        random_state (int): Random state for reproducibility.
+#     Args:
+#         df (pd.DataFrame): DataFrame containing the data.
+#         contamination (float): The proportion of outliers in the data set.
+#         random_state (int): Random state for reproducibility.
 
-    Returns:
-        pd.DataFrame: DataFrame with outliers removed.
-        pd.Series: Mask indicating which rows are kept.
-    """
-    print("\nApplying Isolation Forest for outlier detection...")
-    iso_forest = IsolationForest(contamination=contamination, random_state=random_state)
-    iso_forest.fit(df)
-    predictions = iso_forest.predict(df)
-    mask = predictions == 1  # 1 for inliers, -1 for outliers
-    n_outliers = (predictions == -1).sum()
-    print(f"Isolation Forest detected {n_outliers} outliers out of {len(df)} samples.")
-    return df[mask], mask
+#     Returns:
+#         pd.DataFrame: DataFrame with outliers removed.
+#         pd.Series: Mask indicating which rows are kept.
+#     """
+#     print("\nApplying Isolation Forest for outlier detection...")
+#     iso_forest = IsolationForest(contamination=contamination, random_state=random_state)
+#     iso_forest.fit(df)
+#     predictions = iso_forest.predict(df)
+#     mask = predictions == 1  # 1 for inliers, -1 for outliers
+#     n_outliers = (predictions == -1).sum()
+#     print(f"Isolation Forest detected {n_outliers} outliers out of {len(df)} samples.")
+#     return df[mask], mask
 
 
 def main(experiment_config_file, sim_directory, software_inferences_dir, momentsLD_inferences_dir):
@@ -65,7 +65,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
         experiment_config = json.load(f)
     print("Configuration loaded.")
 
-    parameters = ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"]
+    parameters = ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"] #TODO: CHANGE THIS LATER
     replicates = experiment_config.get('top_values_k', 1)  # Default to 1 if not specified
     lower_bounds = experiment_config.get('lower_bound_params', {})
     upper_bounds = experiment_config.get('upper_bound_params', {})
@@ -130,35 +130,44 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     combined_predictions_df = pd.concat([software_df, momentsLD_df], axis=1)
     print(f"Combined DataFrame shape: {combined_predictions_df.shape}")
 
-    # Handle missing values using KNN Imputer
-    print("\nHandling missing values using KNN Imputer...")
-    imputer = KNNImputer(n_neighbors=5)
-    combined_predictions_df_imputed = pd.DataFrame(imputer.fit_transform(combined_predictions_df),
-                                                  columns=combined_predictions_df.columns)
-    print("Missing value handling complete.")
+    # Drop rows with NaN values in the combined DataFrame
+    print("\nDropping rows with NaN values...")
+    combined_predictions_df = combined_predictions_df.dropna()
+    targets_df = targets_df.loc[combined_predictions_df.index].reset_index(drop=True)
+    print(f"DataFrame shape after dropping NaN rows: {combined_predictions_df.shape}")
 
-    # Optionally, ensure imputed values respect bounds by clipping
-    # This step can help prevent outliers introduced by imputation
-    print("\nClipping imputed values to parameter bounds...")
-    for param in parameters:
-        matching_columns = [col for col in combined_predictions_df_imputed.columns if param in col]
-        lower = lower_bounds.get(param, -np.inf)
-        upper = upper_bounds.get(param, np.inf)
-        for col in matching_columns:
-            combined_predictions_df_imputed[col] = combined_predictions_df_imputed[col].clip(lower, upper)
-    print("Clipping complete.")
+    # # Handle missing values using KNN Imputer
+    # print("\nHandling missing values using KNN Imputer...")
+    # imputer = KNNImputer(n_neighbors=5)
+    # combined_predictions_df_imputed = pd.DataFrame(imputer.fit_transform(combined_predictions_df),
+    #                                               columns=combined_predictions_df.columns)
+    # print("Missing value handling complete.")
 
-    # Remove extreme outliers using Isolation Forest
-    clean_predictions_df, mask = remove_outliers_isolation_forest(combined_predictions_df_imputed, contamination=0.05)
-    clean_targets_df = targets_df[mask].reset_index(drop=True)
+    # # Optionally, ensure imputed values respect bounds by clipping
+    # # This step can help prevent outliers introduced by imputation
+    # print("\nClipping imputed values to parameter bounds...")
+    # for param in parameters:
+    #     matching_columns = [col for col in combined_predictions_df_imputed.columns if param in col]
+    #     lower = lower_bounds.get(param, -np.inf)
+    #     upper = upper_bounds.get(param, np.inf)
+    #     for col in matching_columns:
+    #         combined_predictions_df_imputed[col] = combined_predictions_df_imputed[col].clip(lower, upper)
+    # print("Clipping complete.")
 
-    n_removed = len(combined_predictions_df_imputed) - len(clean_predictions_df)
-    print(f"Removed {n_removed} outlier samples ({(n_removed / len(combined_predictions_df_imputed)) * 100:.2f}% of data)")
+    # # Remove extreme outliers using Isolation Forest
+    # clean_predictions_df, mask = remove_outliers_isolation_forest(combined_predictions_df_imputed, contamination=0.05)
+    # clean_targets_df = targets_df[mask].reset_index(drop=True)
 
-    # Check if any samples remain
-    if clean_predictions_df.empty:
-        print("No samples remain after outlier removal. Exiting...")
-        return
+    # n_removed = len(combined_predictions_df_imputed) - len(clean_predictions_df)
+    # print(f"Removed {n_removed} outlier samples ({(n_removed / len(combined_predictions_df_imputed)) * 100:.2f}% of data)")
+
+    # # Check if any samples remain
+    # if clean_predictions_df.empty:
+    #     print("No samples remain after outlier removal. Exiting...")
+    #     return
+
+    clean_predictions_df = combined_predictions_df.copy()
+    clean_targets_df = targets_df.copy()
 
     # Normalize FIM columns (if present)
     fim_columns = [col for col in clean_predictions_df.columns if 'FIM_element' in col]

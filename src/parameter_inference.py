@@ -108,17 +108,25 @@ def _optimize_dadi(
     This function just wraps dadi.Inference.opt so we can run
     it in a separate process. We'll push results into 'queue'.
     """
-    opt_params, ll_value = dadi.Inference.opt(
+    xopt, fopt, info_dict = dadi.Inference.optimize_log_lbfgsb(
         p_guess,
         sfs,
         func_ex,
         pts=pts_ext,
         lower_bound=lower_bound,
         upper_bound=upper_bound,
-        algorithm=nlopt.LN_BOBYQA,
-        maxeval=400,
-        verbose=20
+        full_output=True,
+        epsilon=1e-8,
+        # algorithm=nlopt.LN_BOBYQA,
+        # ftol_abs=10e-8,
+        # log_opt = True,
+        verbose=10,
     )
+    opt_params = xopt
+    ll_value = fopt
+
+    print(f'INFO DICT {info_dict}')
+
     # Put results in a queue for the parent process to retrieve
     queue.put((opt_params, ll_value))
 
