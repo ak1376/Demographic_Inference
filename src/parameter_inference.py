@@ -223,7 +223,9 @@ def run_inference_dadi(
     # Build the model with the optimized parameters
     model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
+    print(f'Theta: {opt_theta}')
     N_ref = opt_theta / (4 * mutation_rate * length)
+    print(f'Nref: {N_ref}')
 
     # Build the opt_params_dict depending on model
     if demographic_model == "bottleneck_model":

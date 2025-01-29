@@ -148,19 +148,9 @@ class Processor:
         # Make sure you are calling the right demes names 
         samples = {pop_name: num_samples for pop_name, num_samples in experiment_config['num_samples'].items()}
 
-        
-
-        
-        
         g = demographic_model(sampled_params)
 
         demog = msprime.Demography.from_demes(g)
-
-        # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
-        # samples = [
-        #     msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
-        #     for pop_name, sample_size in num_samples.items()
-        # ]
 
         # Simulate ancestry for two populations (joint simulation)
         ts = msprime.sim_ancestry(
@@ -174,45 +164,37 @@ class Processor:
         # Simulate mutations over the ancestry tree sequence
         ts = msprime.sim_mutations(ts, rate=mutation_rate)
 
-        return ts
+        return ts, g
 
-    def create_SFS(self, ts, mode, num_samples, length=1e7, **kwargs
-    ):
+    def create_SFS(self, g, ts):
         """
-        If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
+        Create the site frequency spectrum (SFS) using the provided demographic model `g`.
 
+        Parameters:
+        - g: A `demes` demographic model object.
+
+        Returns:
+        - sfs_demes: The dadi Spectrum object for the given demographic model.
         """
+        # Convert the demes model to a msprime-compatible demography
+        demog = msprime.Demography.from_demes(g)
 
-        if mode == "pretrain":
-            # Define sample sets dynamically for the SFS
-            sample_sets = [
-                ts.samples(population=pop.id) 
-                for pop in ts.populations() 
-                if len(ts.samples(population=pop.id)) > 0  # Exclude populations with no samples
-            ]
-                        
-            # Create the joint allele frequency spectrum
-            sfs = ts.allele_frequency_spectrum(sample_sets=sample_sets, mode="site", polarised=True)
-            
-            # Multiply SFS by the sequence length to adjust scale
-            sfs *= length
+        # Extract sampled demes and sample sizes
+        sampled_demes = list(self.num_samples.keys())  # Population names
+        sample_sizes = [2 * self.num_samples[pop] for pop in sampled_demes]  # Double sample size per deme
 
-            # Convert to moments Spectrum for further use
-            sfs = moments.Spectrum(sfs)
-        
-        elif mode == "inference":
-            vcf_file = kwargs.get("vcf_file", None)
-            pop_file = kwargs.get("pop_file", None)
-            popname = kwargs.get("popname", None)
+        # Compute the total number of segregating sites
+        total_seg_sites = ts.num_sites
 
-            if vcf_file is None or pop_file is None:
-                raise ValueError(
-                    "vcf_file and pop_file must be provided in inference mode."
-                )
+        # Generate the SFS using dadi and the provided demes model
+        sfs_demes = dadi.Demes.SFS(
+            g,
+            sampled_demes=sampled_demes,  # Specify the deme names in your demographic model
+            sample_sizes=sample_sizes,  # List of sample sizes per deme
+            pts=4 * max(sample_sizes),  # Grid size for interpolation
+        )
 
-            dd = dadi.Misc.make_data_dict_vcf(vcf_file, pop_file)
-            sfs = dadi.Spectrum.from_data_dict(
-                dd, [popname], projections=[2 * num_samples], polarized=True
-            )
+        # Convert to absolute counts
+        sfs_absolute = sfs_demes * total_seg_sites
 
-        return sfs
+        return sfs_absolute
