@@ -70,7 +70,7 @@ def main(experiment_config, sim_directory, sim_number):
 
     # Now create the SFS
 
-    SFS = processor.create_SFS(g, ts)
+    SFS = processor.create_SFS(ts, num_samples=experiment_config['num_samples'], length = experiment_config['genome_length'])
 
     # Save the SFS
     SFS_filename = f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl"
@@ -87,7 +87,7 @@ def main(experiment_config, sim_directory, sim_number):
     if demographic_model == demographic_models.bottleneck_model:
         sampled_params = {
             key: sampled_params[key]
-            for key in experiment_config["parameters_to_estimate"]
+            for key in experiment_config["parameter_names"]
             if key in sampled_params
         }
 

@@ -95,7 +95,7 @@ def linear_evaluation(features_and_targets_filepath, model_config_path, color_sh
         validation_predictions
     )
 
-    linear_mdl_obj["param_names"] = model_config['neural_net_hyperparameters']['parameter_names']
+    linear_mdl_obj["param_names"] = experiment_config['parameters_to_estimate']
 
     # Now calculate the linear model error
 

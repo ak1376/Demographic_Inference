@@ -28,6 +28,70 @@ def bottleneck_model(sampled_params):
 
     return g
 
+# Define TB_fixed globally before calling optimization
+TB_fixed = None  # Default to None
+
+def set_TB_fixed(value):
+    """
+    Set the global TB_fixed variable.
+    """
+    global TB_fixed
+    TB_fixed = value
+
+def three_epoch_fixed(params, ns, pts):
+    """
+    Wrapper function for three_epoch where TB is fixed.
+    """
+    if TB_fixed is None:
+        raise ValueError("TB_fixed is not set before calling three_epoch_fixed")
+    
+    nuB, nuF, TF = params  # TB is removed from params
+
+    xx = Numerics.default_grid(pts)
+    phi = PhiManip.phi_1D(xx)
+
+    # Use fixed TB instead of optimizing it
+    phi = Integration.one_pop(phi, xx, TB_fixed, nuB)
+    phi = Integration.one_pop(phi, xx, TF, nuF)
+
+    fs = Spectrum.from_phi(phi, ns, (xx,))
+    return fs
+
+# Update parameter names to reflect that TB is no longer optimized
+three_epoch_fixed.__param_names__ = ['nuB', 'nuF', 'TF']
+
+
+def three_epoch_fixed_moments(params, ns, pop_ids=None):
+    """
+    Three epoch model of constant sizes with TB fixed.
+
+    params = (nuB, nuF, TF)  # TB is removed from params.
+
+    :param params: Tuple of length three specifying (nuB, nuF, TF).
+
+        - nuB: Ratio of bottleneck population size to ancient pop size.
+        - nuF: Ratio of contemporary to ancient pop size.
+        - TF: Time since bottleneck recovery (in units of 2*Na generations).
+
+    :param ns: Number of samples in resulting Spectrum.
+    :param pop_ids: Optional list of length one specifying the population ID.
+    """
+    if TB_fixed is None:
+        raise ValueError("TB_fixed is not set before calling three_epoch_fixed")
+    if pop_ids is not None and len(pop_ids) != 1:
+        raise ValueError("pop_ids must have length 1")
+
+    nuB, nuF, TF = params  # TB is now fixed, so it's removed from params.
+    sts = moments.LinearSystem_1D.steady_state_1D(ns[0])
+    fs = moments.Spectrum(sts, pop_ids=pop_ids)
+
+    # Use TB_fixed instead of optimizing TB
+    fs.integrate([nuB], TB_fixed, 0.01)
+    fs.integrate([nuF], TF, 0.01)
+    
+    return fs
+
+
 def split_isolation_model_simulation(sampled_params):
 
     # Unpack the sampled parameters

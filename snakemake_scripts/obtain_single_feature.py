@@ -3,6 +3,7 @@
 import pickle
 import json
 from src.parameter_inference import run_inference_dadi, run_inference_moments
+from src.demographic_models import set_TB_fixed
 import argparse
 import os 
 
@@ -50,27 +51,20 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(sampled_params, "rb") as f:
         sampled_params = pickle.load(f)
 
-    # if experiment_config["demographic_model"] == "bottleneck_model":
-    #     demographic_model = demographic_models.bottleneck_model
+    p0 = experiment_config['optimization_initial_guess']
+    lower_bound = lower_bound[:]
+    upper_bound = upper_bound[:]
 
-    # elif experiment_config["demographic_model"] == "split_isolation_model":
-    #     demographic_model = demographic_models.split_isolation_model_simulation
-
-    # Load the experiment config and run the simulation (as before)
-    # processor = Processor(
-    #     experiment_config,
-    #     experiment_directory=sim_directory,
-    #     recombination_rate=experiment_config["recombination_rate"],
-    #     mutation_rate=experiment_config["mutation_rate"],
-    # )
-
+    if experiment_config['demographic_model'] == "bottleneck_model":
+        # Extract the true TB value from sampled parameters
+        set_TB_fixed((sampled_params['t_bottleneck_start'] - sampled_params['t_bottleneck_end']) / (2 * sampled_params['N0']))
 
     # Conditional analysis based on provided functions
     if experiment_config["dadi_analysis"]:
         model_sfs_dadi, opt_theta_dadi, opt_params_dict_dadi = (
             run_inference_dadi(
                 sfs = SFS,
-                p0= experiment_config['optimization_initial_guess'],
+                p0= p0,
                 lower_bound= lower_bound,
                 upper_bound= upper_bound,
                 num_samples=30,

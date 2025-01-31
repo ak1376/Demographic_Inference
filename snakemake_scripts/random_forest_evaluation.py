@@ -228,7 +228,7 @@ def random_forest_evaluation(
         "neural_net_hyperparameters" in model_config 
         and "parameter_names" in model_config["neural_net_hyperparameters"]
     ):
-        random_forest_mdl_obj["param_names"] = model_config["neural_net_hyperparameters"]["parameter_names"]
+        random_forest_mdl_obj["param_names"] = experiment_config["parameters_to_estimate"]
     else:
         random_forest_mdl_obj["param_names"] = ["Unknown_Param"]
 

@@ -166,35 +166,33 @@ class Processor:
 
         return ts, g
 
-    def create_SFS(self, g, ts):
+    def create_SFS(self, ts, num_samples, length, **kwargs):
         """
-        Create the site frequency spectrum (SFS) using the provided demographic model `g`.
+        Generate the site frequency spectrum (SFS) using the simulated TreeSequence (ts).
 
         Parameters:
-        - g: A `demes` demographic model object.
+        - ts: TreeSequence object containing the simulated data.
+        - num_samples: Dictionary with deme names as keys and the number of samples as values.
 
         Returns:
-        - sfs_demes: The dadi Spectrum object for the given demographic model.
+        - sfs: The moments Spectrum object for the given demographic data.
         """
-        # Convert the demes model to a msprime-compatible demography
-        demog = msprime.Demography.from_demes(g)
-
-        # Extract sampled demes and sample sizes
-        sampled_demes = list(self.num_samples.keys())  # Population names
-        sample_sizes = [2 * self.num_samples[pop] for pop in sampled_demes]  # Double sample size per deme
-
-        # Compute the total number of segregating sites
-        total_seg_sites = ts.num_sites
-
-        # Generate the SFS using dadi and the provided demes model
-        sfs_demes = dadi.Demes.SFS(
-            g,
-            sampled_demes=sampled_demes,  # Specify the deme names in your demographic model
-            sample_sizes=sample_sizes,  # List of sample sizes per deme
-            pts=4 * max(sample_sizes),  # Grid size for interpolation
+        
+        # Define sample sets dynamically for the SFS
+        sample_sets = [
+            ts.samples(population=pop.id) 
+            for pop in ts.populations() 
+            if len(ts.samples(population=pop.id)) > 0  # Exclude populations with no samples
+        ]
+                    
+        sfs = ts.allele_frequency_spectrum(
+            sample_sets=sample_sets,
+            mode="site",
+            polarised=True,
+            span_normalise=False  # <-- crucial
         )
 
-        # Convert to absolute counts
-        sfs_absolute = sfs_demes * total_seg_sites
-
-        return sfs_absolute
+        # Convert to 1D or 2D moments Spectrum
+        sfs = moments.Spectrum(sfs)
+        
+        return sfs

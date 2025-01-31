@@ -65,7 +65,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
         experiment_config = json.load(f)
     print("Configuration loaded.")
 
-    parameters = ["N0", "Nb", "N_recover", "t_bottleneck_start", "t_bottleneck_end"] #TODO: CHANGE THIS LATER
+    parameters = experiment_config['parameters_to_estimate']
     replicates = experiment_config.get('top_values_k', 1)  # Default to 1 if not specified
     lower_bounds = experiment_config.get('lower_bound_params', {})
     upper_bounds = experiment_config.get('upper_bound_params', {})
@@ -129,6 +129,17 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
 
     combined_predictions_df = pd.concat([software_df, momentsLD_df], axis=1)
     print(f"Combined DataFrame shape: {combined_predictions_df.shape}")
+
+    # DEBUG STUFF
+    print("\nChecking for NaNs before normalization...")
+    nan_counts = combined_predictions_df.isna().sum()
+    nan_columns = nan_counts[nan_counts > 0]
+
+    if nan_columns.empty:
+        print("No NaNs found in combined_predictions_df.")
+    else:
+        print("Columns with NaNs:")
+        print(nan_columns)
 
     # Drop rows with NaN values in the combined DataFrame
     print("\nDropping rows with NaN values...")
