@@ -148,6 +148,10 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
 
     # Initial guess for optimization
     p_guess = experiment_config["optimization_initial_guess"].copy()
+    if experiment_config['demographic_model'] == "bottleneck_model":
+        # Extract the true TB value from sampled parameters
+        set_T1_fixed((sampled_params['t_bottleneck_start'] - sampled_params['t_bottleneck_end']) / (2 * sampled_params['N0']))
+
     p_guess.extend([10000])  # Extend with additional parameters if needed
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) #type:ignore
 
@@ -159,8 +163,9 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
     except Exception as e:
         # Print the exception details
         print(f"Exception occurred: {e}")
-        cleanup_files(sim_number)
-        resimulate(sim_number, experiment_config_filepath)
+        break
+        # cleanup_files(sim_number)
+        # resimulate(sim_number, experiment_config_filepath)
 
         # Retry optimization after resimulation
         opt_params_momentsLD, ll_list_momentsLD = reoptimize_with_retries(

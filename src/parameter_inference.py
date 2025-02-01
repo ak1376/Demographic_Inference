@@ -108,21 +108,33 @@ def _optimize_dadi(
     This function just wraps dadi.Inference.optimize_log_lbfgsb
     so we can run it in a separate process. We'll push results into 'queue'.
     """
-    xopt, fopt, info_dict = dadi.Inference.optimize_log_lbfgsb(
+    # xopt, fopt, info_dict = dadi.Inference.optimize_log_lbfgsb(
+    #     p_guess,
+    #     sfs,
+    #     func_ex,
+    #     pts=pts_ext,
+    #     lower_bound=lower_bound,
+    #     upper_bound=upper_bound,
+    #     full_output=True,
+    #     epsilon=1e-4,
+    #     verbose=10,
+    # )
+    # opt_params = xopt
+    # ll_value = fopt
+
+    # print(f"INFO DICT {info_dict}")
+
+    opt_params, ll_value = dadi.Inference.opt(
         p_guess,
         sfs,
         func_ex,
         pts=pts_ext,
         lower_bound=lower_bound,
         upper_bound=upper_bound,
-        full_output=True,
-        epsilon=1e-4,
-        verbose=10,
+        algorithm=nlopt.LN_BOBYQA,
+        maxeval=400,
+        verbose=20
     )
-    opt_params = xopt
-    ll_value = fopt
-
-    print(f"INFO DICT {info_dict}")
 
     # Put results in a queue for the parent process to retrieve
     queue.put((opt_params, ll_value))
@@ -430,7 +442,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
     mv = moments.LD.Parsing.bootstrap_data(ld_stats)  # type: ignore
 
     if demographic_model == "bottleneck_model":
-        demo_func = moments.LD.Demographics1D.three_epoch  # type: ignore
+        demo_func = demographic_models.three_epoch_fixed_MomentsLD #TODO: CHANGE
     elif demographic_model == "split_isolation_model":
         demo_func = demographic_models.split_isolation_model_momentsLD
     else:

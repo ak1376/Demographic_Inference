@@ -91,6 +91,51 @@ def three_epoch_fixed_moments(params, ns, pop_ids=None):
     
     return fs
 
+# Define TB_fixed globally before calling optimization
+T1_fixed = None  # Default to None
+
+def set_T1_fixed(value):
+    """
+    Set the fixed value for T1 (bottleneck duration in coalescent units).
+    """
+    global T1_fixed
+    T1_fixed = value
+
+def three_epoch_fixed_MomentsLD(params, order=2, rho=None, theta=0.001, pop_ids=None):
+    """
+    Three epoch model with constant sized epochs and T1 fixed.
+
+    :param params: The relative sizes and integration times of recent epochs,
+        in genetic units: (nu2, T2).
+        - nu2: Relative size of the final epoch.
+        - T2: Duration of the recovery phase (in genetic units).
+    :type params: list
+    :param order: The maximum order of the LD statistics. Defaults to 2.
+    :type order: int
+    :param rho: Population-scaled recombination rate (4Nr),
+        given as scalar or list of rhos.
+    :type rho: float or list of floats, optional
+    :param theta: Population-scaled mutation rate (4Nu). Defaults to 0.001.
+    :type theta: float
+    :param pop_ids: List of population IDs of length 1.
+    :type pop_ids: list of str, optional
+    """
+    if T1_fixed is None:
+        raise ValueError("T1_fixed is not set before calling three_epoch_fixed")
+
+    if pop_ids is not None and len(pop_ids) != 1:
+        raise ValueError("pop_ids must have length 1")
+    
+    nu2, T2 = params  # T1 is removed from params and fixed globally
+    Y = Numerics.steady_state([1], rho=rho, theta=theta)
+    Y = LDstats(Y, num_pops=1, pop_ids=pop_ids)
+
+    # Use T1_fixed instead of optimizing T1
+    Y.integrate([nu2], T1_fixed, rho=rho, theta=theta)
+    Y.integrate([nu2], T2, rho=rho, theta=theta)
+
+    return Y
+
 
 def split_isolation_model_simulation(sampled_params):
 
