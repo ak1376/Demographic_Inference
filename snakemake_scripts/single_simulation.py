@@ -50,6 +50,9 @@ def main(experiment_config, sim_directory, sim_number):
     elif experiment_config["demographic_model"] == "split_isolation_model":
         demographic_model = demographic_models.split_isolation_model_simulation
 
+    elif experiment_config["demographic_model"] == "split_migration_model":
+        demographic_model = demographic_models.split_migration_model_simulation
+
     else:
         raise ValueError(
             f"Unsupported demographic model: {experiment_config['demographic_model']}"

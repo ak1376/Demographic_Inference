@@ -47,6 +47,37 @@ def split_isolation_model_simulation(sampled_params):
     g = b.resolve()
     return g
 
+
+def split_migration_model_simulation(sampled_params):
+    # Unpack the sampled parameters
+    Na, N1, N2, m12, m21, t_split = (
+        sampled_params["Na"],  # Effective population size of the ancestral population
+        sampled_params["N1"],  # Size of population 1 after split
+        sampled_params["N2"],  # Size of population 2 after split
+        sampled_params["m12"], # Migration rate from N1 to N2
+        sampled_params["m21"], # Migration rate from N2 to N1
+        sampled_params["t_split"],  # Time of the population split (in generations)
+    )
+
+    # Define the demographic model using demes
+    b = demes.Builder()
+    
+    # Ancestral population
+    b.add_deme("Na", epochs=[dict(start_size=Na, end_time=t_split)])
+
+    # Derived populations after split
+    b.add_deme("N1", ancestors=["Na"], epochs=[dict(start_size=N1)])
+    b.add_deme("N2", ancestors=["Na"], epochs=[dict(start_size=N2)])
+
+    # Asymmetric migration: Different migration rates for each direction
+    b.add_migration(source="N1", dest="N2", rate=m12)  # Migration from N1 to N2
+    b.add_migration(source="N2", dest="N1", rate=m21)  # Migration from N2 to N1
+
+    # Resolve and return the demography graph
+    g = b.resolve()
+    return g
+
+
 def split_isolation_model_dadi(params, ns, pts):
     """
     params = (nu1, nu2, t_split)
