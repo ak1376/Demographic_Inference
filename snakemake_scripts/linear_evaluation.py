@@ -109,25 +109,25 @@ def linear_evaluation(features_and_targets_filepath, model_config_path, color_sh
 
     # Open a file to save the object
     with open(
-        f"{model_directory}/linear_mdl_obj.pkl", "wb"
+        f"{model_directory}/linear_mdl_obj_{regression_type}.pkl", "wb"
     ) as file:  # "wb" mode opens the file in binary write mode
         pickle.dump(linear_mdl_obj, file)
 
     # Save rrmse_dict to a JSON file
-    with open(f"{model_directory}/linear_model_error.json", "w") as json_file:
+    with open(f"{model_directory}/linear_model_error.json_{regression_type}", "w") as json_file:
         json.dump(rrmse_dict, json_file, indent=4)
 
     # targets
     visualizing_results(
         linear_mdl_obj,
-        "linear_results",
+        f"linear_results_{regression_type}",
         save_loc=model_directory,
         stages=["training", "validation"],
         color_shades=color_shades,
         main_colors=main_colors,
     )
 
-    joblib.dump(linear_mdl, f"{model_directory}/linear_regression_model.pkl")
+    joblib.dump(linear_mdl, f"{model_directory}/linear_regression_model_{regression_type}.pkl")
 
     print("Linear model trained LFG")
 

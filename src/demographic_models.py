@@ -103,11 +103,12 @@ def set_T1_fixed(value):
 
 def three_epoch_fixed_MomentsLD(params, order=2, rho=None, theta=0.001, pop_ids=None):
     """
-    Three epoch model with constant sized epochs and T1 fixed.
+    Three-epoch bottleneck model with a fixed bottleneck duration.
 
     :param params: The relative sizes and integration times of recent epochs,
-        in genetic units: (nu2, T2).
-        - nu2: Relative size of the final epoch.
+        in genetic units: (nuB, nuF, T2).
+        - nuB: Bottleneck population size relative to ancestral size (N0).
+        - nuF: Final recovered population size relative to N0.
         - T2: Duration of the recovery phase (in genetic units).
     :type params: list
     :param order: The maximum order of the LD statistics. Defaults to 2.
@@ -121,20 +122,24 @@ def three_epoch_fixed_MomentsLD(params, order=2, rho=None, theta=0.001, pop_ids=
     :type pop_ids: list of str, optional
     """
     if T1_fixed is None:
-        raise ValueError("T1_fixed is not set before calling three_epoch_fixed")
+        raise ValueError("T1_fixed is not set before calling three_epoch_fixed_MomentsLD")
 
     if pop_ids is not None and len(pop_ids) != 1:
         raise ValueError("pop_ids must have length 1")
     
-    nu2, T2 = params  # T1 is removed from params and fixed globally
-    Y = Numerics.steady_state([1], rho=rho, theta=theta)
+    nuB, nuF, T2 = params  # T1 is removed from params and fixed globally
+
+    Y = NumericsMomentsLD.steady_state([1], rho=rho, theta=theta)
     Y = LDstats(Y, num_pops=1, pop_ids=pop_ids)
 
-    # Use T1_fixed instead of optimizing T1
-    Y.integrate([nu2], T1_fixed, rho=rho, theta=theta)
-    Y.integrate([nu2], T2, rho=rho, theta=theta)
+    # **1st epoch: Bottleneck phase (`Nb`) with fixed duration `T1_fixed`**
+    Y.integrate([nuB], T1_fixed, rho=rho, theta=theta)
+
+    # **2nd epoch: Recovery phase (`N_recover`)**
+    Y.integrate([nuF], T2, rho=rho, theta=theta)
 
     return Y
+
 
 
 def split_isolation_model_simulation(sampled_params):

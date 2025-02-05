@@ -31,8 +31,7 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
         pop_file=pop_file_path,
         pops=unique_populations,
         r_bins=r_bins,
-        report=False,
-        use_genotypes = False
+        report=True,
     )
 
     return ld_stats
@@ -457,12 +456,15 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
 
     opt_params_dict = {}
     if demographic_model == "bottleneck_model":
+        # opt_params[0]: Nb
+        # opt_params[1]: N_recover 
+        # opt_params[2]: t_bottleneck_end
+        # opt_params[3]: N_ref
         opt_params_dict = {
-            "N0": opt_params[4],
-            "Nb": opt_params[0] * opt_params[4],
-            "N_recover": opt_params[1] * opt_params[4],
-            "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * opt_params[4],
-            "t_bottleneck_end": opt_params[3] * 2 * opt_params[4]
+            "N0": opt_params[3],
+            "Nb": opt_params[0] * opt_params[3],
+            "N_recover": opt_params[1] * opt_params[3],
+            "t_bottleneck_end": opt_params[2] * 2 * opt_params[3]
         }
 
     elif demographic_model == "split_isolation_model":

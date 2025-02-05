@@ -7,7 +7,13 @@ import shutil
 import numpy as np
 from tqdm import tqdm
 from src.parameter_inference import run_inference_momentsLD
+from src.demographic_models import set_T1_fixed
 import moments
+
+
+# ---------------------------------------------------------------------------------------
+# If desired, you can keep these functions for manual use but remove or comment out calls.
+# ---------------------------------------------------------------------------------------
 
 def cleanup_files(sim_number):
     """Clean up simulation-related files for a given simulation number."""
@@ -45,6 +51,7 @@ def cleanup_files(sim_number):
         print(f"Deleted LD inferences directory: /projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
     else:
         print(f"LD inferences directory not found: /projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
+
 
 def resimulate(sim_number, experiment_config_filepath):
     """Rerun simulation and regenerate genome windows."""
@@ -88,7 +95,6 @@ def resimulate(sim_number, experiment_config_filepath):
         subprocess.run(regenerate_window_command, check=True)
         print(f"Regenerated genome window {window_number}.")
 
-    # ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, sim_number, window_number)
     # Recompute the LD stats (since we are resimulating)
     for window_number in range(experiment_config['num_windows']):
         regenerate_window_command = [
@@ -111,6 +117,10 @@ def resimulate(sim_number, experiment_config_filepath):
         print(f"Recomputed LD stats for simulation {sim_number} and window {window_number}.")
 
 
+# ---------------------------------------------------------------------------------------
+# Main optimization logic with retries, now WITHOUT cleanup or re-simulation calls.
+# ---------------------------------------------------------------------------------------
+
 def reoptimize_with_retries(combined_ld_stats, p_guess, experiment_config, sim_number):
     """Attempt optimization with retries, handling exceptions."""
     def reoptimize():
@@ -124,17 +134,19 @@ def reoptimize_with_retries(combined_ld_stats, p_guess, experiment_config, sim_n
         print(f'The optimal parameters are: {opt_params_momentsLD}')
         return opt_params_momentsLD, ll_list_momentsLD
 
+    # Instead of cleaning up and resimulating on error, we now just raise the error
+    # so you can see what's going on.
     try:
         return reoptimize()
     except (np.linalg.LinAlgError, KeyError) as e:
         print("================================================================================")
-        print(f"Error encountered during optimization: {e}. Resimulating for sim_number={sim_number}.")
+        print(f"Error encountered during optimization for sim_number={sim_number}: {e}")
         print("================================================================================")
-        raise  # Signal that the caller should handle resimulation
+        raise  # Just re-raise so you can diagnose without cleaning or resimulating
 
 
 def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experiment_config_filepath, sim_number):
-    """Main function to infer momentsLD features and handle errors."""
+    """Main function to infer momentsLD features and handle errors (NO auto-cleanup or re-simulation)."""
     with open(experiment_config_filepath, "r") as f:
         experiment_config = json.load(f)
 
@@ -152,25 +164,21 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
         # Extract the true TB value from sampled parameters
         set_T1_fixed((sampled_params['t_bottleneck_start'] - sampled_params['t_bottleneck_end']) / (2 * sampled_params['N0']))
 
-    p_guess.extend([10000])  # Extend with additional parameters if needed
-    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1) #type:ignore
+    # Adjust p_guess as needed (example extension by 10000).
+    p_guess.extend([10000])
+    p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)  # type: ignore
 
-    # Attempt optimization with a retry mechanism
+    # Attempt optimization with a retry mechanism (but no cleanup/resimulation)
     try:
         opt_params_momentsLD, ll_list_momentsLD = reoptimize_with_retries(
             combined_ld_stats, p_guess, experiment_config, sim_number
         )
     except Exception as e:
-        # Print the exception details
-        print(f"Exception occurred: {e}")
-        break
-        # cleanup_files(sim_number)
-        # resimulate(sim_number, experiment_config_filepath)
-
-        # Retry optimization after resimulation
-        opt_params_momentsLD, ll_list_momentsLD = reoptimize_with_retries(
-            combined_ld_stats, p_guess, experiment_config, sim_number
-        )
+        # We simply print the error and exit so you can investigate.
+        print(f"Exception occurred during reoptimization: {e}")
+        print("No cleanup or resimulation is performed. Please check your files/logs for more details.")
+        # You may choose to sys.exit(1) here if you'd like to end the script on error.
+        raise
 
     # Store results in dictionary and save to a pickle file
     momentsLD_results = {
