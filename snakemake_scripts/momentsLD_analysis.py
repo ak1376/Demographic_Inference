@@ -1,27 +1,29 @@
+import os
 import pickle
 import json
 import argparse
 import subprocess
-import os
 import shutil
 import numpy as np
 from tqdm import tqdm
 from src.parameter_inference import run_inference_momentsLD
 import moments
 
+# Get the current working directory dynamically
+# BASE_DIR = os.getcwd()
+BASE_DIR = "/sietch_colab/akapoor/"
+
 def cleanup_files(sim_number):
     """Clean up simulation-related files for a given simulation number."""
-    simulation_results_directory = (
-        "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results"
-    )
-    genome_windows_directory = f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}"
+    simulation_results_directory = os.path.join(BASE_DIR, "Demographic_Inference", "simulated_parameters_and_inferences", "simulation_results")
+    genome_windows_directory = os.path.join(BASE_DIR, "Demographic_Inference", "sampled_genome_windows", f"sim_{sim_number}")
 
     # Define files to delete
     files_to_delete = [
-        f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl",
-        f"{simulation_results_directory}/ts_sim_{sim_number}.trees",
-        f"{simulation_results_directory}/sampled_params_{sim_number}.pkl",
-        f"{simulation_results_directory}/sampled_params_metadata_{sim_number}.txt"
+        os.path.join(simulation_results_directory, f"SFS_sim_{sim_number}.pkl"),
+        os.path.join(simulation_results_directory, f"ts_sim_{sim_number}.trees"),
+        os.path.join(simulation_results_directory, f"sampled_params_{sim_number}.pkl"),
+        os.path.join(simulation_results_directory, f"sampled_params_metadata_{sim_number}.txt"),
     ]
 
     # Delete individual files
@@ -40,11 +42,12 @@ def cleanup_files(sim_number):
         print(f"Genome windows directory not found: {genome_windows_directory}")
 
     # Delete the LD stats directory 
-    if os.path.exists(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}"):
-        shutil.rmtree(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
-        print(f"Deleted LD inferences directory: /projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
+    ld_inferences_dir = os.path.join(BASE_DIR, "Demographic_Inference", "LD_inferences", f"sim_{sim_number}")
+    if os.path.exists(ld_inferences_dir):
+        shutil.rmtree(ld_inferences_dir)
+        print(f"Deleted LD inferences directory: {ld_inferences_dir}")
     else:
-        print(f"LD inferences directory not found: /projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}")
+        print(f"LD inferences directory not found: {ld_inferences_dir}")
 
 def resimulate(sim_number, experiment_config_filepath):
     """Rerun simulation and regenerate genome windows."""
@@ -53,11 +56,11 @@ def resimulate(sim_number, experiment_config_filepath):
     # Run the simulation script
     rerun_command = [
         "python",
-        "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/single_simulation.py",
+        os.path.join(BASE_DIR, "Demographic_Inference", "snakemake_scripts", "single_simulation.py"),
         "--experiment_config",
         experiment_config_filepath,
         "--sim_directory",
-        '/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences',
+        os.path.join(BASE_DIR, "Demographic_Inference", "simulated_parameters_and_inferences"),
         "--sim_number",
         str(sim_number),
     ]
@@ -73,9 +76,9 @@ def resimulate(sim_number, experiment_config_filepath):
     for window_number in range(experiment_config["num_windows"]):
         regenerate_window_command = [
             "python",
-            "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/obtain_genome_vcfs.py",
+            os.path.join(BASE_DIR, "Demographic_Inference", "snakemake_scripts", "obtain_genome_vcfs.py"),
             "--tree_sequence_file",
-            f"/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees",
+            os.path.join(BASE_DIR, "Demographic_Inference", "simulated_parameters_and_inferences", "simulation_results", f"ts_sim_{sim_number}.trees"),
             "--experiment_config_filepath",
             experiment_config_filepath,
             "--genome_sim_directory",
@@ -88,20 +91,19 @@ def resimulate(sim_number, experiment_config_filepath):
         subprocess.run(regenerate_window_command, check=True)
         print(f"Regenerated genome window {window_number}.")
 
-    # ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, sim_number, window_number)
-    # Recompute the LD stats (since we are resimulating)
+    # Recompute the LD stats
     for window_number in range(experiment_config['num_windows']):
         regenerate_window_command = [
             "python", 
-            "/projects/kernlab/akapoor/Demographic_Inference/snakemake_scripts/ld_stats.py",
+            os.path.join(BASE_DIR, "Demographic_Inference", "snakemake_scripts", "ld_stats.py"),
             "--vcf_filepath",
-            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/window.{window_number}.vcf.gz",
+            os.path.join(BASE_DIR, "Demographic_Inference", "sampled_genome_windows", f"sim_{sim_number}", f"window_{window_number}", f"window.{window_number}.vcf.gz"),
             "--flat_map_path",
-            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt",
+            os.path.join(BASE_DIR, "Demographic_Inference", "sampled_genome_windows", f"sim_{sim_number}", f"window_{window_number}", "flat_map.txt"),
             "--pop_file_path",
-            f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt",
+            os.path.join(BASE_DIR, "Demographic_Inference", "sampled_genome_windows", f"sim_{sim_number}", f"window_{window_number}", "samples.txt"),
             "--sim_directory",
-            f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences",
+            os.path.join(BASE_DIR, "Demographic_Inference", "LD_inferences"),
             "--sim_number",
             str(sim_number),
             "--window_number",
@@ -109,7 +111,6 @@ def resimulate(sim_number, experiment_config_filepath):
         ]
         subprocess.run(regenerate_window_command, check=True)
         print(f"Recomputed LD stats for simulation {sim_number} and window {window_number}.")
-
 
 def reoptimize_with_retries(combined_ld_stats, p_guess, experiment_config, sim_number):
     """Attempt optimization with retries, handling exceptions."""
@@ -119,6 +120,7 @@ def reoptimize_with_retries(combined_ld_stats, p_guess, experiment_config, sim_n
             ld_stats=combined_ld_stats,
             demographic_model=experiment_config["demographic_model"],
             p_guess=p_guess,
+            experiment_config=experiment_config
         )
         print("Optimization completed successfully.")
         print(f'The optimal parameters are: {opt_params_momentsLD}')
@@ -131,7 +133,6 @@ def reoptimize_with_retries(combined_ld_stats, p_guess, experiment_config, sim_n
         print(f"Error encountered during optimization: {e}. Resimulating for sim_number={sim_number}.")
         print("================================================================================")
         raise  # Signal that the caller should handle resimulation
-
 
 def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experiment_config_filepath, sim_number):
     """Main function to infer momentsLD features and handle errors."""
@@ -157,7 +158,6 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
             combined_ld_stats, p_guess, experiment_config, sim_number
         )
     except Exception as e:
-        # Print the exception details
         print(f"Exception occurred: {e}")
         cleanup_files(sim_number)
         resimulate(sim_number, experiment_config_filepath)
@@ -174,11 +174,10 @@ def obtain_feature(combined_ld_stats_path, sim_directory, sampled_params, experi
     }
     mega_result_dict.update(momentsLD_results)
 
-    output_path = f"{sim_directory}/momentsLD_inferences_sim_{sim_number}.pkl"
+    output_path = os.path.join(sim_directory, f"momentsLD_inferences_sim_{sim_number}.pkl")
     with open(output_path, "wb") as f:
         pickle.dump(mega_result_dict, f)
     print(f"Results saved to {output_path}")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

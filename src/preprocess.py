@@ -120,29 +120,34 @@ class Processor:
             fout.write("0\t0\n")
             fout.write(f"{experiment_config['genome_length']}\t{experiment_config['recombination_rate'] * experiment_config['genome_length'] * 100}\n")
 
-
     def sample_params(self):
         sampled_params = {}
         for key in self.lower_bound_params:
             lower_bound = self.lower_bound_params[key]
             upper_bound = self.upper_bound_params[key]
-            sampled_value = np.random.uniform(lower_bound, upper_bound)
-            sampled_params[key] = int(sampled_value)
 
+            # Sample uniformly within bounds
+            sampled_value = np.random.uniform(lower_bound, upper_bound)
+
+            # Ensure floating-point precision for migration rates
+            if key in ["m12", "m21"]:  # Migration rates
+                sampled_params[key] = sampled_value  # Keep as float
+            else:
+                sampled_params[key] = int(sampled_value)  # Cast other parameters to int
 
             # Check if the sampled parameter is equal to the mean of the uniform distribution
             mean_value = (lower_bound + upper_bound) / 2
             if sampled_value == mean_value:
-                # Add a small random value to avoid exact mean, while keeping within bounds
                 adjustment = np.random.uniform(-0.1 * (upper_bound - lower_bound), 0.1 * (upper_bound - lower_bound))
                 adjusted_value = sampled_value + adjustment
-                
-                # Ensure the adjusted value is still within the bounds
                 adjusted_value = max(min(adjusted_value, upper_bound), lower_bound)
-                sampled_params[key] = int(adjusted_value)
-
+                
+                if key in ["m12", "m21"]:  # Keep migration rates as float
+                    sampled_params[key] = adjusted_value
+                else:
+                    sampled_params[key] = int(adjusted_value)
+                    
         return sampled_params
-
     def simulate_chromosome(self, experiment_config, sampled_params, demographic_model, length=1e7, mutation_rate=5.7e-9, recombination_rate = 3.386e-9, **kwargs):
         
         # Make sure you are calling the right demes names 

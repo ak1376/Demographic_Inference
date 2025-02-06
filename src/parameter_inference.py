@@ -161,6 +161,9 @@ def run_inference_dadi(
         model_func = dadi.Demographics1D.three_epoch
     elif demographic_model == "split_isolation_model":
         model_func = demographic_models.split_isolation_model_dadi
+    
+    elif demographic_model == "split_migration_model":
+        model_func = demographic_models.split_migration_model_dadi
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
@@ -236,6 +239,16 @@ def run_inference_dadi(
             "m": opt_params[3] * 2 * N_ref,
             "ll": ll_value,
         }
+    elif demographic_model == "split_migration_model":
+        opt_params_dict = {
+            "Na": N_ref,
+            "N1": opt_params[0] * N_ref,
+            "N2": opt_params[1] * N_ref,
+            "t_split": opt_params[4] * 2 * N_ref,
+            "m12": opt_params[2] * 2 * N_ref,
+            "m21": opt_params[3] * 2 * N_ref,
+            "ll": ll_value,
+        }
 
     # Scale the model by theta
     model *= opt_theta
@@ -268,6 +281,8 @@ def run_inference_moments(
         model_func = moments.Demographics1D.three_epoch
     elif demographic_model == "split_isolation_model":
         model_func = demographic_models.split_isolation_model_moments
+    elif demographic_model == "split_migration_model":
+        model_func = demographic_models.split_migration_model_moments
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
@@ -316,6 +331,20 @@ def run_inference_moments(
                 num_diag_elements = (num_params * (num_params + 1)) // 2  # formula for upper triangle including diagonal
                 opt_params_dict["upper_triangular_FIM"] = np.full((num_diag_elements,), np.nan)
             return None, None, opt_params_dict
+
+        elif demographic_model == "split_migration_model":
+            opt_params_dict = {
+                "Na": np.nan,
+                "N1": np.nan,
+                "N2": np.nan,
+                "t_split": np.nan,
+                "m12": np.nan,
+                "m21": np.nan,
+                "ll": np.nan,
+            }
+            if use_FIM:
+                num_params = len(p0)
+                num_diag_elements = (num_params * (num_params + 1)) // 2
 
     # 5) Otherwise, retrieve the results from the queue
     opt_params, ll = queue.get()
@@ -371,13 +400,26 @@ def run_inference_moments(
         if use_FIM:
             opt_params_dict["upper_triangular_FIM"] = upper_triangular
 
+    elif demographic_model == "split_migration_model":
+        opt_params_dict = {
+            "Na": N_ref,
+            "N1": opt_params[0] * N_ref,
+            "N2": opt_params[1] * N_ref,
+            "t_split": opt_params[4] * 2 * N_ref,
+            "m12": opt_params[2] * 2 * N_ref,
+            "m21": opt_params[3] * 2 * N_ref,
+            "ll": ll,
+        }
+        if use_FIM:
+            opt_params_dict["upper_triangular_FIM"] = upper_triangular
+
     # 10) Scale the model by opt_theta
     model *= opt_theta
 
     # 11) Return the final outputs
     return model, opt_theta, opt_params_dict
 
-def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
+def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_config):
     """
     This should do the parameter inference for momentsLD.
     """
@@ -389,17 +431,24 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
     print(ld_stats.keys())
 
     mv = moments.LD.Parsing.bootstrap_data(ld_stats)  # type: ignore
+    print('MV CREATION COMPLETED!')
 
     if demographic_model == "bottleneck_model":
         demo_func = moments.LD.Demographics1D.three_epoch  # type: ignore
     elif demographic_model == "split_isolation_model":
         demo_func = demographic_models.split_isolation_model_momentsLD
+
+    elif demographic_model == "split_migration_model":
+        demo_func = demographic_models.split_migration_model_momentsLD
+
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # Perform optimization
     opt_params, ll = moments.LD.Inference.optimize_log_fmin(  # type: ignore
-        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=3, maxiter=400
+        p_guess, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=400, 
+        lower_bound = experiment_config['lower_bound_optimization'],
+        upper_bound = experiment_config['upper_bound_optimization']
     )
 
     ll_list.append(ll)
@@ -435,6 +484,30 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess):
         print(f"  Div. time (gen)  :  {physical_units[2]:.1f}")
         print(f"  Migration rate   :  {physical_units[3]:.6f}")
         print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
+
+    elif demographic_model == "split_migration_model":
+        physical_units = moments.LD.Util.rescale_params(
+            opt_params, ["nu", "nu", "T", "m", "m", "Ne"]  # Use "m" for both migration rates
+        )
+
+        print(physical_units)
+
+        opt_params_dict = {
+            "N1": physical_units[0],
+            "N2": physical_units[1],
+            "t_split": physical_units[2],
+            "m12": physical_units[3],  # Matches first "m"
+            "m21": physical_units[4],  # Matches second "m"
+            'Na': physical_units[5]
+        }
+
+        print("best fit parameters:")
+        print(f"  N(deme1)         :  {physical_units[0]:.1f}")
+        print(f"  N(deme2)         :  {physical_units[1]:.1f}")
+        print(f"  Div. time (gen)  :  {physical_units[2]:.1f}")
+        print(f"  Migration rate 1 :  {physical_units[3]:.6f}")
+        print(f"  Migration rate 2 :  {physical_units[4]:.6f}")
+        print(f"  N(ancestral)     :  {physical_units[5]:.1f}")
 
     opt_params_dict_list.append(opt_params_dict)
 
