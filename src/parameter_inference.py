@@ -12,6 +12,164 @@ import multiprocessing
 
 TIMEOUT_SECONDS = 20 * 60  # 20 minutes = 1200 seconds
 
+def norm(p):
+    return [(x - m) / s for x, m, s in zip(p, mean, stddev)]
+
+def unnorm(z):
+    return [z_i * s + m for z_i, m, s in zip(z, mean, stddev)]
+
+
+def diffusion_sfs_moments(parameters: list[float], sample_sizes: OrderedDict, demographic_model) -> moments.Spectrum:
+    """
+    Get the expected SFS under the diffusion approximation (moments).
+    """
+    # 1) Convert our parameter list into a dictionary
+
+    if demographic_model == "split_migration_model":
+        demo_model = demographic_models.split_migration_model_simulation
+        param_dict = {
+            "N0": parameters[0],
+            "N1": parameters[1],
+            "N2": parameters[2],
+            "m12": parameters[3],
+            "m21": parameters[4],
+            "t_split": parameters[5],
+        }
+    elif demographic_model == "split_isolation_model":
+        demo_model = demographic_models.split_isolation_model_simulation
+        param_dict = {
+            "N0": parameters[0],
+            "N1": parameters[1],
+            "N2": parameters[2],
+            "m": parameters[3],
+            "t_split": parameters[4],
+        }
+    elif: demographic_model == "bottleneck_model":
+        demo_model = demographic_models.bottleneck_model
+        param_dict = {
+            "N0": parameters[0],
+            "Nb": parameters[1],
+            "N_recover": parameters[2],
+            "t_bottleneck_end": parameters[3],
+        }
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
+    # 2) Build the demes graph
+    demes_graph = demo_model(param_dict)
+
+    # 3) Construct the Spectrum via from_demes
+    sampled_demes = list(sample_sizes.keys())
+    haploid_sample_sizes = [n * 2 for n in sample_sizes.values()]
+
+    # Typically, you'd set theta = 4 * Nref * mu * L for a given reference size Nref,
+    # but here we just use the first population's size as "N0".
+    # Adjust to your model's convention for Nref if needed.
+    Nref = parameters[0]  # or define some other reference population size
+    theta = 4 * Nref * mutation_rate * sequence_length
+
+    sfs = moments.Spectrum.from_demes(
+        demes_graph,
+        sample_sizes=haploid_sample_sizes,
+        sampled_demes=sampled_demes,
+        theta=theta,
+    )
+    return sfs
+
+def diffusion_sfs_dadi(
+    parameters: list[float],
+    sample_sizes: OrderedDict,
+    demographic_model: str,
+    mutation_rate: float,
+    sequence_length: float,
+    pts: list[int],
+) -> dadi.Spectrum:
+    """
+    Get the expected SFS under the diffusion approximation (using dadi)
+    by building a demes.Graph and converting to a dadi model via demes_dadi.
+
+    Parameters
+    ----------
+    parameters : list[float]
+        Model parameters in demographic units or scaled units
+        (depending on how your demes builder interprets them).
+    sample_sizes : OrderedDict
+        e.g. {"N1": 15, "N2": 8} for 2D data
+    demographic_model : str
+        One of ["split_migration_model", "split_isolation_model", "bottleneck_model"].
+    mutation_rate : float
+        Mutation rate per generation per base.
+    sequence_length : float
+        Total number of base pairs or length of region.
+    pts : list of int
+        Extrapolation grid sizes for dadi (e.g. [60, 70, 80]).
+
+    Returns
+    -------
+    dadi.Spectrum
+        The model-predicted SFS (on the largest grid in `pts`).
+    """
+    # 1) Parse the parameters and pick the correct demes-based function
+    if demographic_model == "split_migration_model":
+        # For example, [N0, N1, N2, m12, m21, t_split]
+        param_dict = {
+            "N0": parameters[0],
+            "N1": parameters[1],
+            "N2": parameters[2],
+            "m12": parameters[3],
+            "m21": parameters[4],
+            "t_split": parameters[5],
+        }
+        demo_func = demographic_models.split_migration_model_simulation
+
+    elif demographic_model == "split_isolation_model":
+        # For example, [N0, N1, N2, m, t_split]
+        param_dict = {
+            "N0": parameters[0],
+            "N1": parameters[1],
+            "N2": parameters[2],
+            "m": parameters[3],
+            "t_split": parameters[4],
+        }
+        demo_func = demographic_models.split_isolation_model_simulation
+
+    elif demographic_model == "bottleneck_model":
+        # For example, [N0, Nb, N_recover, t_bottleneck_end, ...]
+        # Adjust indexing to match your code.
+        param_dict = {
+            "N0": parameters[0],
+            "Nb": parameters[1],
+            "N_recover": parameters[2],
+            "t_bottleneck_end": parameters[3],
+            # etc. if more parameters
+        }
+        demo_func = demographic_models.bottleneck_model
+
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
+    # 2) Build the demes graph
+    demes_graph = demo_func(param_dict)  # e.g. returns a demes.Graph
+
+    # 3) Convert the demes Graph to a dadi function using demes_dadi
+    #    This creates a python function: model_func(pts, ns, [params]) -> fs
+    #    But the demes graph is already fully specified. We just pass it in.
+    dadi_model_func = demes_dadi.Demes2Dadi(demes_graph)
+
+    # 4) Evaluate on the extrapolation grid
+    #    For a 2D model, sample_sizes might be [n1, n2]. For 1D, [n]. For 3D, etc.
+    ns = list(sample_sizes.values())  # e.g. [15, 8]
+    model_fs = dadi_model_func(pts, ns)
+
+    # 5) Scale by theta if you want an absolute SFS. Typically, we do:
+    #    theta = 4 * Nref * mu * L. If you consider parameters[0] = N0, then:
+    Nref = parameters[0]
+    theta = 4.0 * Nref * mutation_rate * sequence_length
+
+    model_fs *= theta
+
+    # model_fs is a dadi.Spectrum. You can return it directly.
+    return model_fs
 
 # Define your function with Ray's remote decorator
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
@@ -123,6 +281,23 @@ def _optimize_dadi(
 
     # print(f"INFO DICT {info_dict}")
 
+    # Optimize using Powell
+    opt_params, ll_value = dadi.Inference.opt(
+        norm(start),
+        sfs,
+        lambda z, n: diffusion_sfs_dadi(unnorm(z), sample_sizes_fit),
+        pts=pts_ext,
+        lower_bound=norm(lower_bound),
+        upper_bound=norm(upper_bound),
+        algorithm=nlopt.LN_BOBYQA,
+        maxeval=400,
+        verbose=20
+    )
+
+    fitted_params = unnorm(opt_params)
+
+    queue.put((opt_params, ll_value))  # pass (opt_params, ll) back to the parent
+
     opt_params, ll_value = dadi.Inference.opt(
         p_guess,
         sfs,
@@ -138,24 +313,41 @@ def _optimize_dadi(
     # Put results in a queue for the parent process to retrieve
     queue.put((opt_params, ll_value))
 
-def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound):
+def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound, sample_sizes_fit):
     """
     This function wraps moments.Inference.optimize_log_powell
     so we can run it in a separate process. We'll push results
     (opt_params, ll) into 'queue'.
     """
-    # full_output=True => returns (best_params, best_ll, ...)
-    xopt = moments.Inference.optimize_log_lbfgsb(
-        p_guess,
+
+    # Optimize using Powell
+    xopt = moments.Inference.optimize_powell(
+        norm(start),
         sfs,
-        model_func,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        verbose=20,
+        lambda z, n: diffusion_sfs_moments(unnorm(z), sample_sizes_fit),
+        lower_bound=norm(lower_bound),
+        upper_bound=norm(upper_bound),
+        multinom=False,
+        verbose=10,
+        flush_delay=0.0,
         full_output=True
     )
+
+    fitted_params = unnorm(xopt[0])
+    ll = xopt[1]
+
+    # full_output=True => returns (best_params, best_ll, ...)
+    # xopt = moments.Inference.optimize_log_lbfgsb(
+    #     p_guess,
+    #     sfs,
+    #     model_func,
+    #     lower_bound=lower_bound,
+    #     upper_bound=upper_bound,
+    #     verbose=20,
+    #     full_output=True
+    # )
     # xopt[0] = opt_params, xopt[1] = ll
-    queue.put((xopt[0], xopt[1]))  # pass (opt_params, ll) back to the parent
+    queue.put((fitted_params, ll))  # pass (opt_params, ll) back to the parent
 
 
 def run_inference_dadi(
@@ -179,22 +371,18 @@ def run_inference_dadi(
     - length: number of callable base pairs (sequence length).
     """
 
-    # -------------------------------------------------------------------
-    # 1) Mask out the monomorphic bins so they don't swamp the polymorphic frequencies.
-    #    Adjust depending on whether this is 1D or 2D.
-    # -------------------------------------------------------------------
-    # # Example for 1D:
-    # if sfs.ndim == 1:
-    #     # Mask freq = 0 and freq = n
-    #     sfs.mask[0] = True
-    #     sfs.mask[-1] = True
-    # elif sfs.ndim == 2:
-    #     # For a 2D SFS, mask the four corners
-    #     sfs.mask[0, :] = True
-    #     sfs.mask[-1, :] = True
-    #     sfs.mask[:, 0] = True
-    #     sfs.mask[:, -1] = True
-    # # (If you have more populations, generalize accordingly.)
+    # Recompute sample sizes from the SFS shape.
+    sample_sizes_fit = OrderedDict((p, (n - 1) // 2)
+                                   for p, n in zip(sfs.pop_ids, sfs.shape))
+
+    
+    # Extract lower and upper bounds
+    lb = experiment_config["lower_bound_params"]
+    ub = experiment_config["upper_bound_params"]
+
+    # Compute mean and standard deviation
+    mean = [(lb[param] + ub[param]) / 2 for param in lb]
+    stddev = [(ub[param] - lb[param]) / np.sqrt(12) for param in lb]
 
     # -------------------------------------------------------------------
     # 2) Pick the correct model function
@@ -214,7 +402,7 @@ def run_inference_dadi(
     # -------------------------------------------------------------------
     ns = sfs.sample_sizes
     pts_ext = [max(ns) + 50, max(ns) + 60, max(ns) + 70]  # or whatever you prefer
-    func_ex = dadi.Numerics.make_extrap_log_func(model_func)
+    func_ex = dadi.Numerics.make_extrap_log_func(model_func) #TODO: Feel like i need to change this 
 
     # -------------------------------------------------------------------
     # 4) Perturb initial guess to avoid local minima
@@ -320,6 +508,20 @@ def run_inference_moments(
     If the optimization takes more than 20 minutes, kill it 
     and return np.nan for all parameters (including the FIM).
     """
+
+    # Recompute sample sizes from the SFS shape.
+    sample_sizes_fit = OrderedDict((p, (n - 1) // 2)
+                                   for p, n in zip(sfs.pop_ids, sfs.shape))
+
+    
+    # Extract lower and upper bounds
+    lb = experiment_config["lower_bound_params"]
+    ub = experiment_config["upper_bound_params"]
+
+    # Compute mean and standard deviation
+    mean = [(lb[param] + ub[param]) / 2 for param in lb]
+    stddev = [(ub[param] - lb[param]) / np.sqrt(12) for param in lb]
+
     # 1) Perturb initial guess
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
