@@ -153,19 +153,9 @@ class Processor:
         # Make sure you are calling the right demes names 
         samples = {pop_name: num_samples for pop_name, num_samples in experiment_config['num_samples'].items()}
 
-        
-
-        
-        
         g = demographic_model(sampled_params)
 
         demog = msprime.Demography.from_demes(g)
-
-        # Dynamically define the samples using msprime.SampleSet, based on the sample_sizes dictionary
-        # samples = [
-        #     msprime.SampleSet(sample_size, population=pop_name, ploidy=1)
-        #     for pop_name, sample_size in num_samples.items()
-        # ]
 
         # Simulate ancestry for two populations (joint simulation)
         ts = msprime.sim_ancestry(
@@ -179,45 +169,35 @@ class Processor:
         # Simulate mutations over the ancestry tree sequence
         ts = msprime.sim_mutations(ts, rate=mutation_rate)
 
-        return ts
+        return ts, g
 
-    def create_SFS(self, ts, mode, num_samples, length=1e7, **kwargs
-    ):
+    def create_SFS(self, ts, num_samples, length, **kwargs):
         """
-        If we are in pretraining mode we will use a simulated SFS. If we are in inference mode we will use a real SFS.
+        Generate the site frequency spectrum (SFS) using the simulated TreeSequence (ts).
 
+        Parameters:
+        - ts: TreeSequence object containing the simulated data.
+        - num_samples: Dictionary with deme names as keys and the number of samples as values.
+
+        Returns:
+        - sfs: The moments Spectrum object for the given demographic data.
         """
-
-        if mode == "pretrain":
-            # Define sample sets dynamically for the SFS
-            sample_sets = [
-                ts.samples(population=pop.id) 
-                for pop in ts.populations() 
-                if len(ts.samples(population=pop.id)) > 0  # Exclude populations with no samples
-            ]
-                        
-            # Create the joint allele frequency spectrum
-            sfs = ts.allele_frequency_spectrum(sample_sets=sample_sets, mode="site", polarised=True)
-            
-            # Multiply SFS by the sequence length to adjust scale
-            sfs *= length
-
-            # Convert to moments Spectrum for further use
-            sfs = moments.Spectrum(sfs)
         
-        elif mode == "inference":
-            vcf_file = kwargs.get("vcf_file", None)
-            pop_file = kwargs.get("pop_file", None)
-            popname = kwargs.get("popname", None)
+        # Define sample sets dynamically for the SFS
+        sample_sets = [
+            ts.samples(population=pop.id) 
+            for pop in ts.populations() 
+            if len(ts.samples(population=pop.id)) > 0  # Exclude populations with no samples
+        ]
+                    
+        sfs = ts.allele_frequency_spectrum(
+            sample_sets=sample_sets,
+            mode="site",
+            polarised=True,
+            span_normalise=False  # <-- crucial
+        )
 
-            if vcf_file is None or pop_file is None:
-                raise ValueError(
-                    "vcf_file and pop_file must be provided in inference mode."
-                )
-
-            dd = dadi.Misc.make_data_dict_vcf(vcf_file, pop_file)
-            sfs = dadi.Spectrum.from_data_dict(
-                dd, [popname], projections=[2 * num_samples], polarized=True
-            )
-
+        # Convert to 1D or 2D moments Spectrum
+        sfs = moments.Spectrum(sfs)
+        
         return sfs

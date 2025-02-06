@@ -62,7 +62,7 @@ def main(experiment_config, sim_directory, sim_number):
     print("BEGINNING THE PROCESS OF SIMULATING THE CHROMOSOME")
 
     # Now simulate the chromosome
-    ts = processor.simulate_chromosome(
+    ts, g = processor.simulate_chromosome(
         experiment_config, # TODO: temporary 
         sampled_params,
         demographic_model=demographic_model,
@@ -73,9 +73,7 @@ def main(experiment_config, sim_directory, sim_number):
 
     # Now create the SFS
 
-    SFS = processor.create_SFS(
-        ts, mode="pretrain", num_samples=experiment_config["num_samples"], length = experiment_config["genome_length"]
-    )
+    SFS = processor.create_SFS(ts, num_samples=experiment_config['num_samples'], length = experiment_config['genome_length'])
 
     # Save the SFS
     SFS_filename = f"{simulation_results_directory}/SFS_sim_{sim_number}.pkl"
@@ -92,7 +90,7 @@ def main(experiment_config, sim_directory, sim_number):
     if demographic_model == demographic_models.bottleneck_model:
         sampled_params = {
             key: sampled_params[key]
-            for key in experiment_config["parameters_to_estimate"]
+            for key in experiment_config["parameter_names"]
             if key in sampled_params
         }
 

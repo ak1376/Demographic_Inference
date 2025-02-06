@@ -31,8 +31,7 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
         pop_file=pop_file_path,
         pops=unique_populations,
         r_bins=r_bins,
-        report=False,
-        use_genotypes = False
+        report=True,
     )
 
     return ld_stats
@@ -105,9 +104,25 @@ def _optimize_dadi(
     upper_bound
 ):
     """
-    This function just wraps dadi.Inference.opt so we can run
-    it in a separate process. We'll push results into 'queue'.
+    This function just wraps dadi.Inference.optimize_log_lbfgsb
+    so we can run it in a separate process. We'll push results into 'queue'.
     """
+    # xopt, fopt, info_dict = dadi.Inference.optimize_log_lbfgsb(
+    #     p_guess,
+    #     sfs,
+    #     func_ex,
+    #     pts=pts_ext,
+    #     lower_bound=lower_bound,
+    #     upper_bound=upper_bound,
+    #     full_output=True,
+    #     epsilon=1e-4,
+    #     verbose=10,
+    # )
+    # opt_params = xopt
+    # ll_value = fopt
+
+    # print(f"INFO DICT {info_dict}")
+
     opt_params, ll_value = dadi.Inference.opt(
         p_guess,
         sfs,
@@ -119,6 +134,7 @@ def _optimize_dadi(
         maxeval=400,
         verbose=20
     )
+
     # Put results in a queue for the parent process to retrieve
     queue.put((opt_params, ll_value))
 
@@ -145,7 +161,7 @@ def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound)
 def run_inference_dadi(
     sfs,
     p0,
-    num_samples, # TODO: delete this argument
+    num_samples,
     demographic_model,
     lower_bound=[0.001, 0.001, 0.001, 0.001],
     upper_bound=[1, 1, 1, 1],
@@ -153,12 +169,38 @@ def run_inference_dadi(
     length=1e8,
 ):
     """
-    This should do the parameter inference for dadi,
-    but will terminate if optimization exceeds 20 min.
+    Perform dadi parameter inference on a masked, unnormalized SFS.
+
+    - sfs: moments.Spectrum or dadi.Spectrum (raw counts).
+    - p0: initial parameter guess.
+    - num_samples: your sample size(s) or any extra info for time-scaling.
+    - demographic_model: e.g. "bottleneck_model" or "split_isolation_model".
+    - mutation_rate: per-generation mutation rate.
+    - length: number of callable base pairs (sequence length).
     """
-    # Pick the model function
+
+    # -------------------------------------------------------------------
+    # 1) Mask out the monomorphic bins so they don't swamp the polymorphic frequencies.
+    #    Adjust depending on whether this is 1D or 2D.
+    # -------------------------------------------------------------------
+    # # Example for 1D:
+    # if sfs.ndim == 1:
+    #     # Mask freq = 0 and freq = n
+    #     sfs.mask[0] = True
+    #     sfs.mask[-1] = True
+    # elif sfs.ndim == 2:
+    #     # For a 2D SFS, mask the four corners
+    #     sfs.mask[0, :] = True
+    #     sfs.mask[-1, :] = True
+    #     sfs.mask[:, 0] = True
+    #     sfs.mask[:, -1] = True
+    # # (If you have more populations, generalize accordingly.)
+
+    # -------------------------------------------------------------------
+    # 2) Pick the correct model function
+    # -------------------------------------------------------------------
     if demographic_model == "bottleneck_model":
-        model_func = dadi.Demographics1D.three_epoch
+        model_func = demographic_models.three_epoch_fixed  # built-in example
     elif demographic_model == "split_isolation_model":
         model_func = demographic_models.split_isolation_model_dadi
     
@@ -167,76 +209,85 @@ def run_inference_dadi(
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    # Prepare for extrapolation
-    func_ex = dadi.Numerics.make_extrap_log_func(model_func)
-    # Retrive the sample sizes from the data
+    # -------------------------------------------------------------------
+    # 3) Setup the extrapolation. Typically pass ns, then an array of grids
+    # -------------------------------------------------------------------
     ns = sfs.sample_sizes
-    pts_ext = [max(ns) + 120, max(ns) + 130, max(ns) + 140]
+    pts_ext = [max(ns) + 50, max(ns) + 60, max(ns) + 70]  # or whatever you prefer
+    func_ex = dadi.Numerics.make_extrap_log_func(model_func)
 
-    # Perturb initial guess
+    # -------------------------------------------------------------------
+    # 4) Perturb initial guess to avoid local minima
+    # -------------------------------------------------------------------
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
 
-    # --- Run the dadi optimization in a separate process ---
+    # -------------------------------------------------------------------
+    # 5) Run the dadi optimization in a separate process (time-limited)
+    # -------------------------------------------------------------------
     queue = multiprocessing.Queue()
     process = multiprocessing.Process(
         target=_optimize_dadi,
         args=(queue, p_guess, sfs, func_ex, pts_ext, lower_bound, upper_bound)
     )
     process.start()
-
-    # Wait up to TIMEOUT_SECONDS
     process.join(TIMEOUT_SECONDS)
 
+    # If it's hung, kill it
     if process.is_alive():
-        # If it's still running after 20 minutes, kill it
-        print("dadi optimization took longer than 20 minutes. Terminating...")
+        print("dadi optimization took too long. Terminating...")
         process.terminate()
-        process.join()  # ensure it finishes
+        process.join()
+        return None, None, {"N0": np.nan, "ll": np.nan}
 
-        # Return nans
-        return None, None, {
-            "N0": np.nan,
-            "Nb": np.nan,
-            "N_recover": np.nan,
-            "t_bottleneck_start": np.nan,
-            "t_bottleneck_end": np.nan,
-            "ll": np.nan,
-            "Na": np.nan,
-            "N1": np.nan,
-            "N2": np.nan,
-            "t_split": np.nan,
-            "m": np.nan,
-        }
-
-    # Otherwise, retrieve the results from the queue
+    # Retrieve results
     opt_params, ll_value = queue.get()
+    print(f"Optimized dadi params: {opt_params}")
+    print(f"Log-likelihood: {ll_value}")
 
-    print(f"OPT DADI PARAMETER: {opt_params}")
+    # -------------------------------------------------------------------
+    # 6) Build the best-fit model with those params
+    # -------------------------------------------------------------------
+    # NOTE: for a typical 1D or 2D model in dadi, usage is:
+    #    model = func_ex(opt_params, ns, pts_ext)
+    # but if your code specifically wants 2 * num_samples, adapt as needed.
+    model = func_ex(opt_params, ns, pts_ext)
 
-    # Build the model with the optimized parameters
-    model = func_ex(opt_params, sfs.sample_sizes, 2 * num_samples)
+    # -------------------------------------------------------------------
+    # 7) From that model & data, compute the best-fit theta
+    # -------------------------------------------------------------------
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
-    N_ref = opt_theta / (4 * mutation_rate * length)
+    print(f"Best-fit theta = {opt_theta}")
 
-    # Build the opt_params_dict depending on model
+    # Convert that theta => N_ref = theta / (4 * mu * L)
+    N_ref = opt_theta / (4.0 * mutation_rate * length)
+    print(f"Estimated N_ref = {N_ref}")
+
+    # -------------------------------------------------------------------
+    # 8) Build the dictionary of final parameters, scaled to population units
+    # -------------------------------------------------------------------
     if demographic_model == "bottleneck_model":
+        # The built-in three_epoch in dadi uses [nuB, nuF, T1, T2] by default
+        nuB, nuF, time_since_recovery = opt_params
+        # Times are in coalescent units => multiply by 2*N_ref to get generations
+        # Sizes are multiples of N_ref
         opt_params_dict = {
             "N0": N_ref,
-            "Nb": opt_params[0] * N_ref,
-            "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * N_ref,
-            "t_bottleneck_end": opt_params[2] * 2 * N_ref,
+            "Nb": nuB * N_ref,
+            "N_recover": nuF * N_ref,
+            "t_bottleneck_end": time_since_recovery * 2 * N_ref,           # generations
             "ll": ll_value,
         }
     elif demographic_model == "split_isolation_model":
+        # Suppose your custom function is [nu1, nu2, T, m], etc.
+        nu1, nu2, T, m = opt_params
         opt_params_dict = {
-            "Na": N_ref,
-            "N1": opt_params[0] * N_ref,
-            "N2": opt_params[1] * N_ref,
-            "t_split": opt_params[2] * 2 * N_ref,
-            "m": opt_params[3] * 2 * N_ref,
+            "Na": N_ref,                   # ancestral population
+            "N1": nu1 * N_ref,
+            "N2": nu2 * N_ref,
+            "t_split": T * 2 * N_ref,      # generations
+            "m": m * 2 * N_ref,           # or however you interpret migration
             "ll": ll_value,
         }
     elif demographic_model == "split_migration_model":
@@ -250,11 +301,9 @@ def run_inference_dadi(
             "ll": ll_value,
         }
 
-    # Scale the model by theta
-    model *= opt_theta
-    print(f"Model shape after scaling: {model.shape}")
-
+    # Return final objects
     return model, opt_theta, opt_params_dict
+
 
 def run_inference_moments(
     sfs,
@@ -278,7 +327,7 @@ def run_inference_moments(
 
     # 2) Pick the correct demographic model
     if demographic_model == "bottleneck_model":
-        model_func = moments.Demographics1D.three_epoch
+        model_func = demographic_models.three_epoch_fixed_moments  # built-in example
     elif demographic_model == "split_isolation_model":
         model_func = demographic_models.split_isolation_model_moments
     elif demographic_model == "split_migration_model":
@@ -309,7 +358,6 @@ def run_inference_moments(
                 "N0": np.nan,
                 "Nb": np.nan,
                 "N_recover": np.nan,
-                "t_bottleneck_start": np.nan,
                 "t_bottleneck_end": np.nan,
                 "ll": np.nan,
             }
@@ -377,12 +425,14 @@ def run_inference_moments(
     # 9) Build the param dictionary 
     #    (separately for each demographic_model)
     if demographic_model == "bottleneck_model":
+        nuB, nuF, time_since_recovery = opt_params
+        # Times are in coalescent units => multiply by 2*N_ref to get generations
+        # Sizes are multiples of N_ref
         opt_params_dict = {
             "N0": N_ref,
-            "Nb": opt_params[0] * N_ref,
-            "N_recover": opt_params[1] * N_ref,
-            "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * N_ref,
-            "t_bottleneck_end": opt_params[2] * 2 * N_ref,
+            "Nb": nuB * N_ref,
+            "N_recover": nuF * N_ref,
+            "t_bottleneck_end": time_since_recovery * 2 * N_ref,           # generations
             "ll": ll,
         }
         if use_FIM:
@@ -434,7 +484,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
     print('MV CREATION COMPLETED!')
 
     if demographic_model == "bottleneck_model":
-        demo_func = moments.LD.Demographics1D.three_epoch  # type: ignore
+        demo_func = demographic_models.three_epoch_fixed_MomentsLD #TODO: CHANGE
     elif demographic_model == "split_isolation_model":
         demo_func = demographic_models.split_isolation_model_momentsLD
 
@@ -455,12 +505,15 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
 
     opt_params_dict = {}
     if demographic_model == "bottleneck_model":
+        # opt_params[0]: Nb
+        # opt_params[1]: N_recover 
+        # opt_params[2]: t_bottleneck_end
+        # opt_params[3]: N_ref
         opt_params_dict = {
-            "N0": opt_params[4],
-            "Nb": opt_params[0] * opt_params[4],
-            "N_recover": opt_params[1] * opt_params[4],
-            "t_bottleneck_start": (opt_params[2] + opt_params[3]) * 2 * opt_params[4],
-            "t_bottleneck_end": opt_params[3] * 2 * opt_params[4]
+            "N0": opt_params[3],
+            "Nb": opt_params[0] * opt_params[3],
+            "N_recover": opt_params[1] * opt_params[3],
+            "t_bottleneck_end": opt_params[2] * 2 * opt_params[3]
         }
 
     elif demographic_model == "split_isolation_model":

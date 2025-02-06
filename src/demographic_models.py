@@ -28,6 +28,120 @@ def bottleneck_model(sampled_params):
 
     return g
 
+# Define TB_fixed globally before calling optimization
+TB_fixed = None  # Default to None
+
+def set_TB_fixed(value):
+    """
+    Set the global TB_fixed variable.
+    """
+    global TB_fixed
+    TB_fixed = value
+
+def three_epoch_fixed(params, ns, pts):
+    """
+    Wrapper function for three_epoch where TB is fixed.
+    """
+    if TB_fixed is None:
+        raise ValueError("TB_fixed is not set before calling three_epoch_fixed")
+    
+    nuB, nuF, TF = params  # TB is removed from params
+
+    xx = Numerics.default_grid(pts)
+    phi = PhiManip.phi_1D(xx)
+
+    # Use fixed TB instead of optimizing it
+    phi = Integration.one_pop(phi, xx, TB_fixed, nuB)
+    phi = Integration.one_pop(phi, xx, TF, nuF)
+
+    fs = Spectrum.from_phi(phi, ns, (xx,))
+    return fs
+
+# Update parameter names to reflect that TB is no longer optimized
+three_epoch_fixed.__param_names__ = ['nuB', 'nuF', 'TF']
+
+
+def three_epoch_fixed_moments(params, ns, pop_ids=None):
+    """
+    Three epoch model of constant sizes with TB fixed.
+
+    params = (nuB, nuF, TF)  # TB is removed from params.
+
+    :param params: Tuple of length three specifying (nuB, nuF, TF).
+
+        - nuB: Ratio of bottleneck population size to ancient pop size.
+        - nuF: Ratio of contemporary to ancient pop size.
+        - TF: Time since bottleneck recovery (in units of 2*Na generations).
+
+    :param ns: Number of samples in resulting Spectrum.
+    :param pop_ids: Optional list of length one specifying the population ID.
+    """
+    if TB_fixed is None:
+        raise ValueError("TB_fixed is not set before calling three_epoch_fixed")
+    if pop_ids is not None and len(pop_ids) != 1:
+        raise ValueError("pop_ids must have length 1")
+
+    nuB, nuF, TF = params  # TB is now fixed, so it's removed from params.
+    sts = moments.LinearSystem_1D.steady_state_1D(ns[0])
+    fs = moments.Spectrum(sts, pop_ids=pop_ids)
+
+    # Use TB_fixed instead of optimizing TB
+    fs.integrate([nuB], TB_fixed, 0.01)
+    fs.integrate([nuF], TF, 0.01)
+    
+    return fs
+
+# Define TB_fixed globally before calling optimization
+T1_fixed = None  # Default to None
+
+def set_T1_fixed(value):
+    """
+    Set the fixed value for T1 (bottleneck duration in coalescent units).
+    """
+    global T1_fixed
+    T1_fixed = value
+
+def three_epoch_fixed_MomentsLD(params, order=2, rho=None, theta=0.001, pop_ids=None):
+    """
+    Three-epoch bottleneck model with a fixed bottleneck duration.
+
+    :param params: The relative sizes and integration times of recent epochs,
+        in genetic units: (nuB, nuF, T2).
+        - nuB: Bottleneck population size relative to ancestral size (N0).
+        - nuF: Final recovered population size relative to N0.
+        - T2: Duration of the recovery phase (in genetic units).
+    :type params: list
+    :param order: The maximum order of the LD statistics. Defaults to 2.
+    :type order: int
+    :param rho: Population-scaled recombination rate (4Nr),
+        given as scalar or list of rhos.
+    :type rho: float or list of floats, optional
+    :param theta: Population-scaled mutation rate (4Nu). Defaults to 0.001.
+    :type theta: float
+    :param pop_ids: List of population IDs of length 1.
+    :type pop_ids: list of str, optional
+    """
+    if T1_fixed is None:
+        raise ValueError("T1_fixed is not set before calling three_epoch_fixed_MomentsLD")
+
+    if pop_ids is not None and len(pop_ids) != 1:
+        raise ValueError("pop_ids must have length 1")
+    
+    nuB, nuF, T2 = params  # T1 is removed from params and fixed globally
+
+    Y = NumericsMomentsLD.steady_state([1], rho=rho, theta=theta)
+    Y = LDstats(Y, num_pops=1, pop_ids=pop_ids)
+
+    # **1st epoch: Bottleneck phase (`Nb`) with fixed duration `T1_fixed`**
+    Y.integrate([nuB], T1_fixed, rho=rho, theta=theta)
+
+    # **2nd epoch: Recovery phase (`N_recover`)**
+    Y.integrate([nuF], T2, rho=rho, theta=theta)
+
+    return Y
+
+
+
 def split_isolation_model_simulation(sampled_params):
 
     # Unpack the sampled parameters
