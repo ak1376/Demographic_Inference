@@ -40,7 +40,11 @@ def real_to_dadi_params(real_params):
     # Example:
     # real_params = (N1, N2, M12, M21, T_gen)
     # Let’s define some reference:
+<<<<<<< HEAD
     N_anc = 1000.0  # <--- you pick your reference size
+=======
+    N_anc = 10000.0  # <--- you pick your reference size
+>>>>>>> d382e36 (Fixing demes integration with dadi (reducing migration rates in config))
     # For migration: in coalescent units, m12 (the symmetric migration parameter)
     # is typically 4*N_anc*m (if haploid or diploid factor?). This depends on how
     # your data was simulated. Let's assume the simple version:
@@ -152,7 +156,6 @@ def diffusion_sfs_dadi(
     """
     # 1) Parse the parameters and pick the correct demes-based function
     parameters.insert(0,10000) # Insert the ancestral pop size. 
-    print(f'THE PARAMETERS PROVIDED ARE: {parameters}')
     
     if demographic_model == "split_migration_model":
         # For example, [N0, N1, N2, m12, m21, t_split]
