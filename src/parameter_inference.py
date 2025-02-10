@@ -9,14 +9,55 @@ import src.demographic_models as demographic_models
 from src.optimize import opt
 import time
 import multiprocessing
+from collections import OrderedDict
+import nlopt
 
 TIMEOUT_SECONDS = 20 * 60  # 20 minutes = 1200 seconds
 
-def norm(p):
+def norm(p, mean, stddev):
     return [(x - m) / s for x, m, s in zip(p, mean, stddev)]
 
-def unnorm(z):
+
+def unnorm(z, mean, stddev):
     return [z_i * s + m for z_i, m, s in zip(z, mean, stddev)]
+
+def real_to_dadi_params(real_params):
+    """
+    Suppose real_params = (N1, N2, M12, M21, Tsplit_in_gen)
+    all in real units (pop sizes, migration per gen, time in generations, etc.)
+    
+    We want to scale them to: (nu1, nu2, m12, m21, t_split)
+    which are the parameters expected by the original dadi function:
+       - nu1, nu2 = N1 / N_anc  (for example)
+       - m12, m21 = (some formula for scaled migration)
+       - t_split = Tsplit_in_gen / (2*N_anc)
+    or whatever your chosen reference is.
+    
+    You define that reference once (N_anc, mu, generation_time, etc.).
+    Then you do the math here.
+    """
+
+    # Example:
+    # real_params = (N1, N2, M12, M21, T_gen)
+    # Let’s define some reference:
+    N_anc = 1000.0  # <--- you pick your reference size
+    # For migration: in coalescent units, m12 (the symmetric migration parameter)
+    # is typically 4*N_anc*m (if haploid or diploid factor?). This depends on how
+    # your data was simulated. Let's assume the simple version:
+    #   m12_dadi = M12 (per gen) * 2*N_anc
+    #   T_dadi = T_gen / (2*N_anc)
+    # likewise for population sizes.
+    
+    (N1, N2, M12, M21, T_gen) = real_params
+    
+    nu1 = N1 / N_anc
+    nu2 = N2 / N_anc
+    m12 = M12 * 2 * N_anc
+    m21 = M21 * 2 * N_anc
+    t_split = T_gen / (2 * N_anc)
+    
+    scaled_params = (nu1, nu2, m12, m21, t_split)
+    return scaled_params
 
 
 def diffusion_sfs_moments(parameters: list[float], sample_sizes: OrderedDict, demographic_model) -> moments.Spectrum:
@@ -44,7 +85,7 @@ def diffusion_sfs_moments(parameters: list[float], sample_sizes: OrderedDict, de
             "m": parameters[3],
             "t_split": parameters[4],
         }
-    elif: demographic_model == "bottleneck_model":
+    elif demographic_model == "bottleneck_model":
         demo_model = demographic_models.bottleneck_model
         param_dict = {
             "N0": parameters[0],
@@ -110,6 +151,9 @@ def diffusion_sfs_dadi(
         The model-predicted SFS (on the largest grid in `pts`).
     """
     # 1) Parse the parameters and pick the correct demes-based function
+    parameters.insert(0,10000) # Insert the ancestral pop size. 
+    print(f'THE PARAMETERS PROVIDED ARE: {parameters}')
+    
     if demographic_model == "split_migration_model":
         # For example, [N0, N1, N2, m12, m21, t_split]
         param_dict = {
@@ -149,26 +193,47 @@ def diffusion_sfs_dadi(
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # 2) Build the demes graph
+    start = time.time()
     demes_graph = demo_func(param_dict)  # e.g. returns a demes.Graph
+    end = time.time()
+
+    # print(f'TIME TO BUILD DEMES GRAPH: {end - start}')
 
     # 3) Convert the demes Graph to a dadi function using demes_dadi
     #    This creates a python function: model_func(pts, ns, [params]) -> fs
     #    But the demes graph is already fully specified. We just pass it in.
-    dadi_model_func = demes_dadi.Demes2Dadi(demes_graph)
+    # dadi_model_func = demes_dadi.Demes2Dadi(demes_graph)
 
     # 4) Evaluate on the extrapolation grid
     #    For a 2D model, sample_sizes might be [n1, n2]. For 1D, [n]. For 3D, etc.
-    ns = list(sample_sizes.values())  # e.g. [15, 8]
-    model_fs = dadi_model_func(pts, ns)
+    ns = [2 * n for n in sample_sizes.values()]  # e.g., [30, 16] if input is [15, 8]
+    # print(f'SAMPLE SIZES: {ns}')
+
+    start = time.time()
+
+    model_fs = dadi.Spectrum.from_demes(
+        demes_graph,
+        sampled_demes = list(sample_sizes.keys()),
+        sample_sizes = ns,
+        pts = pts
+    )
+
+    end = time.time()
+
+    # print(f'TIME TO BUILD SFS: {end - start}')
+    
+    # model_fs = dadi_model_func(pts, ns)
 
     # 5) Scale by theta if you want an absolute SFS. Typically, we do:
     #    theta = 4 * Nref * mu * L. If you consider parameters[0] = N0, then:
-    Nref = parameters[0]
-    theta = 4.0 * Nref * mutation_rate * sequence_length
+    # Nref = parameters[0]
+    # theta = 4.0 * Nref * mutation_rate * sequence_length
 
-    model_fs *= theta
+    # model_fs *= theta
 
     # model_fs is a dadi.Spectrum. You can return it directly.
+    # print(f'Diffusion SFS Dadi: {model_fs}')
+    # print(f'Diffusion SFS Dadi Shape: {model_fs.shape}')
     return model_fs
 
 # Define your function with Ray's remote decorator
@@ -254,64 +319,52 @@ def compute_ld_stats_sequential(flat_map_path, pop_file_path, metadata_path, r_b
 
 def _optimize_dadi(
     queue,
-    p_guess,
+    init_z,             # initial guess in z-space
     sfs,
-    func_ex,
+    model_func,         # e.g. split_migration_model_dadi
     pts_ext,
-    lower_bound,
-    upper_bound
+    lower_bound,        # real-space bound
+    upper_bound,        # real-space bound
+    mean,               # used for un‐z‐scoring
+    stddev              # used for un‐z‐scoring
 ):
     """
-    This function just wraps dadi.Inference.optimize_log_lbfgsb
-    so we can run it in a separate process. We'll push results into 'queue'.
+    Runs dadi optimization in *z-scored* space, then returns the
+    best-fit *un-z-scored* parameters + LL to the parent process via 'queue'.
     """
-    # xopt, fopt, info_dict = dadi.Inference.optimize_log_lbfgsb(
-    #     p_guess,
-    #     sfs,
-    #     func_ex,
-    #     pts=pts_ext,
-    #     lower_bound=lower_bound,
-    #     upper_bound=upper_bound,
-    #     full_output=True,
-    #     epsilon=1e-4,
-    #     verbose=10,
-    # )
-    # opt_params = xopt
-    # ll_value = fopt
 
-    # print(f"INFO DICT {info_dict}")
+    # 1) Convert real-space bounds to z-space
+    lb_z = norm(lower_bound, mean, stddev)
+    ub_z = norm(upper_bound, mean, stddev)
 
-    # Optimize using Powell
-    opt_params, ll_value = dadi.Inference.opt(
-        norm(start),
-        sfs,
-        lambda z, n: diffusion_sfs_dadi(unnorm(z), sample_sizes_fit),
-        pts=pts_ext,
-        lower_bound=norm(lower_bound),
-        upper_bound=norm(upper_bound),
-        algorithm=nlopt.LN_BOBYQA,
-        maxeval=400,
-        verbose=20
-    )
+    # 2) Make a wrapper that un‐z‐scores inside
+    def z_wrapper(z_params, ns, pts):
+        scaled_params = unnorm(z_params, mean, stddev)
+        return model_func(scaled_params, ns, pts)
 
-    fitted_params = unnorm(opt_params)
+    # 3) Extrapolation
+    func_ex = dadi.Numerics.make_extrap_log_func(z_wrapper)
+    print(f'Starting Dadi Optimization')
 
-    queue.put((opt_params, ll_value))  # pass (opt_params, ll) back to the parent
-
-    opt_params, ll_value = dadi.Inference.opt(
-        p_guess,
+    # 4) Run the optimizer in z-space
+    opt_params_z, ll_value = dadi.Inference.opt(
+        init_z,
         sfs,
         func_ex,
         pts=pts_ext,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        algorithm=nlopt.LN_BOBYQA,
+        lower_bound=lb_z,
+        upper_bound=ub_z,
+        algorithm=nlopt.LN_BOBYQA,  # or LN_SBPLX, etc.
         maxeval=400,
-        verbose=20
+        verbose=1
     )
 
-    # Put results in a queue for the parent process to retrieve
-    queue.put((opt_params, ll_value))
+    # 5) Convert best-fit from z-space to real (scaled) space
+    fitted_params = unnorm(opt_params_z, mean, stddev)
+    print(f'The converted to real space parameters are: {fitted_params}')
+
+    # 6) Send them back to the parent
+    queue.put((fitted_params, ll_value))
 
 def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound, sample_sizes_fit):
     """
@@ -321,6 +374,7 @@ def _optimize_moments(queue, p_guess, sfs, model_func, lower_bound, upper_bound,
     """
 
     # Optimize using Powell
+    print(f'Empirical SFS shape: {sfs.shape}')
     xopt = moments.Inference.optimize_powell(
         norm(start),
         sfs,
@@ -362,136 +416,125 @@ def run_inference_dadi(
 ):
     """
     Perform dadi parameter inference on a masked, unnormalized SFS.
-
-    - sfs: moments.Spectrum or dadi.Spectrum (raw counts).
-    - p0: initial parameter guess.
-    - num_samples: your sample size(s) or any extra info for time-scaling.
-    - demographic_model: e.g. "bottleneck_model" or "split_isolation_model".
-    - mutation_rate: per-generation mutation rate.
-    - length: number of callable base pairs (sequence length).
+    We'll do the optimization in z-scored space,
+    but the final best-fit parameters remain in coalescent space for dadi.
     """
 
-    # Recompute sample sizes from the SFS shape.
-    sample_sizes_fit = OrderedDict((p, (n - 1) // 2)
-                                   for p, n in zip(sfs.pop_ids, sfs.shape))
+    # 0) sample_sizes_fit, not strictly needed below, but for reference
+    sample_sizes_fit = OrderedDict(
+        (p, (n - 1)//2) for p, n in zip(sfs.pop_ids, sfs.shape)
+    )
+    ns = sfs.sample_sizes
 
-    
-    # Extract lower and upper bounds
-    lb = experiment_config["lower_bound_params"]
-    ub = experiment_config["upper_bound_params"]
+    print(f"lower bound: {lower_bound}")
+    print(f"upper bound: {upper_bound}")
 
-    # Compute mean and standard deviation
-    mean = [(lb[param] + ub[param]) / 2 for param in lb]
-    stddev = [(ub[param] - lb[param]) / np.sqrt(12) for param in lb]
+    # 1) Build "mean" and "stddev" from your (scaled) bounds
+    mean = [(l+u)/2 for (l, u) in zip(lower_bound, upper_bound)]
+    stddev = [(u - l)/np.sqrt(12) for (l, u) in zip(lower_bound, upper_bound)]
 
-    # -------------------------------------------------------------------
-    # 2) Pick the correct model function
-    # -------------------------------------------------------------------
+    # 2) Pick the correct dadi model in scaled space
     if demographic_model == "bottleneck_model":
-        model_func = demographic_models.three_epoch_fixed  # built-in example
+        model_func = demographic_models.three_epoch_fixed
     elif demographic_model == "split_isolation_model":
         model_func = demographic_models.split_isolation_model_dadi
-    
     elif demographic_model == "split_migration_model":
         model_func = demographic_models.split_migration_model_dadi
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    # -------------------------------------------------------------------
-    # 3) Setup the extrapolation. Typically pass ns, then an array of grids
-    # -------------------------------------------------------------------
-    ns = sfs.sample_sizes
-    pts_ext = [max(ns) + 50, max(ns) + 60, max(ns) + 70]  # or whatever you prefer
-    func_ex = dadi.Numerics.make_extrap_log_func(model_func) #TODO: Feel like i need to change this 
+    # 3) Setup grids for extrapolation
+    pts_ext = [max(ns) + 10, max(ns) + 20, max(ns) + 30]
 
-    # -------------------------------------------------------------------
-    # 4) Perturb initial guess to avoid local minima
-    # -------------------------------------------------------------------
+    # 4) Perturb the initial guess to avoid local minima
     p_guess = moments.Misc.perturb_params(
         p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
 
-    # -------------------------------------------------------------------
-    # 5) Run the dadi optimization in a separate process (time-limited)
-    # -------------------------------------------------------------------
+    # 5) Convert that guess to z-space
+    init_z = norm(p_guess, mean, stddev)
+
+    # 6) Launch the optimization in a separate process
     queue = multiprocessing.Queue()
     process = multiprocessing.Process(
         target=_optimize_dadi,
-        args=(queue, p_guess, sfs, func_ex, pts_ext, lower_bound, upper_bound)
+        args=(
+            queue,          # for returning results
+            init_z,         # initial guess in z-space
+            sfs,
+            model_func,     # the original dadi model
+            pts_ext,
+            lower_bound,
+            upper_bound,
+            mean,
+            stddev
+        )
     )
     process.start()
+    TIMEOUT_SECONDS = 20*60  # e.g. 20 mins
     process.join(TIMEOUT_SECONDS)
 
-    # If it's hung, kill it
     if process.is_alive():
         print("dadi optimization took too long. Terminating...")
         process.terminate()
         process.join()
         return None, None, {"N0": np.nan, "ll": np.nan}
 
-    # Retrieve results
-    opt_params, ll_value = queue.get()
-    print(f"Optimized dadi params: {opt_params}")
+    # 7) Retrieve best-fit from the queue
+    opt_params_scaled, ll_value = queue.get()
+    print(f"Best-fit scaled params: {opt_params_scaled}")
     print(f"Log-likelihood: {ll_value}")
 
-    # -------------------------------------------------------------------
-    # 6) Build the best-fit model with those params
-    # -------------------------------------------------------------------
-    # NOTE: for a typical 1D or 2D model in dadi, usage is:
-    #    model = func_ex(opt_params, ns, pts_ext)
-    # but if your code specifically wants 2 * num_samples, adapt as needed.
-    model = func_ex(opt_params, ns, pts_ext)
+    # 8) Reconstruct final model
+    func_ex = dadi.Numerics.make_extrap_log_func(model_func)
+    model = func_ex(opt_params_scaled, ns, pts_ext)
 
-    # -------------------------------------------------------------------
-    # 7) From that model & data, compute the best-fit theta
-    # -------------------------------------------------------------------
+    # 9) From that model & data, compute best-fit theta
     opt_theta = dadi.Inference.optimal_sfs_scaling(model, sfs)
     print(f"Best-fit theta = {opt_theta}")
 
-    # Convert that theta => N_ref = theta / (4 * mu * L)
+    # 10) Convert that theta -> N_ref = theta / (4*mu*L)
     N_ref = opt_theta / (4.0 * mutation_rate * length)
     print(f"Estimated N_ref = {N_ref}")
 
-    # -------------------------------------------------------------------
-    # 8) Build the dictionary of final parameters, scaled to population units
-    # -------------------------------------------------------------------
-    if demographic_model == "bottleneck_model":
-        # The built-in three_epoch in dadi uses [nuB, nuF, T1, T2] by default
-        nuB, nuF, time_since_recovery = opt_params
-        # Times are in coalescent units => multiply by 2*N_ref to get generations
-        # Sizes are multiples of N_ref
+    # 11) Build dictionary. E.g. for split_migration_model:
+    if demographic_model == "split_migration_model":
+        # Suppose we have (nu1, nu2, m12, m21, t_split)
+        nu1, nu2, m12, m21, t_split = opt_params_scaled
+        opt_params_dict = {
+            "Na": N_ref,
+            "N1": nu1*N_ref,
+            "N2": nu2*N_ref,
+            "t_split": t_split * 2 * N_ref,    # in generations
+            "m12": m12 * 2 * N_ref,           # migration per generation
+            "m21": m21 * 2 * N_ref,
+            "ll": ll_value
+        }
+    elif demographic_model == "split_isolation_model":
+        # e.g. (nu1, nu2, T, m)
+        nu1, nu2, T, m = opt_params_scaled
+        opt_params_dict = {
+            "Na": N_ref,
+            "N1": nu1*N_ref,
+            "N2": nu2*N_ref,
+            "t_split": T * 2 * N_ref,
+            "m": m * 2 * N_ref,
+            "ll": ll_value,
+        }
+    elif demographic_model == "bottleneck_model":
+        # e.g. (nuB, nuF, T1, T2)
+        nuB, nuF, T1, T2 = opt_params_scaled
         opt_params_dict = {
             "N0": N_ref,
             "Nb": nuB * N_ref,
             "N_recover": nuF * N_ref,
-            "t_bottleneck_end": time_since_recovery * 2 * N_ref,           # generations
+            "t_bottleneck_end": T1 * 2 * N_ref,  # or however your model is set
             "ll": ll_value,
         }
-    elif demographic_model == "split_isolation_model":
-        # Suppose your custom function is [nu1, nu2, T, m], etc.
-        nu1, nu2, T, m = opt_params
-        opt_params_dict = {
-            "Na": N_ref,                   # ancestral population
-            "N1": nu1 * N_ref,
-            "N2": nu2 * N_ref,
-            "t_split": T * 2 * N_ref,      # generations
-            "m": m * 2 * N_ref,           # or however you interpret migration
-            "ll": ll_value,
-        }
-    elif demographic_model == "split_migration_model":
-        opt_params_dict = {
-            "Na": N_ref,
-            "N1": opt_params[0] * N_ref,
-            "N2": opt_params[1] * N_ref,
-            "t_split": opt_params[4] * 2 * N_ref,
-            "m12": opt_params[2] * 2 * N_ref,
-            "m21": opt_params[3] * 2 * N_ref,
-            "ll": ll_value,
-        }
+    else:
+        opt_params_dict = {}
 
-    # Return final objects
     return model, opt_theta, opt_params_dict
-
 
 def run_inference_moments(
     sfs,

@@ -399,3 +399,18 @@ def split_migration_model_momentsLD(params, rho=None, theta=0.001, pop_ids=None)
 
     Y.pop_ids = pop_ids
     return Y
+    
+def split_migration_model_dadi_zscore(z_params, ns, pts, mean, std):
+    """
+    z_params: parameters in z-scored space (whatever length 5).
+    mean, std: used to unnorm them to "real units".
+
+    Steps:
+      1) un-zscore --> real_params
+      2) real_to_dadi_params --> scaled_params
+      3) call split_migration_model_dadi(scaled_params, ns, pts)
+    """
+    real_params = unnorm(z_params, mean, std)  # step 1
+    dadi_params = real_to_dadi_params(real_params)  # step 2
+    fs = split_migration_model_dadi(dadi_params, ns, pts)  # step 3
+    return fs
