@@ -173,6 +173,14 @@ def split_migration_model_simulation(sampled_params):
         sampled_params["t_split"],  # Time of the population split (in generations)
     )
 
+    # DEBUGGING PRINT
+    # print(f"[DEBUG] Migration Rates: m12={m12}, m21={m21}")
+
+    # Check if the migration rates are valid
+    if not (0 <= m12 <= 1) or not (0 <= m21 <= 1):
+        print(f"[ERROR] Invalid migration rates detected! m12={m12}, m21={m21}")
+        raise ValueError(f"Invalid migration rates: m12={m12}, m21={m21}")
+
     # Define the demographic model using demes
     b = demes.Builder()
     
@@ -399,7 +407,7 @@ def split_migration_model_momentsLD(params, rho=None, theta=0.001, pop_ids=None)
 
     Y.pop_ids = pop_ids
     return Y
-    
+
 def split_migration_model_dadi_zscore(z_params, ns, pts, mean, std):
     """
     z_params: parameters in z-scored space (whatever length 5).
