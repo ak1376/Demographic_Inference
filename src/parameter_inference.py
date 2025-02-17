@@ -416,6 +416,7 @@ def _optimize_moments(
         lambda z, n: z_wrapper(z, n),
         lower_bound=lb_z,
         upper_bound=ub_z,
+        multinom=False,
         verbose=10,
         flush_delay=0.0,
         full_output=True
