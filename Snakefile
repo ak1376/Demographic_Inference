@@ -172,19 +172,36 @@ rule combine_metadata:
 
 rule calculate_LD_stats:
     input:
-        pop_file_path=os.path.join(BASE_DIR, "sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt"),
-        flat_map_file=os.path.join(BASE_DIR, "sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt"),
-        metadata_file=os.path.join(BASE_DIR, "sampled_genome_windows/sim_{sim_number}/metadata.txt"),
-        sampled_params_pkl=os.path.join(BASE_DIR, "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl")
+        pop_file_path=os.path.join(
+            BASE_DIR, 
+            "sampled_genome_windows/sim_{sim_number}/window_{window_number}/samples.txt"
+        ),
+        flat_map_file=os.path.join(
+            BASE_DIR, 
+            "sampled_genome_windows/sim_{sim_number}/window_{window_number}/flat_map.txt"
+        ),
+        sampled_params_pkl=os.path.join(
+            BASE_DIR, 
+            "simulated_parameters_and_inferences/simulation_results/sampled_params_{sim_number}.pkl"
+        )
     output:
-        processed_file=os.path.join(BASE_DIR, "LD_inferences/sim_{sim_number}/window_{window_number}/ld_stats_window.{window_number}.pkl")
+        processed_file=os.path.join(
+            BASE_DIR, 
+            "LD_inferences/sim_{sim_number}/window_{window_number}/ld_stats_window.{window_number}.pkl"
+        )
     params:
+        # Moved metadata.txt here so Snakemake doesn't watch it for timestamp changes
+        metadata_file=os.path.join(
+            BASE_DIR, 
+            "sampled_genome_windows/sim_{sim_number}/metadata.txt"
+        ),
         window_number=lambda wildcards: wildcards.window_number
     shell:
         """
         echo "Extracting VCF file for window number {wildcards.window_number}"
-        vcf_filepath=$(sed -n "$(( {wildcards.window_number} + 1 ))p" {input.metadata_file})
+        vcf_filepath=$(sed -n "$(( {wildcards.window_number} + 1 ))p" {params.metadata_file})
         echo "Processing VCF file: $vcf_filepath"
+
         PYTHONPATH={BASE_DIR} python {BASE_DIR}/snakemake_scripts/ld_stats.py \
             --vcf_filepath "$vcf_filepath" \
             --pop_file_path {input.pop_file_path} \

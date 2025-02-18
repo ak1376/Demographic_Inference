@@ -1,22 +1,23 @@
 {
     "upper_bound_params": {
-        "N0": 10000,
-        "Nb": 5000,
-        "N_recover": 7000,
-        "t_bottleneck_start": 2000,
-        "t_bottleneck_end": 1000
+        "t_split": 20000,
+        "N1": 30000,
+        "N2": 30000,
+        "Na": 30000,
+        "m": 0.0001
     },
     "lower_bound_params": {
-        "N0": 8000,
-        "Nb": 4000,
-        "N_recover": 6000,
-        "t_bottleneck_start": 1500,
-        "t_bottleneck_end": 800
+        "t_split": 500,
+        "N1": 1000,
+        "N2": 1000,
+        "Na": 1000,
+        "m": 1e-08
     },
-    "num_sims_pretrain": 5000,
+    "num_sims_pretrain": 100,
     "num_sims_inference": 1,
     "num_samples": {
-        "N": 20
+        "N1": 22,
+        "N2": 18
     },
     "dadi_analysis": true,
     "moments_analysis": true,
@@ -25,41 +26,50 @@
     "window_length": 1000000.0,
     "maxiter": 20,
     "genome_length": 100000000.0,
-    "mutation_rate": 1.5e-8,
-    "recombination_rate": 1.5e-8,
+    "mutation_rate": 1.5e-08,
+    "recombination_rate": 1.5e-08,
     "seed": 42,
     "normalization": true,
     "remove_outliers": true,
     "use_FIM": true,
     "k": 3,
     "top_values_k": 2,
-    "training_percentage": 0.5,
-    "demographic_model": "bottleneck_model",
+    "training_percentage": 0.8,
+    "demographic_model": "split_isolation_model",
     "parameter_names": [
-        "N0",
-        "Nb",
-        "N_recover",
-        "t_bottleneck_start",
-        "t_bottleneck_end"
+        "Na",
+        "N1",
+        "N2",
+        "t_split",
+        "m"
     ],
     "optimization_initial_guess": [
-        0.25, 0.75, 0.1
+        5000,
+        10000,
+        10000,
+        5000,
+        0.00001
     ],
     "parameters_to_estimate": [
-        "N0",
-        "Nb",
-        "N_recover",
-        "t_bottleneck_end"
+        "N1",
+        "N2",
+        "t_split",
+        "m",
+        "Na"
     ],
     "lower_bound_optimization": [
-        0.3,
-        0.5,
-        0.03
+        1000,
+        1000,
+        500,
+        1000,
+        1e-08
     ],
     "upper_bound_optimization": [
-        0.7, 
-        0.9, 
-        0.07
+        30000,
+        30000,
+        20000,
+        30000,
+        0.0001
     ],
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
