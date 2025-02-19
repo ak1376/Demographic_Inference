@@ -473,6 +473,20 @@ def run_inference_dadi(
     """
 
     # 0) sample_sizes_fit, not strictly needed below, but for reference
+
+    pop_ids = None
+
+    if demographic_model == "split_migration_model":
+        pop_ids = ['N1', 'N2']
+    elif demographic_model == "split_isolation_model":
+        pop_ids = ['N1', 'N2']
+    elif demographic_model == "bottleneck_model":
+        pop_ids = ['N']
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
+    sfs.pop_ids = pop_ids
+
     sample_sizes_fit = OrderedDict(
         (p, (n - 1)//2) for p, n in zip(sfs.pop_ids, sfs.shape)
     )
