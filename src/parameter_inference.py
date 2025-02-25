@@ -369,10 +369,17 @@ def _optimize_dadi(
     lb_z = norm(lower_bound, mean, stddev)
     ub_z = norm(upper_bound, mean, stddev)
 
+    # print(f'init_z: {init_z}')
+    # print(f'lb_z: {lb_z}')
+    # print(f'ub_z: {ub_z}')
+    # print(f'mean: {mean}')
+    # print(f'stddev: {stddev}')
+    # print(f'Unnormed: {unnorm(init_z, mean, stddev)}')
+
     # 2) Define wrapper function for dadi optimization in z-space
     def z_wrapper(z_params, ns, pts):
         scaled_params = unnorm(z_params, mean, stddev)
-        # print(f'Scaled Parameters are: {scaled_params}')
+        # print(f'unscaled Parameters are: {scaled_params}')
         return diffusion_sfs_dadi(
             scaled_params,
             sample_sizes_fit,
@@ -393,10 +400,30 @@ def _optimize_dadi(
         pts=pts_ext,
         lower_bound=lb_z,
         upper_bound=ub_z,
-        algorithm=nlopt.LN_BOBYQA,  # Use BOBYQA as requested
-        maxeval=400,
+        algorithm=nlopt.LN_BOBYQA,  # NLopt BOBYQA algorithm
+        maxeval=1000,             # Increase maxeval for higher accuracy
         verbose=1
     )
+
+    # # 3) Run the optimizer in z-space
+    # xopt = dadi.Inference.optimize(
+    #     init_z,
+    #     sfs,
+    #     lambda z, n, pts: z_wrapper(z, n, pts),  # Accept pts here!
+    #     pts=pts_ext,
+    #     lower_bound=lb_z,
+    #     upper_bound=ub_z,
+    #     multinom=False,
+    #     verbose=10,
+    #     flush_delay=0.0,
+    #     full_output=True
+    # )
+
+    # # 4) Convert best-fit from z-space to real (scaled) space
+    # fitted_params = unnorm(xopt[0], mean, stddev)
+    # ll_value = xopt[1]
+
+    # print(f"Best-fit dadi params (real-space): {fitted_params}")
 
     # 5) Convert best-fit from z-space to real (scaled) space
     fitted_params = unnorm(opt_params_z, mean, stddev)
@@ -510,7 +537,7 @@ def run_inference_dadi(
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # 3) Setup grids for extrapolation
-    pts_ext = [max(ns) + 10, max(ns) + 20, max(ns) + 30]
+    pts_ext = [max(ns) + 60, max(ns) + 70, max(ns) + 80]
 
     # 4) Perturb the initial guess to avoid local minima
     p_guess = moments.Misc.perturb_params(
@@ -578,7 +605,7 @@ def run_inference_dadi(
         # Suppose we have (nu1, nu2, m12, m21, t_split)
         N_ref, nu1, nu2, m12, m21, t_split = opt_params_scaled
         opt_params_dict = {
-            "Na": N_ref,
+            "N0": N_ref,
             "N1": nu1,
             "N2": nu2,
             "t_split": t_split,    # in generations
@@ -590,7 +617,7 @@ def run_inference_dadi(
         # e.g. (nu1, nu2, T, m)
         nu1, nu2, T, m = opt_params_scaled
         opt_params_dict = {
-            "Na": N_ref,
+            "N0": N_ref,
             "N1": nu1*N_ref,
             "N2": nu2*N_ref,
             "t_split": T * 2 * N_ref,
@@ -699,17 +726,41 @@ def run_inference_moments(
 
     # Construct parameter dictionary
 
-    n0, n1, n2, m12, m21, t_split = opt_params_scaled
+    if demographic_model == "split_migration_model":
+    
+        n0, n1, n2, m12, m21, t_split = opt_params_scaled
 
-    opt_params_dict = {
-        "Na": n0,
-        "N1": n1,
-        "N2": n2,
-        "t_split": t_split,
-        "m12": m12,
-        "m21": m21,
-        "ll": ll_value
-    }
+        opt_params_dict = {
+            "N0": n0,
+            "N1": n1,
+            "N2": n2,
+            "t_split": t_split,
+            "m12": m12,
+            "m21": m21,
+            "ll": ll_value
+        }
+    elif demographic_model == "split_isolation_model":
+        n0, n1, n2, t_split, m = opt_params_scaled
+
+        opt_params_dict = {
+            "N0": n0,
+            "N1": n1,
+            "N2": n2,
+            "t_split": t_split,
+            "m": m,
+            "ll": ll_value
+        }
+
+    elif demographic_model == "bottleneck_model":
+        n0, nb, n_recover, t_bottleneck_end = opt_params_scaled
+
+        opt_params_dict = {
+            "N0": n0,
+            "Nb": nb,
+            "N_recover": n_recover,
+            "t_bottleneck_end": t_bottleneck_end,
+            "ll": ll_value
+        }
 
     if use_FIM:
         opt_params_dict["upper_triangular_FIM"] = upper_triangular
@@ -782,7 +833,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
             "N2": physical_units[1],
             "t_split": physical_units[2],
             "m": physical_units[3],
-            'Na': physical_units[4]
+            'N0': physical_units[4]
         }
 
         print("best fit parameters:")
@@ -794,7 +845,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
 
     elif demographic_model == "split_migration_model":
         physical_units = moments.LD.Util.rescale_params(
-            opt_params, ["nu", "nu", "T", "m", "m", "Ne"]  # Use "m" for both migration rates
+            opt_params, ["nu", "nu", "m", "m", "T", "Ne"]  # Use "m" for both migration rates
         )
 
         print(physical_units)
@@ -802,18 +853,18 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
         opt_params_dict = {
             "N1": physical_units[0],
             "N2": physical_units[1],
-            "t_split": physical_units[2],
-            "m12": physical_units[3],  # Matches first "m"
-            "m21": physical_units[4],  # Matches second "m"
-            'Na': physical_units[5]
+            "t_split": physical_units[4],
+            "m12": physical_units[2],  # Matches first "m"
+            "m21": physical_units[3],  # Matches second "m"
+            'N0': physical_units[5]
         }
 
         print("best fit parameters:")
         print(f"  N(deme1)         :  {physical_units[0]:.1f}")
         print(f"  N(deme2)         :  {physical_units[1]:.1f}")
-        print(f"  Div. time (gen)  :  {physical_units[2]:.1f}")
-        print(f"  Migration rate 1 :  {physical_units[3]:.6f}")
-        print(f"  Migration rate 2 :  {physical_units[4]:.6f}")
+        print(f"  Div. time (gen)  :  {physical_units[4]:.1f}")
+        print(f"  Migration rate 1 :  {physical_units[2]:.6f}")
+        print(f"  Migration rate 2 :  {physical_units[3]:.6f}")
         print(f"  N(ancestral)     :  {physical_units[5]:.1f}")
 
     opt_params_dict_list.append(opt_params_dict)
