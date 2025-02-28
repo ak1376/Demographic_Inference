@@ -48,40 +48,64 @@ def real_to_dadi_params(real_params, demographic_model):
     # likewise for population sizes.
     scaled_params = None
     if demographic_model == "split_migration_model":
-    
-        (N_anc, N1, N2, M12, M21, T_gen) = real_params
+
+        N_anc = real_params['Na']
+        N1 = real_params['N1']
+        N2 = real_params['N2']
+        M12 = real_params['m12']
+        M21 = real_params['m21']
+        T_gen = real_params['t_split']
         
         nu1 = N1 / N_anc
         nu2 = N2 / N_anc
         m12 = M12*(2 * N_anc)
         m21 = M21*(2 * N_anc)
         t_split = T_gen / (2 * N_anc)
+
+        scaled_params = {}
+        scaled_params['nu1'] = nu1
+        scaled_params['nu2'] = nu2
+        scaled_params['m12'] = m12
+        scaled_params['m21'] = m21
+        scaled_params['t_split'] = t_split
     
-        scaled_params = (nu1, nu2, m12, m21, t_split)
     elif demographic_model == "split_isolation_model":
-        print(f'The real parameters are: {real_params}')
-        (N_anc, N1, N2, T_gen, M) = real_params
+        N_anc = real_params['Na']
+        N1 = real_params['N1']
+        N2 = real_params['N2']
+        M = real_params['m']
+        T_gen = real_params['t_split']
         
         nu1 = N1 / N_anc
         nu2 = N2 / N_anc
         m = M*(2 * N_anc)
         t_split = T_gen / (2 * N_anc)
-    
-        scaled_params = (nu1, nu2, m, t_split) 
 
+        scaled_params = {}
+        scaled_params['nu1'] = nu1
+        scaled_params['nu2'] = nu2
+        scaled_params['m'] = m
+        scaled_params['t_split'] = t_split
+    
     elif demographic_model == "bottleneck_model":
-        (N_anc, Nb, N_recover, t_botteleneck_end) = real_params
+        N_anc = real_params['Na']
+        Nb = real_params['Nb']
+        N_recover = real_params['N_recover']
+        t_bottleneck_end = real_params['t_bottleneck_end']
 
         nuB = Nb / N_anc
         nuF = N_recover / N_anc
         t_bottleneck_end = t_botteleneck_end / (2 * N_anc)
 
-        scaled_params = (nuB, nuF, t_bottleneck_end)
+        scaled_params = {}
+        scaled_params['nuB'] = nuB
+        scaled_params['nuF'] = nuF
+        scaled_params['t_bottleneck_end'] = t_bottleneck_end
+
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     return scaled_params
-
 
 def diffusion_sfs_moments(parameters: list[float],
     sample_sizes: OrderedDict,
@@ -793,17 +817,38 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     p_guess_scaled = real_to_dadi_params(p_guess, demographic_model)
+
+    # lower_bound_scaled = real_to_dadi_params(experiment_config["lower_bound_optimization"], demographic_model)
+    # upper_bound_scaled = real_to_dadi_params(experiment_config["upper_bound_optimization"], demographic_model)
+
+    lower_bound_scaled = [1e-5, 1e-5, 1e-5, 1e-5, 1e-5]
+    upper_bound_scaled = [10, 10, 10, 10, 10]
+
+    print(f'the scaled parameters are: {p_guess_scaled}')
+    # p_guess_scaled is a dictionary. We need to be very careful when converting it to a list for optimization
+
+    if demographic_model == "split_migration_model":
+        p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'],  p_guess_scaled['m12'], p_guess_scaled['m21']]
+    elif demographic_model == "split_isolation_model":
+        p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'], p_guess_scaled['m']]
+    elif demographic_model == "bottleneck_model":
+        p_guess_scaled = [p_guess_scaled['Nb'], p_guess_scaled['N_recover'], p_guess_scaled['t_bottleneck_end']]
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
     p_guess_scaled = moments.LD.Util.perturb_params(p_guess_scaled, fold=0.1)  # type: ignore
 
     # Append the real ancestral size to the end of p_guess_scaled
-    p_guess_scaled = np.append(p_guess_scaled, p_guess[0])
+    p_guess_scaled = np.append(p_guess_scaled, p_guess['Na'])
+
 
     print(f'Initial guess in real space: {p_guess}')
     print(f'Initial guess in scaled space: {p_guess_scaled}')
 
+
     # Perform optimization
-    opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
-        p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=400
+    opt_params, ll = moments.LD.Inference.optimize_log_powell(  # type: ignore
+        p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=1000
     )
 
     ll_list.append(ll)

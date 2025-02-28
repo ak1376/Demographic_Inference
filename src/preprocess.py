@@ -130,7 +130,7 @@ class Processor:
             sampled_value = np.random.uniform(lower_bound, upper_bound)
 
             # Ensure floating-point precision for migration rates
-            if key in ["m12", "m21"]:  # Migration rates
+            if key in ["m", "m12", "m21"]:  # Migration rates
                 sampled_params[key] = sampled_value  # Keep as float
             else:
                 sampled_params[key] = int(sampled_value)  # Cast other parameters to int
@@ -142,7 +142,7 @@ class Processor:
                 adjusted_value = sampled_value + adjustment
                 adjusted_value = max(min(adjusted_value, upper_bound), lower_bound)
                 
-                if key in ["m12", "m21"]:  # Keep migration rates as float
+                if key in ["m", "m12", "m21"]:  # Keep migration rates as float
                     sampled_params[key] = adjusted_value
                 else:
                     sampled_params[key] = int(adjusted_value)
