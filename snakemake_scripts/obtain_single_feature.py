@@ -40,8 +40,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
 
     # It's strange because we also want to optimize the ancestral size but indirectly through theta. Therefore, the ancestral population size will not be an element in the upper or lower bounds
     
-    upper_bound = [b if b is not None else None for b in experiment_config['upper_bound_optimization']]
-    lower_bound = [b if b is not None else None for b in experiment_config['lower_bound_optimization']]
+    upper_bound = list(experiment_config['upper_bound_optimization'].values())
+    lower_bound = list(experiment_config['lower_bound_optimization'].values())
 
     # Load in the SFS file
     with open(SFS, "rb") as f:
@@ -51,7 +51,7 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(sampled_params, "rb") as f:
         sampled_params = pickle.load(f)
 
-    p0 = experiment_config['optimization_initial_guess']
+    p0 = list(experiment_config['optimization_initial_guess'].values())
     lower_bound = lower_bound[:]
     upper_bound = upper_bound[:]
 
@@ -82,13 +82,11 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
             "ll_dadi": opt_params_dict_dadi['ll'],
         }
         
-
-
     if experiment_config["moments_analysis"]:
         model_sfs_moments, opt_theta_moments, opt_params_dict_moments = (
             run_inference_moments(
                 sfs = SFS,
-                p0=experiment_config['optimization_initial_guess'],
+                p0=p0,
                 lower_bound= lower_bound,
                 upper_bound= upper_bound,
                 demographic_model=experiment_config['demographic_model'],

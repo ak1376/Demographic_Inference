@@ -1,23 +1,23 @@
 {
     "upper_bound_params": {
-        "t_split": 20000,
-        "N1": 30000,
-        "N2": 30000,
-        "Na": 30000,
-        "m": 0.0001
+        "t_split": 1600,
+        "N1": 3000,
+        "N2": 25000,
+        "Na": 11000,
+        "m": 1e-4
     },
     "lower_bound_params": {
-        "t_split": 500,
-        "N1": 1000,
-        "N2": 1000,
-        "Na": 1000,
-        "m": 1e-08
+        "t_split": 1500,
+        "N1": 2000,
+        "N2": 20000,
+        "Na": 10000,
+        "m": 1e-8
     },
-    "num_sims_pretrain": 100,
+    "num_sims_pretrain": 10,
     "num_sims_inference": 1,
     "num_samples": {
-        "N1": 22,
-        "N2": 18
+        "N1": 10,
+        "N2": 10
     },
     "dadi_analysis": true,
     "moments_analysis": true,
@@ -28,7 +28,7 @@
     "genome_length": 100000000.0,
     "mutation_rate": 1.5e-08,
     "recombination_rate": 1.5e-08,
-    "seed": 42,
+    "seed": 295,
     "normalization": true,
     "remove_outliers": true,
     "use_FIM": true,
@@ -43,34 +43,27 @@
         "t_split",
         "m"
     ],
-    "optimization_initial_guess": [
-        5000,
-        10000,
-        10000,
-        5000,
-        0.00001
-    ],
-    "parameters_to_estimate": [
-        "N1",
-        "N2",
-        "t_split",
-        "m",
-        "Na"
-    ],
-    "lower_bound_optimization": [
-        1000,
-        1000,
-        500,
-        1000,
-        1e-08
-    ],
-    "upper_bound_optimization": [
-        30000,
-        30000,
-        20000,
-        30000,
-        0.0001
-    ],
+    "optimization_initial_guess": {
+        "Na": 10000,
+        "N1": 5230,
+        "N2": 22000,
+        "t_split": 1510,
+        "m": 0.000356
+    },
+    "lower_bound_optimization": {
+        "Na": 10000,
+        "N1": 2000,
+        "N2": 20000,
+        "t_split": 1500,
+        "m": 1e-8
+    },
+    "upper_bound_optimization": {
+        "Na": 11000,
+        "N1": 3000,
+        "N2": 25000,
+        "t_split": 1600,
+        "m": 1e-4
+    },
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
     "popname": "wisent"

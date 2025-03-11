@@ -130,11 +130,11 @@ def diffusion_sfs_moments(parameters: list[float],
     elif demographic_model == "split_isolation_model":
         demo_model = demographic_models.split_isolation_model_simulation
         param_dict = {
-            "N0": parameters[0],
+            "Na": parameters[0],
             "N1": parameters[1],
             "N2": parameters[2],
-            "m": parameters[3],
-            "t_split": parameters[4],
+            "m": parameters[4],
+            "t_split": parameters[3],
         }
     elif demographic_model == "bottleneck_model":
         demo_model = demographic_models.bottleneck_model
@@ -219,11 +219,11 @@ def diffusion_sfs_dadi(
     elif demographic_model == "split_isolation_model":
         # For example, [N0, N1, N2, m, t_split]
         param_dict = {
-            "N0": parameters[0],
+            "Na": parameters[0],
             "N1": parameters[1],
             "N2": parameters[2],
-            "m": parameters[3],
-            "t_split": parameters[4],
+            "m": parameters[4],
+            "t_split": parameters[3],
         }
         demo_func = demographic_models.split_isolation_model_simulation
 
@@ -298,13 +298,17 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
         # Get unique populations
         unique_populations = list(set(populations))
 
-    ld_stats = moments.LD.Parsing.compute_ld_statistics( #type:ignore
+        print(f"Unique populations: {unique_populations}")
+
+    ld_stats = moments.LD.Parsing.compute_ld_statistics(
         vcf_file,
         rec_map_file=flat_map_path,
         pop_file=pop_file_path,
-        pops=unique_populations,
+        pops = ['N1', 'N2'],
+        # pops=unique_populations,
         r_bins=r_bins,
-        report=True,
+        report=False,
+        use_h5 = False
     )
 
     return ld_stats
@@ -639,9 +643,9 @@ def run_inference_dadi(
         }
     elif demographic_model == "split_isolation_model":
         # e.g. (nu1, nu2, T, m)
-        nu1, nu2, T, m = opt_params_scaled
+        N_ref, nu1, nu2, T, m = opt_params_scaled
         opt_params_dict = {
-            "N0": N_ref,
+            "Na": N_ref,
             "N1": nu1*N_ref,
             "N2": nu2*N_ref,
             "t_split": T * 2 * N_ref,
@@ -733,7 +737,7 @@ def run_inference_moments(
 
     # Compute FIM if needed
     upper_triangular = None
-    model_func=demographic_models.split_migration_model_moments
+    model_func=demographic_models.split_isolation_model_moments #TODO: NEED TO CHANGE!!!!!!!!!!!!!!!!!!!
     if use_FIM:
         H = _get_godambe(
             model_func,
@@ -767,7 +771,7 @@ def run_inference_moments(
         n0, n1, n2, t_split, m = opt_params_scaled
 
         opt_params_dict = {
-            "N0": n0,
+            "Na": n0,
             "N1": n1,
             "N2": n2,
             "t_split": t_split,
@@ -847,7 +851,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
 
 
     # Perform optimization
-    opt_params, ll = moments.LD.Inference.optimize_log_powell(  # type: ignore
+    opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
         p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=1000
     )
 

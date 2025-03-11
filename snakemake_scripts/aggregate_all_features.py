@@ -9,6 +9,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer
 from sklearn.ensemble import IsolationForest
 from scipy import stats
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+pd.set_option('display.width', 1000)
+pd.set_option('display.max_colwidth', None)
 
 
 # def remove_outliers_isolation_forest(df, contamination=0.05, random_state=42):
@@ -65,7 +69,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
         experiment_config = json.load(f)
     print("Configuration loaded.")
 
-    parameters = experiment_config['parameters_to_estimate']
+    parameters = experiment_config['parameter_names']
     replicates = experiment_config.get('top_values_k', 1)  # Default to 1 if not specified
     lower_bounds = experiment_config.get('lower_bound_params', {})
     upper_bounds = experiment_config.get('upper_bound_params', {})
@@ -140,6 +144,13 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
     else:
         print("Columns with NaNs:")
         print(nan_columns)
+
+    # Print rows that contain NaNs
+    if not combined_predictions_df.isna().any().any():
+        print("No rows with NaNs found in combined_predictions_df.")
+    else:
+        print("Rows with NaNs (showing top 5 rows with any NaN values):")
+        print(combined_predictions_df[combined_predictions_df.isna().any(axis=1)].head())
 
     # Drop rows with NaN values in the combined DataFrame
     print("\nDropping rows with NaN values...")
