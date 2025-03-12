@@ -643,13 +643,22 @@ def run_inference_dadi(
         }
     elif demographic_model == "split_isolation_model":
         # e.g. (nu1, nu2, T, m)
+        # These are all in real units
         N_ref, nu1, nu2, T, m = opt_params_scaled
+        print("====================================")
+        print(f'N_ref: {N_ref}')
+        print(f'nu1: {nu1}')
+        print(f'nu2: {nu2}')
+        print(f'T: {T}')
+        print(f'm: {m}')
+        print("====================================")
+
         opt_params_dict = {
             "Na": N_ref,
-            "N1": nu1*N_ref,
-            "N2": nu2*N_ref,
-            "t_split": T * 2 * N_ref,
-            "m": m * 2 * N_ref,
+            "N1": nu1,
+            "N2": nu2,
+            "t_split": T,
+            "m": m,
             "ll": ll_value,
         }
     elif demographic_model == "bottleneck_model":
@@ -882,7 +891,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
             "N2": physical_units[1],
             "t_split": physical_units[2],
             "m": physical_units[3],
-            'N0': physical_units[4]
+            'Na': physical_units[4]
         }
 
         print("best fit parameters:")
