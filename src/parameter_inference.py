@@ -804,7 +804,7 @@ def run_inference_moments(
 
     return model_sfs, opt_theta, opt_params_dict
 
-def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_config):
+def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params, experiment_config):
     """
     This should do the parameter inference for momentsLD.
     """
@@ -819,15 +819,72 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
     print('MV CREATION COMPLETED!')
 
     if demographic_model == "bottleneck_model":
-        demo_func = demographic_models.three_epoch_fixed_MomentsLD #TODO: CHANGE
+        demo_func = demographic_models.three_epoch_fixed_MomentsLD
+        demes_func = demographic_models.bottleneck_model
     elif demographic_model == "split_isolation_model":
         demo_func = demographic_models.split_isolation_model_momentsLD
+        demes_func = demographic_models.split_isolation_model_simulation
 
     elif demographic_model == "split_migration_model":
         demo_func = demographic_models.split_migration_model_momentsLD
+        demes_func = demographic_models.split_migration_model_simulation
 
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
+    print('Demes Graph Computation')
+    g = demes_func(sampled_params)
+
+    # Expected LD stats plots
+    if demographic_model == "bottleneck_model":
+        y = moments.Demes.LD(g, sampled_demes=["N0"], rho=4 * sampled_params["N0"] * r_bins)
+    elif demographic_model == "split_migration_model":
+        y = moments.Demes.LD(g, sampled_demes=["N1", "N2"], rho=4 * sampled_params["N0"] * r_bins)
+    elif demographic_model == "split_isolation_model":
+        y = moments.Demes.LD(g, sampled_demes=["N1", "N2"], rho=4 * sampled_params["Na"] * r_bins)
+    else:
+        raise ValueError(f"Unknown demographic model: {demographic_model}")
+
+    y = moments.LD.LDstats(
+        [(y_l + y_r) / 2 for y_l, y_r in zip(y[:-2], y[1:-1])] + [y[-1]],
+        num_pops=y.num_pops,
+        pop_ids=y.pop_ids,
+    )
+    y = moments.LD.Inference.sigmaD2(y)
+
+    fig = moments.LD.Plotting.plot_ld_curves_comp(
+        y,
+        mv["means"][:-1],
+        mv["varcovs"][:-1],
+        rs=r_bins,
+        stats_to_plot=[
+            ["DD_0_0"],
+            ["DD_0_1"],
+            ["DD_1_1"],
+            ["Dz_0_0_0"],
+            ["Dz_0_1_1"],
+            ["Dz_1_1_1"],
+            ["pi2_0_0_1_1"],
+            ["pi2_0_1_0_1"],
+            ["pi2_1_1_1_1"],
+        ],
+        labels=[
+            [r"$D_0^2$"],
+            [r"$D_0 D_1$"],
+            [r"$D_1^2$"],
+            [r"$Dz_{0,0,0}$"],
+            [r"$Dz_{0,1,1}$"],
+            [r"$Dz_{1,1,1}$"],
+            [r"$\pi_{2;0,0,1,1}$"],
+            [r"$\pi_{2;0,1,0,1}$"],
+            [r"$\pi_{2;1,1,1,1}$"],
+        ],
+        rows=3,
+        plot_vcs=True,
+        show=False,
+        fig_size=(6, 4),
+        # REMOVE `output=output_path`
+    )
 
     p_guess_scaled = real_to_dadi_params(p_guess, demographic_model)
 
@@ -927,4 +984,4 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, experiment_con
 
     opt_params_dict_list.append(opt_params_dict)
 
-    return opt_params_dict_list, ll_list
+    return opt_params_dict_list, ll_list, fig 
