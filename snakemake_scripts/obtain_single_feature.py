@@ -39,6 +39,14 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
         experiment_config = json.load(f)
 
     # It's strange because we also want to optimize the ancestral size but indirectly through theta. Therefore, the ancestral population size will not be an element in the upper or lower bounds
+    param_order = experiment_config["parameter_names"]
+    p0 = [experiment_config["optimization_initial_guess"][param] for param in param_order]
+    lower_bound = [experiment_config["lower_bound_optimization"][param] for param in param_order]
+    upper_bound = [experiment_config["upper_bound_optimization"][param] for param in param_order]
+
+    print(f'The guess is: {p0}')
+    print(f'The upper bound is: {upper_bound}')
+    print(f'The lower bound is: {lower_bound}')
     
     upper_bound = list(experiment_config['upper_bound_optimization'].values())
     lower_bound = list(experiment_config['lower_bound_optimization'].values())
@@ -51,9 +59,9 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(sampled_params, "rb") as f:
         sampled_params = pickle.load(f)
 
-    p0 = list(experiment_config['optimization_initial_guess'].values())
-    lower_bound = lower_bound[:]
-    upper_bound = upper_bound[:]
+    # p0 = list(experiment_config['optimization_initial_guess'].values())
+    # lower_bound = lower_bound[:]
+    # upper_bound = upper_bound[:]
 
     if experiment_config['demographic_model'] == "bottleneck_model":
         # Extract the true TB value from sampled parameters

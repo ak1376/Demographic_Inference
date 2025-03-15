@@ -394,8 +394,8 @@ def _optimize_dadi(
     """
 
     # 1) Convert real-space bounds to z-space
-    lb_z = norm(lower_bound, mean, stddev)
-    ub_z = norm(upper_bound, mean, stddev)
+    # lb_z = norm(lower_bound, mean, stddev)
+    # ub_z = norm(upper_bound, mean, stddev)
 
     # print(f'init_z: {init_z}')
     # print(f'lb_z: {lb_z}')
@@ -420,21 +420,20 @@ def _optimize_dadi(
     # 3) Extrapolation function
     func_ex = dadi.Numerics.make_extrap_log_func(z_wrapper)
 
-    # 4) Run the optimizer in z-space using nlopt.LN_BOBYQA
     opt_params_z, ll_value = dadi.Inference.opt(
         init_z,
         sfs,
         func_ex,
         pts=pts_ext,
-        lower_bound=lb_z,
-        upper_bound=ub_z,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
         algorithm=nlopt.LN_BOBYQA,  # NLopt BOBYQA algorithm
         maxeval=1000,             # Increase maxeval for higher accuracy
         verbose=1
     )
 
-    # # 3) Run the optimizer in z-space
-    # xopt = dadi.Inference.optimize(
+    # 3) Run the optimizer in z-space
+    # xopt = dadi.Inference.optimize_log_powell(
     #     init_z,
     #     sfs,
     #     lambda z, n, pts: z_wrapper(z, n, pts),  # Accept pts here!
@@ -447,15 +446,15 @@ def _optimize_dadi(
     #     full_output=True
     # )
 
-    # # 4) Convert best-fit from z-space to real (scaled) space
+    # 4) Convert best-fit from z-space to real (scaled) space
     # fitted_params = unnorm(xopt[0], mean, stddev)
     # ll_value = xopt[1]
-
-    # print(f"Best-fit dadi params (real-space): {fitted_params}")
+    fitted_params = unnorm(opt_params_z, mean, stddev)
+    print(f"Best-fit dadi params (real-space): {fitted_params}")
 
     # 5) Convert best-fit from z-space to real (scaled) space
-    fitted_params = unnorm(opt_params_z, mean, stddev)
-    print(f'The converted to real-space parameters are: {fitted_params}')
+    print(f'The initial guess in real space is: {unnorm(init_z, mean, stddev)}')
+    print(f'The optimized parameters in real space are : {fitted_params}')
 
     # 6) Send them back to the parent process
     queue.put((fitted_params, ll_value))
@@ -547,8 +546,8 @@ def run_inference_dadi(
     )
     ns = sfs.sample_sizes
 
-    print(f"lower bound: {lower_bound}")
-    print(f"upper bound: {upper_bound}")
+    # print(f"lower bound: {lower_bound}")
+    # print(f"upper bound: {upper_bound}")
 
     # 1) Build "mean" and "stddev" from your (scaled) bounds
     mean = [(l+u)/2 for (l, u) in zip(lower_bound, upper_bound)]
@@ -574,7 +573,12 @@ def run_inference_dadi(
 
     # 5) Convert that guess to z-space
     init_z = norm(p_guess, mean, stddev)
+    lower_bound_z = norm(lower_bound, mean, stddev)
+    upper_bound_z = norm(upper_bound, mean, stddev)
+
     print(f'Initial guess in z-space: {init_z}')
+    print(f'Lower bound in z-space: {lower_bound_z}')
+    print(f'Upper bound in z-space: {upper_bound_z}')
 
     # 6) Launch the optimization in a separate process
     queue = multiprocessing.Queue()
@@ -589,8 +593,8 @@ def run_inference_dadi(
             mutation_rate,   # mutation rate
             length,          # sequence length
             pts_ext,         # extrapolation grid points
-            lower_bound,     # real-space lower bound
-            upper_bound,     # real-space upper bound
+            lower_bound_z,     # real-space lower bound
+            upper_bound_z,     # real-space upper bound
             mean,            # mean for z-scoring
             stddev           # stddev for z-scoring
         )
@@ -887,22 +891,32 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     )
 
     p_guess_scaled = real_to_dadi_params(p_guess, demographic_model)
+    # p_guess_scaled = real_to_dadi_params(sampled_params, demographic_model) # Let's pass in the ground truth and see if we can recover the true generative params. Sanity check. 
 
-    # lower_bound_scaled = real_to_dadi_params(experiment_config["lower_bound_optimization"], demographic_model)
-    # upper_bound_scaled = real_to_dadi_params(experiment_config["upper_bound_optimization"], demographic_model)
+    lower_bound_scaled = real_to_dadi_params(experiment_config["lower_bound_optimization"], demographic_model)
+    upper_bound_scaled = real_to_dadi_params(experiment_config["upper_bound_optimization"], demographic_model)
 
-    lower_bound_scaled = [1e-5, 1e-5, 1e-5, 1e-5, 1e-5]
-    upper_bound_scaled = [10, 10, 10, 10, 10]
+    # lower_bound_scaled = [1e-5, 1e-5, 1e-5, 1e-5, 1e-5]
+    # upper_bound_scaled = [10, 10, 10, 10, 10]
 
     print(f'the scaled parameters are: {p_guess_scaled}')
+    # print(f'the lower bound scaled parameters are: {lower_bound_scaled}')
+    # print(f'the upper bound scaled parameters are: {upper_bound_scaled}')
+
     # p_guess_scaled is a dictionary. We need to be very careful when converting it to a list for optimization
 
     if demographic_model == "split_migration_model":
         p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'],  p_guess_scaled['m12'], p_guess_scaled['m21']]
+        lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['t_split'], lower_bound_scaled['m12'], lower_bound_scaled['m21']]
+        upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['t_split'], upper_bound_scaled['m12'], upper_bound_scaled['m21']]
     elif demographic_model == "split_isolation_model":
         p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'], p_guess_scaled['m']]
+        lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['t_split'], lower_bound_scaled['m']]
+        upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['t_split'], upper_bound_scaled['m']]
     elif demographic_model == "bottleneck_model":
         p_guess_scaled = [p_guess_scaled['Nb'], p_guess_scaled['N_recover'], p_guess_scaled['t_bottleneck_end']]
+        lower_bound_scaled = [lower_bound_scaled['Nb'], lower_bound_scaled['N_recover'], lower_bound_scaled['t_bottleneck_end']]
+        upper_bound_scaled = [upper_bound_scaled['Nb'], upper_bound_scaled['N_recover'], upper_bound_scaled['t_bottleneck_end']]
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
@@ -911,10 +925,8 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     # Append the real ancestral size to the end of p_guess_scaled
     p_guess_scaled = np.append(p_guess_scaled, p_guess['Na'])
 
-
     print(f'Initial guess in real space: {p_guess}')
     print(f'Initial guess in scaled space: {p_guess_scaled}')
-
 
     # Perform optimization
     opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
