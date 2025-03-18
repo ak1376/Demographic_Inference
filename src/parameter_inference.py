@@ -276,10 +276,10 @@ def diffusion_sfs_dadi(
 
     # 5) Scale by theta if you want an absolute SFS. Typically, we do:
     #    theta = 4 * Nref * mu * L. If you consider parameters[0] = N0, then:
-    # Nref = parameters[0]
-    # theta = 4.0 * Nref * mutation_rate * sequence_length
+    Nref = parameters[0]
+    theta = 4.0 * Nref * mutation_rate * sequence_length
 
-    # model_fs *= theta
+    model_fs *= theta
 
     # model_fs is a dadi.Spectrum. You can return it directly.
     # print(f'Diffusion SFS Dadi: {model_fs}')
@@ -375,7 +375,7 @@ import nlopt
 
 def _optimize_dadi(
     queue,
-    init_z,             # initial guess in z-space
+    p_guess,             # initial guess in z-space
     sfs,
     demographic_model,  # model name
     sample_sizes_fit,   # OrderedDict of sample sizes
@@ -405,8 +405,35 @@ def _optimize_dadi(
     # print(f'Unnormed: {unnorm(init_z, mean, stddev)}')
 
     # 2) Define wrapper function for dadi optimization in z-space
-    def z_wrapper(z_params, ns, pts):
-        scaled_params = unnorm(z_params, mean, stddev)
+    # def z_wrapper(z_params, ns, pts):
+    #     scaled_params = unnorm(z_params, mean, stddev)
+    #     # print(f'unscaled Parameters are: {scaled_params}')
+    #     return diffusion_sfs_dadi(
+    #         scaled_params,
+    #         sample_sizes_fit,
+    #         demographic_model,
+    #         mutation_rate,
+    #         sequence_length,
+    #         pts
+    #     )
+
+    # # 3) Extrapolation function
+    # func_ex = dadi.Numerics.make_extrap_log_func(z_wrapper)
+
+    # opt_params_z, ll_value = dadi.Inference.opt(
+    #     init_z,
+    #     sfs,
+    #     func_ex,
+    #     pts=pts_ext,
+    #     lower_bound=lower_bound,
+    #     upper_bound=upper_bound,
+    #     algorithm=nlopt.LN_BOBYQA,  # NLopt BOBYQA algorithm
+    #     maxeval=1000,             # Increase maxeval for higher accuracy
+    #     verbose=1
+    # )
+
+    def raw_wrapper(scaled_params, ns, pts):
+        # scaled_params = unnorm(z_params, mean, stddev)
         # print(f'unscaled Parameters are: {scaled_params}')
         return diffusion_sfs_dadi(
             scaled_params,
@@ -418,18 +445,21 @@ def _optimize_dadi(
         )
 
     # 3) Extrapolation function
-    func_ex = dadi.Numerics.make_extrap_log_func(z_wrapper)
+    func_ex = dadi.Numerics.make_extrap_func(raw_wrapper)
 
-    opt_params_z, ll_value = dadi.Inference.opt(
-        init_z,
+    # 3) Run the optimizer in z-space
+    xopt = dadi.Inference.optimize_log_powell(
+        p_guess,
         sfs,
         func_ex,
         pts=pts_ext,
         lower_bound=lower_bound,
         upper_bound=upper_bound,
-        algorithm=nlopt.LN_BOBYQA,  # NLopt BOBYQA algorithm
-        maxeval=1000,             # Increase maxeval for higher accuracy
-        verbose=1
+        multinom=False,
+        verbose=1,
+        flush_delay=0.0,
+        full_output=True,
+        maxiter=1000
     )
 
     # 3) Run the optimizer in z-space
@@ -449,11 +479,15 @@ def _optimize_dadi(
     # 4) Convert best-fit from z-space to real (scaled) space
     # fitted_params = unnorm(xopt[0], mean, stddev)
     # ll_value = xopt[1]
-    fitted_params = unnorm(opt_params_z, mean, stddev)
+
+    fitted_params = xopt[0]
+    ll_value = xopt[1]
+
+    # fitted_params = unnorm(opt_params_z, mean, stddev)
     print(f"Best-fit dadi params (real-space): {fitted_params}")
 
     # 5) Convert best-fit from z-space to real (scaled) space
-    print(f'The initial guess in real space is: {unnorm(init_z, mean, stddev)}')
+    # print(f'The initial guess in real space is: {unnorm(init_z, mean, stddev)}')
     print(f'The optimized parameters in real space are : {fitted_params}')
 
     # 6) Send them back to the parent process
@@ -586,15 +620,15 @@ def run_inference_dadi(
         target=_optimize_dadi,
         args=(
             queue,           # for returning results
-            init_z,          # initial guess in z-space
+            p_guess,          # initial guess in z-space
             sfs,             # empirical SFS
             demographic_model,  # model name as a string (e.g., "split_migration_model")
             sample_sizes_fit,  # OrderedDict of sample sizes
             mutation_rate,   # mutation rate
             length,          # sequence length
             pts_ext,         # extrapolation grid points
-            lower_bound_z,     # real-space lower bound
-            upper_bound_z,     # real-space upper bound
+            lower_bound,     # real-space lower bound
+            upper_bound,     # real-space upper bound
             mean,            # mean for z-scoring
             stddev           # stddev for z-scoring
         )
@@ -626,11 +660,11 @@ def run_inference_dadi(
 
     # 9) Compute best-fit theta
     opt_theta = dadi.Inference.optimal_sfs_scaling(model_sfs, sfs)
-    print(f"Best-fit theta = {opt_theta}")
+    # print(f"Best-fit theta = {opt_theta}")
 
-    # 10) Convert theta to N_ref
-    N_ref = opt_theta / (4.0 * mutation_rate * length)
-    print(f"Estimated N_ref = {N_ref}")
+    # # 10) Convert theta to N_ref
+    # N_ref = opt_theta / (4.0 * mutation_rate * length)
+    # print(f"Estimated N_ref = {N_ref}")
 
     # 11) Build dictionary. E.g. for split_migration_model:
     if demographic_model == "split_migration_model":
@@ -648,17 +682,18 @@ def run_inference_dadi(
     elif demographic_model == "split_isolation_model":
         # e.g. (nu1, nu2, T, m)
         # These are all in real units
-        N_ref, nu1, nu2, T, m = opt_params_scaled
+        Na, nu1, nu2, T, m = opt_params_scaled
         print("====================================")
-        print(f'N_ref: {N_ref}')
+        print(f'N_ref: {Na}')
         print(f'nu1: {nu1}')
         print(f'nu2: {nu2}')
         print(f'T: {T}')
         print(f'm: {m}')
+        # print(f'The difference between N_ref and N0 is: {N_ref - N0}')
         print("====================================")
 
         opt_params_dict = {
-            "Na": N_ref,
+            "Na": Na,
             "N1": nu1,
             "N2": nu2,
             "t_split": T,
