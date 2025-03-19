@@ -4,27 +4,7 @@ xgboost_evaluation.py
 An example script to train, evaluate, and optionally perform hyperparameter optimization
 using Random Search on an XGBoost model. Follows a similar structure as the Random Forest example.
 
-Usage examples:
-1) Fixed hyperparameters (no search):
-   python xgboost_evaluation.py \
-       --features_and_targets_filepath path/to/features_and_targets.pkl \
-       --model_config_path path/to/model_config.json \
-       --color_shades_file path/to/color_shades.pkl \
-       --main_colors_file path/to/main_colors.pkl \
-       --experiment_config_filepath path/to/experiment_config.json \
-       --model_directory path/to/desired/model/directory \
-       --n_estimators 300 \
-       --max_depth 4 \
-       --learning_rate 0.05
-
-2) Automatic random-search hyperparameter optimization (by omitting all XGBoost hyperparameters):
-   python xgboost_evaluation.py \
-       --features_and_targets_filepath path/to/features_and_targets.pkl \
-       --model_config_path path/to/model_config.json \
-       --color_shades_file path/to/color_shades.pkl \
-       --main_colors_file path/to/main_colors.pkl \
-       --experiment_config_filepath path/to/experiment_config.json \
-       --model_directory path/to/desired/model/directory
+Now includes per-parameter MSE for both training and validation.
 """
 
 import pickle
@@ -38,6 +18,7 @@ from src.models import XGBoostReg  # Your XGBoost wrapper class (or rename as ne
 from xgboost import XGBRegressor
 from sklearn.metrics import make_scorer, mean_squared_error as mse_sklearn
 from sklearn.model_selection import RandomizedSearchCV
+import numpy as np
 
 
 def xgboost_evaluation(
@@ -47,7 +28,7 @@ def xgboost_evaluation(
     main_colors_path,
     experiment_config_filepath=None,
     model_directory=None,
-    feature_names=None,              # <- NEW
+    feature_names=None,  # might be used for plotting importances
     **xgb_kwargs
 ):
     """
@@ -55,24 +36,7 @@ def xgboost_evaluation(
     If no hyperparameters are specified, random search will be used to find
     the best hyperparameters within a predefined parameter space.
 
-    Parameters
-    ----------
-    features_and_targets_filepath : str
-        Path to the pickled features and targets object.
-    model_config_path : str
-        Path to the model configuration JSON file.
-    color_shades_path : str
-        Path to the pickled color shades file.
-    main_colors_path : str
-        Path to the pickled main colors file.
-    experiment_config_filepath : str, optional
-        Path to the experiment configuration file (if any).
-    model_directory : str, optional
-        Where to save the trained model and results. If None, it will be built using
-        the experiment config (like in the linear evaluation).
-    xgb_kwargs : dict
-        Additional keyword arguments for the XGBoostReg wrapper, e.g.:
-            n_estimators, max_depth, learning_rate, verbosity, subsample, ...
+    Now also computes per-parameter MSE for training & validation.
     """
 
     # ------------------------
@@ -126,16 +90,19 @@ def xgboost_evaluation(
     # ------------------------
     features_and_targets = pickle.load(open(features_and_targets_filepath, "rb"))
 
-    # Suppose we store feature_names in the data or pass via argument
+    # Possibly set feature_names from data if not provided
     if feature_names is None:
-        # If none provided, make some up or check if they're in the pickle
         if "feature_names" in features_and_targets:
             feature_names = features_and_targets["feature_names"]
         else:
-            X_train = features_and_targets["training"]["features"]
-            y_train = features_and_targets['training']['targets']
-            feature_names = X_train.columns.tolist()
-            target_names = y_train.columns.tolist()
+            X_train_temp = features_and_targets["training"]["features"]
+            y_train_temp = features_and_targets["training"]["targets"]
+            feature_names = X_train_temp.columns.tolist()
+            target_names = y_train_temp.columns.tolist()
+    else:
+        # If we do have feature_names passed in,
+        # (or you can handle target_names similarly)
+        target_names = ["Unknown_Param"]
 
     model_config = json.load(open(model_config_path, "r"))
     color_shades = pickle.load(open(color_shades_path, "rb"))
@@ -146,59 +113,58 @@ def xgboost_evaluation(
     X_val = features_and_targets["validation"]["features"]
     y_val = features_and_targets["validation"]["targets"]
 
+    # Possibly load experiment_config for param names
+    if experiment_config_filepath is not None:
+        experiment_config = json.load(open(experiment_config_filepath, "r"))
+    else:
+        experiment_config = None
+
     # ------------------------
     # 3) Optional: Hyperparameter Optimization via Random Search
-    #    If user didn't specify ANY XGBoost hyperparams, run random search.
+    #    If user didn't specify ANY XGBoost hyperparams -> random search
     # ------------------------
     user_provided_params = any(value is not None for value in xgb_kwargs.values())
 
     if not user_provided_params:
-        print("\nNo XGBoost hyperparameters specified. "
-              "Running RandomizedSearchCV to find best hyperparameters...\n")
+        print("\nNo XGBoost hyperparameters specified. Running RandomizedSearchCV...\n")
 
         # Define the parameter distributions
-        # Feel free to expand these lists or change the ranges
         param_dist = {
             "n_estimators": [100, 200, 300, 400, 500],
-            "max_depth": [2, 3, 4, 5, 10, 20],
+            "max_depth": [2, 3, 4, 5, 10],
             "learning_rate": [0.01, 0.05, 0.1],
-            "subsample": [0.2, 0.6, 0.8, 1.0],
+            "subsample": [0.6, 0.8, 1.0],
             "colsample_bytree": [0.6, 0.8, 1.0],
             "min_child_weight": [1, 3, 5],
-            "reg_lambda": [1, 2, 5],  # L2 reg
-            "reg_alpha": [0, 0.1, 0.5],  # L1 reg
+            "reg_lambda": [1, 2, 5],
+            "reg_alpha": [0, 0.1, 0.5],
         }
 
-        # Create a base model for searching
-        base_xgb = XGBRegressor(objective="reg:squarederror")
+        from xgboost import XGBRegressor
+        from sklearn.metrics import make_scorer, mean_squared_error as mse_sklearn
+        from sklearn.model_selection import RandomizedSearchCV
 
-        # Use negative MSE for scoring
+        base_xgb = XGBRegressor(objective="reg:squarederror")
         mse_scorer = make_scorer(mse_sklearn, greater_is_better=False)
 
-        # Initialize RandomizedSearchCV
         random_search = RandomizedSearchCV(
             estimator=base_xgb,
             param_distributions=param_dist,
-            n_iter=10,            # Number of random configurations
-            cv=3,                 # 3-fold cross-validation
-            scoring=mse_scorer,   # Use neg MSE
-            random_state=42,      # Reproducibility
-            n_jobs=-1,            # Use all available CPUs
+            n_iter=10,
+            cv=3,
+            scoring=mse_scorer,
+            random_state=42,
+            n_jobs=-1,
             verbose=1
         )
-
-        # Fit on training data
         random_search.fit(X_train, y_train)
 
-        # Get best hyperparams from the search
         best_params = random_search.best_params_
         print(f"\nBest hyperparameters found via RandomizedSearchCV: {best_params}\n")
-
-        # Update xgb_kwargs with the best found parameters
         xgb_kwargs.update(best_params)
 
     # ------------------------
-    # 4) Train model (user-provided or best from random search)
+    # 4) Instantiate your XGBoostReg wrapper
     # ------------------------
     xgb_model = XGBoostReg(
         training_features=X_train,
@@ -224,11 +190,8 @@ def xgboost_evaluation(
         validation_predictions
     )
 
-    # Attach parameter names if available in model_config
-    if (
-        "neural_net_hyperparameters" in model_config 
-        and "parameter_names" in model_config["neural_net_hyperparameters"]
-    ):
+    # If param names exist in the experiment config
+    if experiment_config is not None and "parameters_to_estimate" in experiment_config:
         xgb_mdl_obj["param_names"] = experiment_config["parameters_to_estimate"]
     else:
         xgb_mdl_obj["param_names"] = ["Unknown_Param"]
@@ -237,6 +200,8 @@ def xgboost_evaluation(
     # 7) Calculate training & validation errors
     # ------------------------
     xgb_error_dict = {}
+
+    # a) Overall MSE for entire vector
     xgb_error_dict["training"] = mean_squared_error(
         y_true=xgb_mdl_obj["training"]["targets"],
         y_pred=training_predictions
@@ -246,32 +211,54 @@ def xgboost_evaluation(
         y_pred=validation_predictions
     )
 
+    # b) Per-parameter MSE
+    param_list = xgb_mdl_obj["param_names"]
+    xgb_error_dict["training_mse"] = {}
+    xgb_error_dict["validation_mse"] = {}
+
+    true_train = np.array(xgb_mdl_obj["training"]["targets"])
+    true_valid = np.array(xgb_mdl_obj["validation"]["targets"])
+    train_preds_arr = np.array(training_predictions)
+    val_preds_arr = np.array(validation_predictions)
+
+    for i, param in enumerate(param_list):
+        param_mse_train = ((true_train[:, i] - train_preds_arr[:, i]) ** 2).mean()
+        xgb_error_dict["training_mse"][param] = param_mse_train
+
+        param_mse_valid = ((true_valid[:, i] - val_preds_arr[:, i]) ** 2).mean()
+        xgb_error_dict["validation_mse"][param] = param_mse_valid
+
     # ------------------------
     # 8) Save artifacts
     # ------------------------
+    # 8a) Save the xgb_mdl_obj
     with open(f"{model_directory}/xgb_mdl_obj.pkl", "wb") as file:
         pickle.dump(xgb_mdl_obj, file)
 
+    # 8b) Save the overall + param-based MSE to JSON
     with open(f"{model_directory}/xgb_model_error.json", "w") as json_file:
         json.dump(xgb_error_dict, json_file, indent=4)
 
-    # Optional: visualize results if your function supports it
+    # 8c) Visualize results
     visualizing_results(
         xgb_mdl_obj,
-        "xgboost_results",
+        analysis="xgboost_results",
         save_loc=model_directory,
         stages=["training", "validation"],
         color_shades=color_shades,
         main_colors=main_colors
     )
 
-    xgb_model.plot_feature_importances(feature_names, target_names, max_num_features=10, save_path=f'{model_directory}/xgb_feature_importances.png')
+    # 8d) (Optional) plot feature importances if your XGBoostReg supports it
+    xgb_model.plot_feature_importances(
+        feature_names,
+        target_names,
+        max_num_features=10,
+        save_path=f'{model_directory}/xgb_feature_importances.png'
+    )
 
-
-    # Save the entire trained wrapper (including XGBoost model) with joblib
+    # 8e) Save the entire trained wrapper with joblib
     joblib.dump(xgb_model, f"{model_directory}/xgb_model.pkl")
-
-
 
     print("XGBoost model trained and saved. LFG!")
 
@@ -370,7 +357,6 @@ if __name__ == "__main__":
         help="L1 regularization term on weights (None => random search pick.)"
     )
 
-    # Parse arguments
     args = parser.parse_args()
 
     # Collect XGBoost kwargs

@@ -1,4 +1,4 @@
-import pickle 
+import pickle
 import joblib
 import json
 from src.utils import visualizing_results, mean_squared_error
@@ -7,17 +7,45 @@ import os
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import Ridge, Lasso, ElasticNet
 
-def linear_evaluation(features_and_targets_filepath, model_config_path, color_shades_path, main_colors_path, experiment_config_filepath = None, model_directory = None, regression_type = "standard", alpha = 0.0, l1_ratio = 0.5):
+def linear_evaluation(
+    features_and_targets_filepath,
+    model_config_path,
+    color_shades_path,
+    main_colors_path, 
+    experiment_config_filepath=None,
+    model_directory=None, 
+    regression_type="standard",
+    alpha=0.0,
+    l1_ratio=0.5
+):
+    """
+    Train a linear regression model (standard, ridge, lasso, or elasticnet)
+    on the features & targets, optionally do a hyperparameter search,
+    then compute MSE (overall + per-parameter), save results, and create plots.
+    """
 
+    # 1) Determine model_directory if not provided
     if model_directory is None:
         experiment_config = json.load(open(experiment_config_filepath, "r"))
         model_config = json.load(open(model_config_path, "r"))
 
         # Build the experiment directory
-        EXPERIMENT_DIRECTORY = f"{experiment_config['demographic_model']}_dadi_analysis_{experiment_config['dadi_analysis']}_moments_analysis_{experiment_config['moments_analysis']}_momentsLD_analysis_{experiment_config['momentsLD_analysis']}_seed_{experiment_config['seed']}"
+        EXPERIMENT_DIRECTORY = (
+            f"{experiment_config['demographic_model']}_"
+            f"dadi_analysis_{experiment_config['dadi_analysis']}_"
+            f"moments_analysis_{experiment_config['moments_analysis']}_"
+            f"momentsLD_analysis_{experiment_config['momentsLD_analysis']}_"
+            f"seed_{experiment_config['seed']}"
+        )
 
         # Build the experiment name
-        EXPERIMENT_NAME = f"sims_pretrain_{experiment_config['num_sims_pretrain']}_sims_inference_{experiment_config['num_sims_inference']}_seed_{experiment_config['seed']}_num_replicates_{experiment_config['k']}_top_values_{experiment_config['top_values_k']}"
+        EXPERIMENT_NAME = (
+            f"sims_pretrain_{experiment_config['num_sims_pretrain']}"
+            f"_sims_inference_{experiment_config['num_sims_inference']}"
+            f"_seed_{experiment_config['seed']}"
+            f"_num_replicates_{experiment_config['k']}"
+            f"_top_values_{experiment_config['top_values_k']}"
+        )
         
         # Process the hidden size parameter
         hidden_size = model_config['neural_net_hyperparameters']['hidden_size']
@@ -38,17 +66,16 @@ def linear_evaluation(features_and_targets_filepath, model_config_path, color_sh
             f"EarlyStopping_{model_config['neural_net_hyperparameters']['EarlyStopping']}"
         )
 
-    # Ensure the model directory exists
     os.makedirs(model_directory, exist_ok=True)
-
     print(f"Model directory created/verified: {model_directory}")
-    
+
+    # 2) Load data and configs
     features_and_targets = pickle.load(open(features_and_targets_filepath, "rb"))
     model_config = json.load(open(model_config_path, "r"))
     color_shades = pickle.load(open(color_shades_path, "rb"))
     main_colors = pickle.load(open(main_colors_path, "rb"))
 
-    # Hyperparameter optimization for ridge, lasso, or elastic net
+    # Possibly do hyperparameter optimization if ridge/lasso/elasticnet
     if regression_type in ["ridge", "lasso", "elasticnet"]:
         X_train = features_and_targets["training"]["features"]
         y_train = features_and_targets["training"]["targets"]
@@ -61,63 +88,81 @@ def linear_evaluation(features_and_targets_filepath, model_config_path, color_sh
             param_grid = {"alpha": [0.1, 1.0, 10.0, 100.0]}
         elif regression_type == "elasticnet":
             model = ElasticNet()
-            param_grid = {"alpha": [0.1, 1.0, 10.0, 100.0], "l1_ratio": [0.1, 0.5, 0.9]}
+            param_grid = {
+                "alpha": [0.1, 1.0, 10.0, 100.0],
+                "l1_ratio": [0.1, 0.5, 0.9]
+            }
 
         grid_search = GridSearchCV(model, param_grid, scoring="neg_mean_squared_error", cv=5)
         grid_search.fit(X_train, y_train)
 
         print(f"Best parameters for {regression_type}: {grid_search.best_params_}")
 
-        # Update alpha and l1_ratio based on the best parameters
+        # Update alpha/l1_ratio based on best params
         alpha = grid_search.best_params_.get("alpha", alpha)
         l1_ratio = grid_search.best_params_.get("l1_ratio", l1_ratio)
 
-    ## LINEAR REGRESSION
+    # 3) Instantiate + train the linear model
     linear_mdl = LinearReg(
         training_features=features_and_targets["training"]["features"],
         training_targets=features_and_targets["training"]["targets"],
         validation_features=features_and_targets["validation"]["features"],
         validation_targets=features_and_targets["validation"]["targets"],
-        regression_type=regression_type, 
+        regression_type=regression_type,
         alpha=alpha,
         l1_ratio=l1_ratio
     )
 
-    training_predictions, validation_predictions = (
-        linear_mdl.train_and_validate()
-    )
-
+    training_predictions, validation_predictions = linear_mdl.train_and_validate()
     print(f'PREDICTIONS SHAPE TRAINING: {training_predictions.shape}')
 
+    # 4) Organize results and store param names
+    experiment_config = json.load(open(experiment_config_filepath, "r"))
     linear_mdl_obj = linear_mdl.organizing_results(
         features_and_targets,
         training_predictions,
         validation_predictions
     )
+    linear_mdl_obj["param_names"] = experiment_config['parameters_to_estimate']  # e.g. ['Na','N1','N2','t_split']
 
-    linear_mdl_obj["param_names"] = experiment_config['parameters_to_estimate']
-
-    # Now calculate the linear model error
-
+    # 5) Compute overall MSE (RMSE) for entire vector
     rrmse_dict = {}
     rrmse_dict["training"] = mean_squared_error(
-        y_true=linear_mdl_obj["training"]["targets"], y_pred=training_predictions
+        y_true=linear_mdl_obj["training"]["targets"],
+        y_pred=training_predictions
     )
     rrmse_dict["validation"] = mean_squared_error(
-        y_true=linear_mdl_obj["validation"]["targets"], y_pred=validation_predictions
+        y_true=linear_mdl_obj["validation"]["targets"],
+        y_pred=validation_predictions
     )
 
-    # Open a file to save the object
-    with open(
-        f"{model_directory}/linear_mdl_obj_{regression_type}.pkl", "wb"
-    ) as file:  # "wb" mode opens the file in binary write mode
+    # 6) Compute per-parameter MSE
+    param_list = linear_mdl_obj["param_names"]
+    # We'll store param-based MSE in sub-dicts
+    rrmse_dict["training_mse"] = {}
+    rrmse_dict["validation_mse"] = {}
+
+    true_train = linear_mdl_obj["training"]["targets"]  # shape (N, #params)
+    true_valid = linear_mdl_obj["validation"]["targets"]  # shape (M, #params)
+
+    for i, param in enumerate(param_list):
+        # Training
+        param_mse_train = ((true_train[:, i] - training_predictions[:, i])**2).mean()
+        rrmse_dict["training_mse"][param] = param_mse_train
+        # Validation
+        param_mse_valid = ((true_valid[:, i] - validation_predictions[:, i])**2).mean()
+        rrmse_dict["validation_mse"][param] = param_mse_valid
+
+    # 7) Plot + Save artifacts
+    # 7a) Save the linear_mdl_obj
+    with open(f"{model_directory}/linear_mdl_obj_{regression_type}.pkl", "wb") as file:
         pickle.dump(linear_mdl_obj, file)
 
-    # Save rrmse_dict to a JSON file
-    with open(f"{model_directory}/linear_model_error.json_{regression_type}", "w") as json_file:
+    # 7b) Save the overall + param-based MSE to JSON
+    with open(f"{model_directory}/linear_model_error_{regression_type}.json", "w") as json_file:
         json.dump(rrmse_dict, json_file, indent=4)
 
-    # targets
+    # 7c) Visualize results
     visualizing_results(
         linear_mdl_obj,
         f"linear_results_{regression_type}",
@@ -127,9 +172,9 @@ def linear_evaluation(features_and_targets_filepath, model_config_path, color_sh
         main_colors=main_colors,
     )
 
+    # 7d) Finally, save the regression model as well
     joblib.dump(linear_mdl, f"{model_directory}/linear_regression_model_{regression_type}.pkl")
-
-    print("Linear model trained LFG")
+    print("Linear model trained. LFG!")
 
 
 if __name__ == "__main__":
@@ -160,7 +205,6 @@ if __name__ == "__main__":
         help="Path to the main colors file",
     )
 
-    # Optional arguments
     parser.add_argument(
         "--experiment_config_filepath",
         type=str,
@@ -182,17 +226,19 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-    "--alpha",
-    type=float,
-    default=0.0,  # Set to 0.0 to reflect no regularization by default
-    help="Regularization strength for Ridge, Lasso, or ElasticNet. Set to 0.0 for no regularization (standard linear regression)."
+        "--alpha",
+        type=float,
+        default=0.0,
+        help="Regularization strength for Ridge, Lasso, or ElasticNet. "
+             "Set to 0.0 for no regularization (standard linear regression)."
     )
 
     parser.add_argument(
         "--l1_ratio",
         type=float,
-        default=0.5,  # Default for ElasticNet; irrelevant for other types unless alpha > 0
-        help="Mixing parameter for ElasticNet (only used if regression_type='elasticnet'). 0 <= l1_ratio <= 1. Irrelevant if alpha=0.0."
+        default=0.5,
+        help="Mixing parameter for ElasticNet (only used if regression_type='elasticnet'). "
+             "0 <= l1_ratio <= 1. Irrelevant if alpha=0.0."
     )
 
     args = parser.parse_args()
@@ -202,9 +248,9 @@ if __name__ == "__main__":
         model_config_path=args.model_config_path,
         color_shades_path=args.color_shades_file,
         main_colors_path=args.main_colors_file,
-        experiment_config_filepath = args.experiment_config_filepath,
-        model_directory = args.model_directory,
-        regression_type = args.regression_type, 
-        alpha = args.alpha,
-        l1_ratio = args.l1_ratio
+        experiment_config_filepath=args.experiment_config_filepath,
+        model_directory=args.model_directory,
+        regression_type=args.regression_type,
+        alpha=args.alpha,
+        l1_ratio=args.l1_ratio
     )

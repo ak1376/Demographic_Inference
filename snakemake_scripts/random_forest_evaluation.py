@@ -1,32 +1,3 @@
-"""
-random_forest_evaluation.py
-
-An example script to train, evaluate, and optionally perform hyperparameter optimization
-using Random Search on a Random Forest model, following a structure similar to the
-linear_evaluation example.
-
-Usage examples:
-1) Fixed hyperparameters (no search):
-   python random_forest_evaluation.py \
-       --features_and_targets_filepath path/to/features_and_targets.pkl \
-       --model_config_path path/to/model_config.json \
-       --color_shades_file path/to/color_shades.pkl \
-       --main_colors_file path/to/main_colors.pkl \
-       --experiment_config_filepath path/to/experiment_config.json \
-       --model_directory path/to/desired/model/directory \
-       --n_estimators 200 \
-       --max_depth 10
-
-2) Automatic random-search hyperparameter optimization (by omitting all RF hyperparameters):
-   python random_forest_evaluation.py \
-       --features_and_targets_filepath path/to/features_and_targets.pkl \
-       --model_config_path path/to/model_config.json \
-       --color_shades_file path/to/color_shades.pkl \
-       --main_colors_file path/to/main_colors.pkl \
-       --experiment_config_filepath path/to/experiment_config.json \
-       --model_directory path/to/desired/model/directory
-"""
-
 import pickle
 import joblib
 import json
@@ -48,7 +19,7 @@ def random_forest_evaluation(
     main_colors_path,
     experiment_config_filepath=None,
     model_directory=None,
-    feature_names=None,              # <- NEW
+    feature_names=None,
     **rf_kwargs
 ):
     """
@@ -56,24 +27,7 @@ def random_forest_evaluation(
     If no hyperparameters are specified (e.g., all are None), random search will be used
     to find the best hyperparameters within a defined parameter space.
 
-    Parameters
-    ----------
-    features_and_targets_filepath : str
-        Path to the pickled features and targets object.
-    model_config_path : str
-        Path to the model configuration JSON file.
-    color_shades_path : str
-        Path to the pickled color shades file.
-    main_colors_path : str
-        Path to the pickled main colors file.
-    experiment_config_filepath : str, optional
-        Path to the experiment configuration file (if any).
-    model_directory : str, optional
-        Where to save the trained model and results. If None, it will be built using
-        the experiment config (like in the linear evaluation).
-    rf_kwargs : dict
-        Additional keyword arguments for the RandomForest wrapper, e.g.:
-            n_estimators, max_depth, random_state, min_samples_split, ...
+    Now also computes per-parameter MSE for training and validation.
     """
 
     # ------------------------
@@ -128,15 +82,15 @@ def random_forest_evaluation(
     features_and_targets = pickle.load(open(features_and_targets_filepath, "rb"))
     # Suppose we store feature_names in the data or pass via argument
     if feature_names is None:
-        # If none provided, make some up or check if they're in the pickle
         if "feature_names" in features_and_targets:
             feature_names = features_and_targets["feature_names"]
         else:
             X_train = features_and_targets["training"]["features"]
-            y_train = features_and_targets['training']['targets']
+            y_train = features_and_targets["training"]["targets"]
             feature_names = X_train.columns.tolist()
             target_names = y_train.columns.tolist()
-
+    else:
+        target_names = ["Unknown_Target"]
 
     model_config = json.load(open(model_config_path, "r"))
     color_shades = pickle.load(open(color_shades_path, "rb"))
@@ -144,60 +98,48 @@ def random_forest_evaluation(
 
     X_train = features_and_targets["training"]["features"]
     y_train = features_and_targets["training"]["targets"]
-
-    # We'll need X_val, y_val for final predictions after training
     X_val = features_and_targets["validation"]["features"]
     y_val = features_and_targets["validation"]["targets"]
 
+    # Optionally load experiment_config for param names
+    experiment_config = None
+    if experiment_config_filepath is not None:
+        experiment_config = json.load(open(experiment_config_filepath, "r"))
+
     # ------------------------
     # 3) Optional: Hyperparameter Optimization via Random Search
-    #    If user didn't specify ANY RF hyperparams, we run random search.
     # ------------------------
-    # Check if the user has specified at least one hyperparam
     user_provided_params = any(value is not None for value in rf_kwargs.values())
-
     if not user_provided_params:
         print("\nNo hyperparameters specified. Running RandomizedSearchCV to find best hyperparameters...\n")
-        
-        # Define the parameter distributions you want to search over
         param_dist = {
             "n_estimators": [20, 50, 100, 200, 300, 500],
             "max_depth": [None, 10, 20, 30, 40, 50],
             "min_samples_split": [2, 5, 10, 15, 20],
             "random_state": [42, 123, 2023, 295],
-            # You can add more params here as needed
         }
 
-        # Create a base model for searching
+        mse_scorer = make_scorer(mse_sklearn, greater_is_better=False)
         base_model = RandomForestRegressor()
 
-        # Create a custom scorer for negative MSE (the default for R^2 might not be suitable)
-        mse_scorer = make_scorer(mse_sklearn, greater_is_better=False)
-
-        # Initialize RandomizedSearchCV
         random_search = RandomizedSearchCV(
             estimator=base_model,
             param_distributions=param_dist,
-            n_iter=10,            # Number of settings to sample
-            cv=3,                 # 3-fold cross-validation
-            scoring=mse_scorer,   # Use negative MSE as the scoring function
-            random_state=42,      # For reproducibility
-            n_jobs=-1,            # Use all available CPUs
+            n_iter=10,
+            cv=3,
+            scoring=mse_scorer,
+            random_state=42,
+            n_jobs=-1,
             verbose=1
         )
-
-        # Fit on training data
         random_search.fit(X_train, y_train)
 
-        # Get best hyperparams from the search
         best_params = random_search.best_params_
         print(f"\nBest hyperparameters found via RandomizedSearchCV: {best_params}\n")
-
-        # Update rf_kwargs with the best found parameters so we can instantiate RandomForest with them
         rf_kwargs.update(best_params)
 
     # ------------------------
-    # 4) Train with either the user-provided or randomly-searched hyperparams
+    # 4) Train the RandomForest wrapper
     # ------------------------
     random_forest_mdl = RandomForest(
         training_features=X_train,
@@ -208,7 +150,7 @@ def random_forest_evaluation(
     )
 
     # ------------------------
-    # 5) Train and predict
+    # 5) Train and get predictions
     # ------------------------
     training_predictions, validation_predictions = random_forest_mdl.train_and_validate()
     print(f"\nRandom Forest predictions shape (training): {training_predictions.shape}")
@@ -223,19 +165,17 @@ def random_forest_evaluation(
         validation_predictions
     )
 
-    # Attach parameter names if available in model_config
-    if (
-        "neural_net_hyperparameters" in model_config 
-        and "parameter_names" in model_config["neural_net_hyperparameters"]
-    ):
+    # If param names exist in the experiment config
+    if experiment_config is not None and "parameters_to_estimate" in experiment_config:
         random_forest_mdl_obj["param_names"] = experiment_config["parameters_to_estimate"]
     else:
         random_forest_mdl_obj["param_names"] = ["Unknown_Param"]
 
     # ------------------------
-    # 7) Calculate training & validation errors
+    # 7) Calculate MSE (rolled-up + per-parameter)
     # ------------------------
     rf_error_dict = {}
+    # Overall MSE for entire (targets) vector
     rf_error_dict["training"] = mean_squared_error(
         y_true=random_forest_mdl_obj["training"]["targets"],
         y_pred=training_predictions
@@ -245,16 +185,36 @@ def random_forest_evaluation(
         y_pred=validation_predictions
     )
 
+    # Per-parameter MSE
+    param_list = random_forest_mdl_obj["param_names"]
+    rf_error_dict["training_mse"] = {}
+    rf_error_dict["validation_mse"] = {}
+
+    # For convenience, random_forest_mdl_obj["training"]["targets"] is shape (N, P)
+    true_train = random_forest_mdl_obj["training"]["targets"]
+    true_valid = random_forest_mdl_obj["validation"]["targets"]
+
+    for i, param in enumerate(param_list):
+        # training MSE for param i
+        param_mse_train = ((true_train[:, i] - training_predictions[:, i])**2).mean()
+        rf_error_dict["training_mse"][param] = param_mse_train
+
+        # validation MSE for param i
+        param_mse_valid = ((true_valid[:, i] - validation_predictions[:, i])**2).mean()
+        rf_error_dict["validation_mse"][param] = param_mse_valid
+
     # ------------------------
     # 8) Save artifacts
     # ------------------------
+    # 8a) Save the random_forest_mdl_obj
     with open(f"{model_directory}/random_forest_mdl_obj.pkl", "wb") as file:
         pickle.dump(random_forest_mdl_obj, file)
 
+    # 8b) Save the overall + param-based MSE to JSON
     with open(f"{model_directory}/random_forest_model_error.json", "w") as json_file:
         json.dump(rf_error_dict, json_file, indent=4)
 
-    # Optional: plot or visualize results
+    # 8c) Visualize results
     visualizing_results(
         random_forest_mdl_obj,
         "random_forest_results",
@@ -263,10 +223,16 @@ def random_forest_evaluation(
         color_shades=color_shades,
         main_colors=main_colors
     )
-    
-    random_forest_mdl.plot_feature_importances(feature_names, target_names, max_num_features=10, save_path=f'{model_directory}/random_forest_feature_importances.png')
 
-    # Save the entire trained wrapper (including scikit-learn model) with joblib
+    # 8d) Optionally, plot feature importances if your wrapper supports it
+    random_forest_mdl.plot_feature_importances(
+        feature_names, 
+        target_names, 
+        max_num_features=10, 
+        save_path=f'{model_directory}/random_forest_feature_importances.png'
+    )
+
+    # 8e) Save the entire trained wrapper (including scikit-learn model) with joblib
     joblib.dump(random_forest_mdl, f"{model_directory}/random_forest_model.pkl")
     print("Random Forest model trained and saved. LFG!")
 
@@ -315,18 +281,17 @@ if __name__ == "__main__":
     )
 
     # Random Forest hyperparameters
-    # If these remain None, random search is triggered for all params.
     parser.add_argument(
         "--n_estimators",
         type=int,
         default=None,
-        help="Number of trees in the forest. (Set None to let random search pick.)"
+        help="Number of trees in the forest. (Set None => random search pick.)"
     )
     parser.add_argument(
         "--max_depth",
         type=int,
         default=None,
-        help="Maximum depth of the tree. (Set None to let random search pick.)"
+        help="Maximum depth of the tree. (Set None => random search pick.)"
     )
     parser.add_argument(
         "--random_state",
@@ -341,11 +306,9 @@ if __name__ == "__main__":
         help="Minimum number of samples required to split an internal node. (None => random search pick.)"
     )
 
-    # Parse arguments
     args = parser.parse_args()
 
     # Collect RF-specific kwargs
-    # If these are all None, random search will be used
     rf_kwargs = {
         "n_estimators": args.n_estimators,
         "max_depth": args.max_depth,
