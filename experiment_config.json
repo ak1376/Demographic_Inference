@@ -1,17 +1,17 @@
 {
     "upper_bound_params": {
-        "t_split": 1600,
-        "N1": 3000,
-        "N2": 25000,
-        "Na": 11000,
-        "m": 1e-4
+        "t_split": 20000,
+        "N1": 30000,
+        "N2": 30000,
+        "Na": 30000,
+        "m": 0.0001
     },
     "lower_bound_params": {
-        "t_split": 1500,
-        "N1": 2000,
-        "N2": 20000,
-        "Na": 10000,
-        "m": 1e-8
+        "t_split": 500,
+        "N1": 1000,
+        "N2": 1000,
+        "Na": 1000,
+        "m": 1e-08
     },
     "num_sims_pretrain": 10,
     "num_sims_inference": 1,
@@ -51,18 +51,18 @@
         "m": 0.000356
     },
     "lower_bound_optimization": {
-        "Na": 10000,
-        "N1": 2000,
-        "N2": 20000,
-        "t_split": 1500,
-        "m": 1e-8
+        "Na": 1000,
+        "N1": 1000,
+        "N2": 1000,
+        "t_split": 500,
+        "m": 1e-08
     },
     "upper_bound_optimization": {
-        "Na": 11000,
-        "N1": 3000,
-        "N2": 25000,
-        "t_split": 1600,
-        "m": 1e-4
+        "Na": 30000,
+        "N1": 30000,
+        "N2": 30000,
+        "t_split": 20000,
+        "m": 0.0001
     },
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-isolation.vcf.gz",
     "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
