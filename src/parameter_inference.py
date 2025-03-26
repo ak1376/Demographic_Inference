@@ -21,91 +21,71 @@ def norm(p, mean, stddev):
 def unnorm(z, mean, stddev):
     return [z_i * s + m for z_i, m, s in zip(z, mean, stddev)]
 
-def real_to_dadi_params(real_params, demographic_model):
+def real_to_dadi_params(real_params, demographic_model, parameter_names=None):
     """
-    Suppose real_params = (N1, N2, M12, M21, Tsplit_in_gen)
-    all in real units (pop sizes, migration per gen, time in generations, etc.)
-    
-    We want to scale them to: (nu1, nu2, m12, m21, t_split)
-    which are the parameters expected by the original dadi function:
-       - nu1, nu2 = N1 / N_anc  (for example)
-       - m12, m21 = (some formula for scaled migration)
-       - t_split = Tsplit_in_gen / (2*N_anc)
-    or whatever your chosen reference is.
-    
-    You define that reference once (N_anc, mu, generation_time, etc.).
-    Then you do the math here.
+    Suppose real_params = (N1, N2, M12, M21, Tsplit_in_gen) or a dict if parameter_names is None.
+    If parameter_names is provided, it must be a sequence of names with the same length as real_params,
+    and we’ll convert real_params into a dict mapping names→values before scaling.
     """
 
-    # Example:
-    # real_params = (N1, N2, M12, M21, T_gen)
-    # Let’s define some reference:
-    # For migration: in coalescent units, m12 (the symmetric migration parameter)
-    # is typically 4*N_anc*m (if haploid or diploid factor?). This depends on how
-    # your data was simulated. Let's assume the simple version:
-    #   m12_dadi = M12 (per gen) * 2*N_anc
-    #   T_dadi = T_gen / (2*N_anc)
-    # likewise for population sizes.
+    # If the user passed in a list/tuple of values plus names, build a dict
+    if parameter_names is not None:
+        if len(parameter_names) != len(real_params):
+            raise ValueError(
+                f"parameter_names length ({len(parameter_names)}) does not match "
+                f"real_params length ({len(real_params)})"
+            )
+        real_params = dict(zip(parameter_names, real_params))
+
     scaled_params = None
-    if demographic_model == "split_migration_model":
 
-        N_anc = real_params['Na']
+    if demographic_model == "split_migration_model":
+        N_anc = real_params['N0']
         N1 = real_params['N1']
         N2 = real_params['N2']
         M12 = real_params['m12']
         M21 = real_params['m21']
         T_gen = real_params['t_split']
-        
-        nu1 = N1 / N_anc
-        nu2 = N2 / N_anc
-        m12 = M12*(2 * N_anc)
-        m21 = M21*(2 * N_anc)
-        t_split = T_gen / (2 * N_anc)
 
-        scaled_params = {}
-        scaled_params['nu1'] = nu1
-        scaled_params['nu2'] = nu2
-        scaled_params['m12'] = m12
-        scaled_params['m21'] = m21
-        scaled_params['t_split'] = t_split
-    
+        scaled_params = {
+            'nu1': N1 / N_anc,
+            'nu2': N2 / N_anc,
+            'm12': M12 * (2 * N_anc),
+            'm21': M21 * (2 * N_anc),
+            't_split': T_gen / (2 * N_anc),
+        }
+
     elif demographic_model == "split_isolation_model":
         N_anc = real_params['Na']
         N1 = real_params['N1']
         N2 = real_params['N2']
         M = real_params['m']
         T_gen = real_params['t_split']
-        
-        nu1 = N1 / N_anc
-        nu2 = N2 / N_anc
-        m = M*(2 * N_anc)
-        t_split = T_gen / (2 * N_anc)
 
-        scaled_params = {}
-        scaled_params['nu1'] = nu1
-        scaled_params['nu2'] = nu2
-        scaled_params['m'] = m
-        scaled_params['t_split'] = t_split
-    
+        scaled_params = {
+            'nu1': N1 / N_anc,
+            'nu2': N2 / N_anc,
+            'm': M * (2 * N_anc),
+            't_split': T_gen / (2 * N_anc),
+        }
+
     elif demographic_model == "bottleneck_model":
-        N_anc = real_params['Na']
+        N_anc = real_params['N0']
         Nb = real_params['Nb']
         N_recover = real_params['N_recover']
-        t_bottleneck_end = real_params['t_bottleneck_end']
+        t_end = real_params['t_bottleneck_end']
 
-        nuB = Nb / N_anc
-        nuF = N_recover / N_anc
-        t_bottleneck_end = t_botteleneck_end / (2 * N_anc)
-
-        scaled_params = {}
-        scaled_params['nuB'] = nuB
-        scaled_params['nuF'] = nuF
-        scaled_params['t_bottleneck_end'] = t_bottleneck_end
+        scaled_params = {
+            'nuB': Nb / N_anc,
+            'nuF': N_recover / N_anc,
+            't_bottleneck_end': t_end / (2 * N_anc),
+        }
 
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     return scaled_params
+
 
 def diffusion_sfs_moments(parameters: list[float],
     sample_sizes: OrderedDict,
@@ -234,7 +214,8 @@ def diffusion_sfs_dadi(
             "N0": parameters[0],
             "Nb": parameters[1],
             "N_recover": parameters[2],
-            "t_bottleneck_end": parameters[3],
+            "t_bottleneck_start": parameters[3],
+            "t_bottleneck_end": parameters[4],
             # etc. if more parameters
         }
         demo_func = demographic_models.bottleneck_model
@@ -288,58 +269,27 @@ def diffusion_sfs_dadi(
 
 # Define your function with Ray's remote decorator
 def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
-
-    # Read the file and extract unique populations
+    # Read the file and extract unique populations while preserving order
     with open(pop_file_path, "r") as file:
-        # Skip the header
-        lines = file.readlines()[1:]
-        # Extract the population column
+        lines = file.readlines()[1:]  # Skip header
         populations = [line.strip().split("\t")[1] for line in lines]
-        # Get unique populations
-        unique_populations = list(set(populations))
 
-        print(f"Unique populations: {unique_populations}")
+        # Preserve order while ensuring uniqueness
+        unique_populations = list(dict.fromkeys(populations)) 
+
+        print(f"Unique populations (order preserved): {unique_populations}")
 
     ld_stats = moments.LD.Parsing.compute_ld_statistics(
         vcf_file,
         rec_map_file=flat_map_path,
         pop_file=pop_file_path,
-        pops = ['N1', 'N2'],
-        # pops=unique_populations,
+        pops=unique_populations,  # Now correctly ordered
         r_bins=r_bins,
         report=False,
-        use_h5 = False
+        use_h5=False
     )
 
     return ld_stats
-
-# def compute_ld_stats_parallel(folderpath, num_reps, r_bins):
-
-#     #     print("parsing LD statistics in parallel")
-#     # # Submit tasks to Ray in parallel using .remote()
-#     # futures = [get_LD_stats.remote(ii, r_bins) for ii in range(num_reps)]
-#     # # Gather results with ray.get() to collect them once the tasks are finished
-#     # ld_stats = ray.get(futures)
-#     # # Optionally, you can convert the list of results into a dictionary with indices
-#     # ld_stats_dict = {ii: result for ii, result in enumerate(ld_stats)}
-
-
-#     flat_map_path = os.path.join(folderpath, "flat_map.txt")
-#     pop_file_path = os.path.join(folderpath, "samples.txt")
-#     vcf_files = [
-#         os.path.join(folderpath, f"rep.{rep_ii}.vcf.gz")
-#         for rep_ii in range(num_reps)
-#     ]
-
-#     # Launch the tasks in parallel using Ray
-#     futures = [
-#         get_LD_stats.remote(vcf_file, r_bins, flat_map_path, pop_file_path)
-#         for vcf_file in vcf_files
-#     ]
-
-#     # Wait for all the tasks to complete and retrieve results
-#     results = ray.get(futures)
-#     return results
 
 def compute_ld_stats_sequential(flat_map_path, pop_file_path, metadata_path, r_bins):
     print("=== Computing LD statistics sequentially ===")
@@ -393,45 +343,6 @@ def _optimize_dadi(
     Uses the diffusion SFS from dadi.
     """
 
-    # 1) Convert real-space bounds to z-space
-    # lb_z = norm(lower_bound, mean, stddev)
-    # ub_z = norm(upper_bound, mean, stddev)
-
-    # print(f'init_z: {init_z}')
-    # print(f'lb_z: {lb_z}')
-    # print(f'ub_z: {ub_z}')
-    # print(f'mean: {mean}')
-    # print(f'stddev: {stddev}')
-    # print(f'Unnormed: {unnorm(init_z, mean, stddev)}')
-
-    # 2) Define wrapper function for dadi optimization in z-space
-    # def z_wrapper(z_params, ns, pts):
-    #     scaled_params = unnorm(z_params, mean, stddev)
-    #     # print(f'unscaled Parameters are: {scaled_params}')
-    #     return diffusion_sfs_dadi(
-    #         scaled_params,
-    #         sample_sizes_fit,
-    #         demographic_model,
-    #         mutation_rate,
-    #         sequence_length,
-    #         pts
-    #     )
-
-    # # 3) Extrapolation function
-    # func_ex = dadi.Numerics.make_extrap_log_func(z_wrapper)
-
-    # opt_params_z, ll_value = dadi.Inference.opt(
-    #     init_z,
-    #     sfs,
-    #     func_ex,
-    #     pts=pts_ext,
-    #     lower_bound=lower_bound,
-    #     upper_bound=upper_bound,
-    #     algorithm=nlopt.LN_BOBYQA,  # NLopt BOBYQA algorithm
-    #     maxeval=1000,             # Increase maxeval for higher accuracy
-    #     verbose=1
-    # )
-
     def raw_wrapper(scaled_params, ns, pts):
         # scaled_params = unnorm(z_params, mean, stddev)
         # print(f'unscaled Parameters are: {scaled_params}')
@@ -447,6 +358,9 @@ def _optimize_dadi(
     # 3) Extrapolation function
     func_ex = dadi.Numerics.make_extrap_func(raw_wrapper)
 
+    print(f'Lower bound: {lower_bound}')
+    print(f'Upper bound: {upper_bound}')
+
     # 3) Run the optimizer in z-space
     xopt = dadi.Inference.optimize_log_powell(
         p_guess,
@@ -461,24 +375,6 @@ def _optimize_dadi(
         full_output=True,
         maxiter=1000
     )
-
-    # 3) Run the optimizer in z-space
-    # xopt = dadi.Inference.optimize_log_powell(
-    #     init_z,
-    #     sfs,
-    #     lambda z, n, pts: z_wrapper(z, n, pts),  # Accept pts here!
-    #     pts=pts_ext,
-    #     lower_bound=lb_z,
-    #     upper_bound=ub_z,
-    #     multinom=False,
-    #     verbose=10,
-    #     flush_delay=0.0,
-    #     full_output=True
-    # )
-
-    # 4) Convert best-fit from z-space to real (scaled) space
-    # fitted_params = unnorm(xopt[0], mean, stddev)
-    # ll_value = xopt[1]
 
     fitted_params = xopt[0]
     ll_value = xopt[1]
@@ -569,7 +465,7 @@ def run_inference_dadi(
     elif demographic_model == "split_isolation_model":
         pop_ids = ['N1', 'N2']
     elif demographic_model == "bottleneck_model":
-        pop_ids = ['N']
+        pop_ids = ['N0']
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
@@ -601,19 +497,9 @@ def run_inference_dadi(
     pts_ext = [max(ns) + 60, max(ns) + 70, max(ns) + 80]
 
     # 4) Perturb the initial guess to avoid local minima
-    p_guess = moments.Misc.perturb_params(
-        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
-    )
-
-    # 5) Convert that guess to z-space
-    init_z = norm(p_guess, mean, stddev)
-    lower_bound_z = norm(lower_bound, mean, stddev)
-    upper_bound_z = norm(upper_bound, mean, stddev)
-
-    print(f'Initial guess in z-space: {init_z}')
-    print(f'Lower bound in z-space: {lower_bound_z}')
-    print(f'Upper bound in z-space: {upper_bound_z}')
-
+    # p_guess = moments.Misc.perturb_params(
+    #     p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
+    # )
     # 6) Launch the optimization in a separate process
     queue = multiprocessing.Queue()
     process = multiprocessing.Process(
@@ -648,7 +534,7 @@ def run_inference_dadi(
     print(f"Best-fit scaled params: {opt_params_scaled}")
     print(f"Log-likelihood: {ll_value}")
 
-    # 8) Generate the model SFS using diffusion_sfs_dadi
+    # 8) Generate the model SFS using diffusion_sfs_dadi #TODO: This may fail for the bottleneck. Need to check that this works. 
     model_sfs = diffusion_sfs_dadi(
         opt_params_scaled,  # Best-fit parameters from optimization
         sample_sizes_fit,   # Sample sizes as an OrderedDict
@@ -660,11 +546,6 @@ def run_inference_dadi(
 
     # 9) Compute best-fit theta
     opt_theta = dadi.Inference.optimal_sfs_scaling(model_sfs, sfs)
-    # print(f"Best-fit theta = {opt_theta}")
-
-    # # 10) Convert theta to N_ref
-    # N_ref = opt_theta / (4.0 * mutation_rate * length)
-    # print(f"Estimated N_ref = {N_ref}")
 
     # 11) Build dictionary. E.g. for split_migration_model:
     if demographic_model == "split_migration_model":
@@ -701,13 +582,14 @@ def run_inference_dadi(
             "ll": ll_value,
         }
     elif demographic_model == "bottleneck_model":
+        print(f'opt_params_scaled: {opt_params_scaled}')
         # e.g. (nuB, nuF, T1, T2)
-        nuB, nuF, T1, T2 = opt_params_scaled
+        N0, nuB, nuF, T1, T2 = opt_params_scaled
         opt_params_dict = {
-            "N0": N_ref,
-            "Nb": nuB * N_ref,
-            "N_recover": nuF * N_ref,
-            "t_bottleneck_end": T1 * 2 * N_ref,  # or however your model is set
+            "N0": N0,
+            "Nb": nuB,
+            "N_recover": nuF,
+            "t_bottleneck_end": T2,  # or however your model is set
             "ll": ll_value,
         }
     else:
@@ -738,10 +620,15 @@ def run_inference_moments(
     mean = [(l + u) / 2 for (l, u) in zip(lower_bound, upper_bound)]
     stddev = [(u - l) / np.sqrt(12) for (l, u) in zip(lower_bound, upper_bound)]
 
+    # Assuming that t_bottleneck_start will always be at index 2
+    if demographic_model == "bottleneck_model":
+        mean[2] = lower_bound[2]
+        stddev[2] = 1.0
+
     # Perturb the initial guess
-    p_guess = moments.Misc.perturb_params(
-        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
-    )
+    # p_guess = moments.Misc.perturb_params(
+    #     p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
+    # )
 
     # Convert to z-space
     init_z = norm(p_guess, mean, stddev)
@@ -785,7 +672,16 @@ def run_inference_moments(
 
     # Compute FIM if needed
     upper_triangular = None
-    model_func=demographic_models.split_isolation_model_moments #TODO: NEED TO CHANGE!!!!!!!!!!!!!!!!!!!
+
+    if demographic_model == "split_migration_model":
+        model_func = demographic_models.split_migration_model_moments
+    elif demographic_model == "split_isolation_model":
+        model_func = demographic_models.split_isolation_model_moments
+    elif demographic_model == "bottleneck_model":
+        model_func = demographic_models.three_epoch_fixed_moments
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
     if use_FIM:
         H = _get_godambe(
             model_func,
@@ -891,12 +787,21 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     )
     y = moments.LD.Inference.sigmaD2(y)
 
-    fig = moments.LD.Plotting.plot_ld_curves_comp(
-        y,
-        mv["means"][:-1],
-        mv["varcovs"][:-1],
-        rs=r_bins,
-        stats_to_plot=[
+    # Determine which LD statistics to plot based on the demographic model
+    if demographic_model == "bottleneck_model":
+        stats_to_plot = [
+            ["DD_0_0"],
+            ["Dz_0_0_0"],
+            ["pi2_0_0_0_0"],
+        ]
+        labels = [
+            [r"$D_0^2$"],
+            [r"$Dz_{0,0,0}$"],
+            [r"$\pi_{2;0,0,0,0}$"],
+        ]
+
+    elif demographic_model in ["split_isolation_model", "split_migration_model"]:
+        stats_to_plot = [
             ["DD_0_0"],
             ["DD_0_1"],
             ["DD_1_1"],
@@ -906,8 +811,8 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
             ["pi2_0_0_1_1"],
             ["pi2_0_1_0_1"],
             ["pi2_1_1_1_1"],
-        ],
-        labels=[
+        ]
+        labels = [
             [r"$D_0^2$"],
             [r"$D_0 D_1$"],
             [r"$D_1^2$"],
@@ -917,12 +822,22 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
             [r"$\pi_{2;0,0,1,1}$"],
             [r"$\pi_{2;0,1,0,1}$"],
             [r"$\pi_{2;1,1,1,1}$"],
-        ],
+        ]
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+
+    # Plot LD curves
+    fig = moments.LD.Plotting.plot_ld_curves_comp(
+        y,
+        mv["means"][:-1],
+        mv["varcovs"][:-1],
+        rs=r_bins,
+        stats_to_plot=stats_to_plot,
+        labels=labels,
         rows=3,
         plot_vcs=True,
         show=False,
         fig_size=(6, 4),
-        # REMOVE `output=output_path`
     )
 
     p_guess_scaled = real_to_dadi_params(p_guess, demographic_model)
@@ -949,16 +864,21 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
         lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['t_split'], lower_bound_scaled['m']]
         upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['t_split'], upper_bound_scaled['m']]
     elif demographic_model == "bottleneck_model":
-        p_guess_scaled = [p_guess_scaled['Nb'], p_guess_scaled['N_recover'], p_guess_scaled['t_bottleneck_end']]
-        lower_bound_scaled = [lower_bound_scaled['Nb'], lower_bound_scaled['N_recover'], lower_bound_scaled['t_bottleneck_end']]
-        upper_bound_scaled = [upper_bound_scaled['Nb'], upper_bound_scaled['N_recover'], upper_bound_scaled['t_bottleneck_end']]
+        p_guess_scaled = [p_guess_scaled['nuB'], p_guess_scaled['nuF'], p_guess_scaled['t_bottleneck_end']]
+        lower_bound_scaled = [lower_bound_scaled['nuB'], lower_bound_scaled['nuF'], lower_bound_scaled['t_bottleneck_end']]
+        upper_bound_scaled = [upper_bound_scaled['nuB'], upper_bound_scaled['nuF'], upper_bound_scaled['t_bottleneck_end']]
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     p_guess_scaled = moments.LD.Util.perturb_params(p_guess_scaled, fold=0.1)  # type: ignore
 
     # Append the real ancestral size to the end of p_guess_scaled
-    p_guess_scaled = np.append(p_guess_scaled, p_guess['Na'])
+    if demographic_model == "split_migration_model":
+        p_guess_scaled = np.append(p_guess_scaled, p_guess['N0'])
+    elif demographic_model == "split_isolation_model":
+        p_guess_scaled = np.append(p_guess_scaled, p_guess['Na'])
+    elif demographic_model == "bottleneck_model":
+        p_guess_scaled = np.append(p_guess_scaled, p_guess['N0'])
 
     print(f'Initial guess in real space: {p_guess}')
     print(f'Initial guess in scaled space: {p_guess_scaled}')
