@@ -81,7 +81,7 @@ def three_epoch_fixed_moments(params, ns, pop_ids=None):
     if pop_ids is not None and len(pop_ids) != 1:
         raise ValueError("pop_ids must have length 1")
 
-    nuB, nuF, TF = params  # TB is now fixed, so it's removed from params.
+    nuB, nuF, _, TF = params  # TB is now fixed, so it's removed from params.
     sts = moments.LinearSystem_1D.steady_state_1D(ns[0])
     fs = moments.Spectrum(sts, pop_ids=pop_ids)
 

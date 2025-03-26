@@ -122,7 +122,8 @@ def diffusion_sfs_moments(parameters: list[float],
             "N0": parameters[0],
             "Nb": parameters[1],
             "N_recover": parameters[2],
-            "t_bottleneck_end": parameters[3],
+            "t_bottleneck_start": parameters[3],
+            "t_bottleneck_end": parameters[4],
         }
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
@@ -500,6 +501,8 @@ def run_inference_dadi(
     # p_guess = moments.Misc.perturb_params(
     #     p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     # )
+
+    p_guess = p0.copy()
     # 6) Launch the optimization in a separate process
     queue = multiprocessing.Queue()
     process = multiprocessing.Process(
@@ -620,15 +623,21 @@ def run_inference_moments(
     mean = [(l + u) / 2 for (l, u) in zip(lower_bound, upper_bound)]
     stddev = [(u - l) / np.sqrt(12) for (l, u) in zip(lower_bound, upper_bound)]
 
-    # Assuming that t_bottleneck_start will always be at index 2
+    # Assuming that t_bottleneck_start will always be at index 3
     if demographic_model == "bottleneck_model":
-        mean[2] = lower_bound[2]
-        stddev[2] = 1.0
+        mean[3] = lower_bound[3]
+        stddev[3] = 1.0
+
+    print(f'Mean is: {mean}')
+    print(f'Stddev is: {stddev}')
 
     # Perturb the initial guess
     # p_guess = moments.Misc.perturb_params(
     #     p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     # )
+
+    p_guess = p0.copy()
+    print(f'Initial guess in real-space: {p_guess}')
 
     # Convert to z-space
     init_z = norm(p_guess, mean, stddev)
@@ -683,6 +692,13 @@ def run_inference_moments(
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     if use_FIM:
+        if demographic_model == "bottleneck_model":
+        #     # For here I want to exclude the optimized t_bottleneck_start. Need to subset the list to not look at index 3 and index 0
+        #     opt_pars = [param for i, param in enumerate(opt_params_scaled) if i not in {0, 3}]
+        #     real_to_dadi_params(opt_pars, demographic_model, parameter_names=['Nb', 'N_recover', 't_bottleneck_end'])
+            from src.demographic_models import set_TB_fixed 
+            set_TB_fixed(opt_params_scaled[3])
+
         H = _get_godambe(
             model_func,
             all_boot=[],
@@ -724,12 +740,13 @@ def run_inference_moments(
         }
 
     elif demographic_model == "bottleneck_model":
-        n0, nb, n_recover, t_bottleneck_end = opt_params_scaled
+        n0, nb, n_recover, t_bottleneck_start, t_bottleneck_end = opt_params_scaled
 
         opt_params_dict = {
             "N0": n0,
             "Nb": nb,
             "N_recover": n_recover,
+            "t_bottleneck_start": t_bottleneck_start,
             "t_bottleneck_end": t_bottleneck_end,
             "ll": ll_value
         }
