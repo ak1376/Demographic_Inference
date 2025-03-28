@@ -38,6 +38,14 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
 
+    if experiment_config["demographic_model"] == "bottleneck_model":
+        fixed_tb_start = sampled_params['t_bottleneck_start']
+
+        # Set the same fixed value across all relevant fields
+        experiment_config["lower_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start
+        experiment_config["upper_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start
+        experiment_config["optimization_initial_guess"]["t_bottleneck_start"] = fixed_tb_start
+
     # It's strange because we also want to optimize the ancestral size but indirectly through theta. Therefore, the ancestral population size will not be an element in the upper or lower bounds
     param_order = experiment_config["parameter_names"]
     p0 = [experiment_config["optimization_initial_guess"][param] for param in param_order]
@@ -62,10 +70,6 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     # p0 = list(experiment_config['optimization_initial_guess'].values())
     # lower_bound = lower_bound[:]
     # upper_bound = upper_bound[:]
-
-    if experiment_config['demographic_model'] == "bottleneck_model":
-        # Extract the true TB value from sampled parameters
-        set_TB_fixed((sampled_params['t_bottleneck_start'] - sampled_params['t_bottleneck_end']) / (2 * sampled_params['N0']))
 
     # Conditional analysis based on provided functions
     if experiment_config["dadi_analysis"]:
