@@ -38,6 +38,10 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)
 
+    # Load in the sampled params
+    with open(sampled_params, "rb") as f:
+        sampled_params = pickle.load(f)
+
     if experiment_config["demographic_model"] == "bottleneck_model":
         fixed_tb_start = sampled_params['t_bottleneck_start']
 
@@ -62,10 +66,6 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     # Load in the SFS file
     with open(SFS, "rb") as f:
         SFS = pickle.load(f)
-
-    # Load in the sampled params
-    with open(sampled_params, "rb") as f:
-        sampled_params = pickle.load(f)
 
     # p0 = list(experiment_config['optimization_initial_guess'].values())
     # lower_bound = lower_bound[:]
