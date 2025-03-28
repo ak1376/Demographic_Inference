@@ -13,7 +13,7 @@
         "Na": 1000,
         "m": 1e-08
     },
-    "num_sims_pretrain": 10,
+    "num_sims_pretrain": 5000,
     "num_sims_inference": 1,
     "num_samples": {
         "N1": 10,
@@ -42,6 +42,12 @@
         "N2",
         "t_split",
         "m"
+    ],
+    "parameters_to_estimate": [
+        "Na",
+        "N1",
+        "N2",
+        "t_split"
     ],
     "optimization_initial_guess": {
         "Na": 10000,
