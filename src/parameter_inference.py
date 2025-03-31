@@ -362,30 +362,42 @@ def _optimize_dadi(
     print(f'Lower bound: {lower_bound}')
     print(f'Upper bound: {upper_bound}')
 
-    # 3) Run the optimizer in z-space
-    xopt = dadi.Inference.optimize_log_powell(
-        p_guess,
-        sfs,
-        func_ex,
-        pts=pts_ext,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-        multinom=False,
-        verbose=1,
-        flush_delay=0.0,
-        full_output=True,
-        maxiter=1000
+    fitted_params, ll_value = dadi.Inference.opt(
+    p_guess,
+    sfs, 
+    func_ex,
+    pts=pts_ext,
+    lower_bound=lower_bound,
+    upper_bound=upper_bound,
+    algorithm=nlopt.LN_BOBYQA,
+    maxeval=1000,
+    verbose=1
     )
 
-    fitted_params = xopt[0]
-    ll_value = xopt[1]
+    # # 3) Run the optimizer in z-space
+    # xopt = dadi.Inference.optimize_log_powell(
+    #     p_guess,
+    #     sfs,
+    #     func_ex,
+    #     pts=pts_ext,
+    #     lower_bound=lower_bound,
+    #     upper_bound=upper_bound,
+    #     multinom=False,
+    #     verbose=1,
+    #     flush_delay=0.0,
+    #     full_output=True,
+    #     maxiter=1000
+    # )
 
-    # fitted_params = unnorm(opt_params_z, mean, stddev)
-    print(f"Best-fit dadi params (real-space): {fitted_params}")
+    # fitted_params = xopt[0]
+    # ll_value = xopt[1]
 
-    # 5) Convert best-fit from z-space to real (scaled) space
-    # print(f'The initial guess in real space is: {unnorm(init_z, mean, stddev)}')
-    print(f'The optimized parameters in real space are : {fitted_params}')
+    # # fitted_params = unnorm(opt_params_z, mean, stddev)
+    # print(f"Best-fit dadi params (real-space): {fitted_params}")
+
+    # # 5) Convert best-fit from z-space to real (scaled) space
+    # # print(f'The initial guess in real space is: {unnorm(init_z, mean, stddev)}')
+    # print(f'The optimized parameters in real space are : {fitted_params}')
 
     # 6) Send them back to the parent process
     queue.put((fitted_params, ll_value))
@@ -426,7 +438,7 @@ def _optimize_moments(
         lower_bound=lb_z,
         upper_bound=ub_z,
         multinom=False,
-        verbose=10,
+        verbose=0,
         flush_delay=0.0,
         full_output=True
     )
@@ -485,14 +497,14 @@ def run_inference_dadi(
     stddev = [(u - l)/np.sqrt(12) for (l, u) in zip(lower_bound, upper_bound)]
 
     # 2) Pick the correct dadi model in scaled space
-    if demographic_model == "bottleneck_model":
-        model_func = demographic_models.three_epoch_fixed
-    elif demographic_model == "split_isolation_model":
-        model_func = demographic_models.split_isolation_model_dadi
-    elif demographic_model == "split_migration_model":
-        model_func = demographic_models.split_migration_model_dadi
-    else:
-        raise ValueError(f"Unsupported demographic model: {demographic_model}")
+    # if demographic_model == "bottleneck_model":
+    #     model_func = demographic_models.three_epoch_fixed
+    # elif demographic_model == "split_isolation_model":
+    #     model_func = demographic_models.split_isolation_model_dadi
+    # elif demographic_model == "split_migration_model":
+    #     model_func = demographic_models.split_migration_model_dadi
+    # else:
+    #     raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # 3) Setup grids for extrapolation
     pts_ext = [max(ns) + 60, max(ns) + 70, max(ns) + 80]

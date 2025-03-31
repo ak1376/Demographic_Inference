@@ -60,8 +60,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     print(f'The upper bound is: {upper_bound}')
     print(f'The lower bound is: {lower_bound}')
     
-    upper_bound = list(experiment_config['upper_bound_optimization'].values())
-    lower_bound = list(experiment_config['lower_bound_optimization'].values())
+    # upper_bound = list(experiment_config['upper_bound_optimization'].values())
+    # lower_bound = list(experiment_config['lower_bound_optimization'].values())
 
     # Load in the SFS file
     with open(SFS, "rb") as f:

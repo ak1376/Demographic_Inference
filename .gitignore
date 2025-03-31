@@ -21,3 +21,15 @@ moments_dadi_features/
 old_logs/
 model_results/
 model_1_results/
+big*
+genome_windows_test/
+ld_stats_test/
+organize_later/
+models/
+sims/
+simulation_results/
+combined_LD_inferences_test/
+MomentsLD*/
+*.zip
+debug_gather*
+split_isolation*
