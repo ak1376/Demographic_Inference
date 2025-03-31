@@ -1,51 +1,26 @@
 {
   "upper_bound_params": {
-    "N0": 20000,
-    "Nb": 1000,
-    "N_recover": 30000,
-    "t_bottleneck_start": 3000,
-    "t_bottleneck_end": 500
+    "N0": 30000,
+    "N1": 30000,
+    "N2": 30000,
+    "m12": 0.001,
+    "m21": 0.001,
+    "t_split": 20000
   },
   "lower_bound_params": {
-    "N0": 5000,
-    "Nb": 500,
-    "N_recover": 10000,
-    "t_bottleneck_start": 1000,
-    "t_bottleneck_end": 100
+    "N0": 100,
+    "N1": 100,
+    "N2": 100,
+    "m12": 0,
+    "m21": 0,
+    "t_split": 500
   },
-  "optimization_initial_guess": {
-    "N0": 10000,
-    "Nb": 800,
-    "N_recover": 20000,
-    "t_bottleneck_start": 2000,
-    "t_bottleneck_end": 300
-  },
-  "lower_bound_optimization": {
-    "N0": 5000,
-    "Nb": 500,
-    "N_recover": 10000,
-    "t_bottleneck_start": 1000,
-    "t_bottleneck_end": 100
-  },
-  "upper_bound_optimization": {
-    "N0": 20000,
-    "Nb": 1000,
-    "N_recover": 30000,
-    "t_bottleneck_start": 3000,
-    "t_bottleneck_end": 500
-  },
-  "parameter_names": [
-    "N0",
-    "Nb",
-    "N_recover",
-    "t_bottleneck_start",
-    "t_bottleneck_end"
-  ],
-  "num_samples": {
-    "N0": 20
-  },
-  "num_sims_pretrain": 1000,
+  "num_sims_pretrain": 100,
   "num_sims_inference": 1,
+  "num_samples": {
+    "N1": 15,
+    "N2": 8
+  },
   "dadi_analysis": true,
   "moments_analysis": true,
   "momentsLD_analysis": true,
@@ -54,7 +29,7 @@
   "genome_length": 100000000.0,
   "mutation_rate": 1.5e-08,
   "recombination_rate": 1.5e-08,
-  "seed": 42,
+  "seed": 295,
   "maxiter": 20,
   "normalization": true,
   "remove_outliers": true,
@@ -62,8 +37,48 @@
   "k": 3,
   "top_values_k": 2,
   "training_percentage": 0.5,
-  "demographic_model": "bottleneck_model",
-  "vcf_filepath": "/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz",
+  "demographic_model": "split_migration_model",
+  "parameter_names": [
+    "N0",
+    "N1",
+    "N2",
+    "m12",
+    "m21",
+    "t_split"
+  ],
+  "parameters_to_estimate": [
+    "N0",
+    "N1",
+    "N2",
+    "m12",
+    "m21",
+    "t_split"
+  ],
+  "optimization_initial_guess": {
+    "N0": 9200,
+    "N1": 6700,
+    "N2": 6000,
+    "m12": 0.0005,
+    "m21": 0.0005,
+    "t_split": 10000
+  },
+  "lower_bound_optimization": {
+    "N0": 100,
+    "N1": 100,
+    "N2": 100,
+    "m12": 0,
+    "m21": 0,
+    "t_split": 500
+  },
+  "upper_bound_optimization": {
+    "N0": 30000,
+    "N1": 30000,
+    "N2": 30000,
+    "m12": 0.001,
+    "m21": 0.001,
+    "t_split": 20000
+  },
+  "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-migration.vcf.gz",
   "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
   "popname": "wisent"
 }

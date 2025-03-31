@@ -11,6 +11,7 @@ import time
 import multiprocessing
 from collections import OrderedDict
 import nlopt
+import moments.LD as LD
 
 TIMEOUT_SECONDS = 300 * 60  # 20 minutes = 1200 seconds
 
@@ -780,6 +781,10 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
         demo_func = demographic_models.split_migration_model_momentsLD
         demes_func = demographic_models.split_migration_model_simulation
 
+    elif demographic_model == "island_model":
+        demo_func = LD.Demographics2D.island_model
+        demes_func = demographic_models.island_model_simulation
+
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
@@ -790,6 +795,8 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     if demographic_model == "bottleneck_model":
         y = moments.Demes.LD(g, sampled_demes=["N0"], rho=4 * sampled_params["N0"] * r_bins)
     elif demographic_model == "split_migration_model":
+        y = moments.Demes.LD(g, sampled_demes=["N1", "N2"], rho=4 * sampled_params["N0"] * r_bins)
+    elif demographic_model == "island_model":
         y = moments.Demes.LD(g, sampled_demes=["N1", "N2"], rho=4 * sampled_params["N0"] * r_bins)
     elif demographic_model == "split_isolation_model":
         y = moments.Demes.LD(g, sampled_demes=["N1", "N2"], rho=4 * sampled_params["Na"] * r_bins)
@@ -816,7 +823,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
             [r"$\pi_{2;0,0,0,0}$"],
         ]
 
-    elif demographic_model in ["split_isolation_model", "split_migration_model"]:
+    elif demographic_model in ["split_isolation_model", "split_migration_model", "island_model"]:
         stats_to_plot = [
             ["DD_0_0"],
             ["DD_0_1"],
@@ -872,9 +879,9 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     # p_guess_scaled is a dictionary. We need to be very careful when converting it to a list for optimization
 
     if demographic_model == "split_migration_model":
-        p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'],  p_guess_scaled['m12'], p_guess_scaled['m21']]
-        lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['t_split'], lower_bound_scaled['m12'], lower_bound_scaled['m21']]
-        upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['t_split'], upper_bound_scaled['m12'], upper_bound_scaled['m21']]
+        p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'],  p_guess_scaled['m12'], p_guess_scaled['m21'], p_guess_scaled['t_split']]
+        lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['m12'], lower_bound_scaled['m21'], lower_bound_scaled['t_split']]
+        upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['m12'], upper_bound_scaled['m21'], upper_bound_scaled['t_split']]
     elif demographic_model == "split_isolation_model":
         p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'], p_guess_scaled['m']]
         lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['t_split'], lower_bound_scaled['m']]
@@ -886,9 +893,9 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    # p_guess_scaled = moments.LD.Util.perturb_params(p_guess_scaled, fold=0.1)
-    # lower_bound_scaled = moments.LD.Util.perturb_params(lower_bound_scaled, fold=0.1) 
-    # upper_bound_scaled = moments.LD.Util.perturb_params(upper_bound_scaled, fold=0.1)
+    p_guess_scaled = moments.LD.Util.perturb_params(p_guess_scaled, fold=0.1)
+    lower_bound_scaled = moments.LD.Util.perturb_params(lower_bound_scaled, fold=0.1) 
+    upper_bound_scaled = moments.LD.Util.perturb_params(upper_bound_scaled, fold=0.1)
 
     # Append the real ancestral size to the end of p_guess_scaled
     if demographic_model == "split_migration_model":
@@ -902,8 +909,8 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
 
     # print(f'Initial guess in real space: {p_guess}')
 
-    lower_bound_scaled = [5000/8000, 5000/8000, 0.001/(2*8000), 0.001/(2*8000), 1500/(2*8000)]
-    upper_bound_scaled = [8000/10000, 8000/10000, 0.005/(2*10000), 0.005/(2*10000), 20000/(2*10000)]
+    # lower_bound_scaled = [5000/8000, 5000/8000, 0.001/(2*8000), 0.001/(2*8000), 1500/(2*8000)]
+    # upper_bound_scaled = [8000/10000, 8000/10000, 0.005/(2*10000), 0.005/(2*10000), 20000/(2*10000)]
 
     print(f'Lower bound in scaled space: {lower_bound_scaled}')
     print(f'Initial guess in scaled space: {p_guess_scaled}')
@@ -911,14 +918,14 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
 
     if demographic_model == "split_migration_model":
         # fixed_params=[None, None, p_guess_scaled[2], p_guess_scaled[3], None, None]
-        opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
-            p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=3000, upper_bound=[0.8, 0.8, 10, 10, 1, 10000]
+        opt_params, ll = moments.LD.Inference.optimize_log_powell(  # type: ignore
+            p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=3000
         )
     
     else:
         # Perform optimization
         opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
-            p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=3000
+            p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=3000, lower_bound=lower_bound_scaled, upper_bound=upper_bound_scaled
         )
 
     ll_list.append(ll)
