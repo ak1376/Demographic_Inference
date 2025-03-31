@@ -32,22 +32,26 @@ def postprocessing(experiment_config, training_features, training_targets, valid
 
         print(f"\nProcessing {stage} data:")
 
-        # ====== 1. Outlier Removal ======
-        mask = np.ones(len(features), dtype=bool)
-        for param in param_types:
-            lb = lower_bounds[param]
-            ub = upper_bounds[param]
-            param_cols = [
-                col for col in features.columns
-                if col.endswith(f'_{param}')
-                and 'FIM_element' not in col
-                and 'SFS' not in col
-            ]
-            for col in param_cols:
-                mask &= (features[col] >= lb) & (features[col] <= ub)
-
-        n_outliers = (~mask).sum()
-        print(f"Removed {n_outliers} outliers from {stage} set.")
+        # ====== 1. Outlier Removal (skip for split_migration_model) ======
+        if experiment_cfg['demographic_model'] == 'split_migration_model':
+            print("Skipping outlier removal for split_migration_model.")
+            mask = np.ones(len(features), dtype=bool)
+        else:
+            mask = np.ones(len(features), dtype=bool)
+            for param in param_types:
+                lb = lower_bounds[param]
+                ub = upper_bounds[param]
+                param_cols = [
+                    col for col in features.columns
+                    if col.endswith(f'_{param}')
+                    and 'FIM_element' not in col
+                    and 'SFS' not in col
+                ]
+                for col in param_cols:
+                    mask &= (features[col] >= lb) & (features[col] <= ub)
+            n_outliers = (~mask).sum()
+            print(f"Removed {n_outliers} outliers from {stage} set.")
+        
         features = features[mask].reset_index(drop=True)
         targets = targets[mask].reset_index(drop=True)
 
@@ -93,6 +97,7 @@ def postprocessing(experiment_config, training_features, training_targets, valid
             }
 
     return postprocessing_dict
+
 
 
 if __name__ == "__main__":

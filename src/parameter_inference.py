@@ -12,7 +12,7 @@ import multiprocessing
 from collections import OrderedDict
 import nlopt
 
-TIMEOUT_SECONDS = 20 * 60  # 20 minutes = 1200 seconds
+TIMEOUT_SECONDS = 300 * 60  # 20 minutes = 1200 seconds
 
 def norm(p, mean, stddev):
     return [(x - m) / s for x, m, s in zip(p, mean, stddev)]
@@ -495,7 +495,7 @@ def run_inference_dadi(
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # 3) Setup grids for extrapolation
-    pts_ext = [max(ns) + 60, max(ns) + 70, max(ns) + 80]
+    pts_ext = [max(ns) + 20, max(ns) + 30, max(ns) + 40]
 
     # 4) Perturb the initial guess to avoid local minima
     # p_guess = moments.Misc.perturb_params(
@@ -523,7 +523,6 @@ def run_inference_dadi(
         )
     )
     process.start()
-    TIMEOUT_SECONDS = 20*60  # e.g. 20 mins
     process.join(TIMEOUT_SECONDS)
 
     if process.is_alive():
@@ -887,23 +886,40 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
-    p_guess_scaled = moments.LD.Util.perturb_params(p_guess_scaled, fold=0.1)  # type: ignore
+    # p_guess_scaled = moments.LD.Util.perturb_params(p_guess_scaled, fold=0.1)
+    # lower_bound_scaled = moments.LD.Util.perturb_params(lower_bound_scaled, fold=0.1) 
+    # upper_bound_scaled = moments.LD.Util.perturb_params(upper_bound_scaled, fold=0.1)
 
     # Append the real ancestral size to the end of p_guess_scaled
     if demographic_model == "split_migration_model":
         p_guess_scaled = np.append(p_guess_scaled, p_guess['N0'])
+        lower_bound_scaled = np.append(lower_bound_scaled, experiment_config["lower_bound_optimization"]['N0'])
+        upper_bound_scaled = np.append(upper_bound_scaled, experiment_config["upper_bound_optimization"]['N0'])
     elif demographic_model == "split_isolation_model":
         p_guess_scaled = np.append(p_guess_scaled, p_guess['Na'])
     elif demographic_model == "bottleneck_model":
         p_guess_scaled = np.append(p_guess_scaled, p_guess['N0'])
 
-    print(f'Initial guess in real space: {p_guess}')
-    print(f'Initial guess in scaled space: {p_guess_scaled}')
+    # print(f'Initial guess in real space: {p_guess}')
 
-    # Perform optimization
-    opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
-        p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=1000
-    )
+    lower_bound_scaled = [5000/8000, 5000/8000, 0.001/(2*8000), 0.001/(2*8000), 1500/(2*8000)]
+    upper_bound_scaled = [8000/10000, 8000/10000, 0.005/(2*10000), 0.005/(2*10000), 20000/(2*10000)]
+
+    print(f'Lower bound in scaled space: {lower_bound_scaled}')
+    print(f'Initial guess in scaled space: {p_guess_scaled}')
+    print(f'Upper bound in scaled space: {upper_bound_scaled}')
+
+    if demographic_model == "split_migration_model":
+        # fixed_params=[None, None, p_guess_scaled[2], p_guess_scaled[3], None, None]
+        opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
+            p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=3000, upper_bound=[0.8, 0.8, 10, 10, 1, 10000]
+        )
+    
+    else:
+        # Perform optimization
+        opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(  # type: ignore
+            p_guess_scaled, [mv["means"], mv["varcovs"]], [demo_func], rs=r_bins, verbose=1, maxiter=3000
+        )
 
     ll_list.append(ll)
 
@@ -943,6 +959,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
         print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
 
     elif demographic_model == "split_migration_model":
+        print(f'opt_params: {opt_params}')
         physical_units = moments.LD.Util.rescale_params(
             opt_params, ["nu", "nu", "m", "m", "T", "Ne"]  # Use "m" for both migration rates
         )
