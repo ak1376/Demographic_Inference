@@ -370,7 +370,7 @@ def _optimize_dadi(
     lower_bound=lower_bound,
     upper_bound=upper_bound,
     algorithm=nlopt.LN_BOBYQA,
-    maxeval=1000,
+    maxeval=5000,
     verbose=1
     )
 

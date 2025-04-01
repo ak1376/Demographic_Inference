@@ -74,6 +74,7 @@ for TASK_ID in $(seq $BATCH_START $BATCH_END); do
         --snakefile /projects/kernlab/akapoor/Demographic_Inference/Snakefile \
         --directory /gpfs/projects/kernlab/akapoor/Demographic_Inference \
         --rerun-incomplete \
+        --nolock \
         "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_${TASK_ID}.pkl" \
         "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/sampled_params_metadata_${TASK_ID}.txt" \
         "/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/SFS_sim_${TASK_ID}.pkl" \

@@ -28,7 +28,7 @@ echo "Current directory: $(pwd)"
 
 # Define batch size and total simulations
 BATCH_SIZE=1
-TOTAL_SIMS=100
+TOTAL_SIMS=5000
 
 # Calculate batch start and end
 BATCH_START=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))

@@ -69,7 +69,7 @@ def main(experiment_config_file, sim_directory, software_inferences_dir, moments
         experiment_config = json.load(f)
     print("Configuration loaded.")
 
-    parameters = experiment_config['parameter_names']
+    parameters = experiment_config['parameters_to_estimate']
     replicates = experiment_config.get('top_values_k', 1)  # Default to 1 if not specified
     lower_bounds = experiment_config.get('lower_bound_params', {})
     upper_bounds = experiment_config.get('upper_bound_params', {})
