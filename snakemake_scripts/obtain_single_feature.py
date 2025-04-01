@@ -46,8 +46,8 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
         fixed_tb_start = sampled_params['t_bottleneck_start']
 
         # Set the same fixed value across all relevant fields
-        experiment_config["lower_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start
-        experiment_config["upper_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start
+        experiment_config["lower_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start - 500
+        experiment_config["upper_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start + 500
         experiment_config["optimization_initial_guess"]["t_bottleneck_start"] = fixed_tb_start
 
     # It's strange because we also want to optimize the ancestral size but indirectly through theta. Therefore, the ancestral population size will not be an element in the upper or lower bounds

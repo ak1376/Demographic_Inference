@@ -362,38 +362,40 @@ def _optimize_dadi(
     print(f'Lower bound: {lower_bound}')
     print(f'Upper bound: {upper_bound}')
 
-    fitted_params, ll_value = dadi.Inference.opt(
-    p_guess,
-    sfs, 
-    func_ex,
-    pts=pts_ext,
-    lower_bound=lower_bound,
-    upper_bound=upper_bound,
-    algorithm=nlopt.LN_BOBYQA,
-    maxeval=5000,
-    verbose=1
-    )
-
-    # # 3) Run the optimizer in z-space
-    # xopt = dadi.Inference.optimize_log_powell(
-    #     p_guess,
-    #     sfs,
-    #     func_ex,
-    #     pts=pts_ext,
-    #     lower_bound=lower_bound,
-    #     upper_bound=upper_bound,
-    #     multinom=False,
-    #     verbose=1,
-    #     flush_delay=0.0,
-    #     full_output=True,
-    #     maxiter=1000
+    # fitted_params, ll_value = dadi.Inference.opt(
+    # p_guess,
+    # sfs, 
+    # func_ex,
+    # pts=pts_ext,
+    # lower_bound=lower_bound,
+    # upper_bound=upper_bound,
+    # algorithm=nlopt.LN_BOBYQA,
+    # maxeval=5000,
+    # verbose=1
     # )
 
-    # fitted_params = xopt[0]
-    # ll_value = xopt[1]
 
-    # # fitted_params = unnorm(opt_params_z, mean, stddev)
-    # print(f"Best-fit dadi params (real-space): {fitted_params}")
+
+    # # 3) Run the optimizer in z-space
+    xopt = dadi.Inference.optimize_log_powell(
+        p_guess,
+        sfs,
+        func_ex,
+        pts=pts_ext,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        multinom=False,
+        verbose=True,
+        flush_delay=0.5,
+        full_output=True,
+        maxiter=1000
+    )
+
+    fitted_params = xopt[0]
+    ll_value = xopt[1]
+
+    # fitted_params = unnorm(opt_params_z, mean, stddev)
+    print(f"Best-fit dadi params (real-space): {fitted_params}")
 
     # # 5) Convert best-fit from z-space to real (scaled) space
     # # print(f'The initial guess in real space is: {unnorm(init_z, mean, stddev)}')
@@ -885,9 +887,9 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     # p_guess_scaled is a dictionary. We need to be very careful when converting it to a list for optimization
 
     if demographic_model == "split_migration_model":
-        p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'],  p_guess_scaled['m12'], p_guess_scaled['m21']]
-        lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['t_split'], lower_bound_scaled['m12'], lower_bound_scaled['m21']]
-        upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['t_split'], upper_bound_scaled['m12'], upper_bound_scaled['m21']]
+        p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['m12'], p_guess_scaled['m21'], p_guess_scaled['t_split']]
+        lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['m12'], lower_bound_scaled['m21'], lower_bound_scaled['t_split']]
+        upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['m12'], upper_bound_scaled['m21'], upper_bound_scaled['t_split']]
     elif demographic_model == "split_isolation_model":
         p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['t_split'], p_guess_scaled['m']]
         lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['t_split'], lower_bound_scaled['m']]
