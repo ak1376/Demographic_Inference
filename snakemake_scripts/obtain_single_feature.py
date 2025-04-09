@@ -42,14 +42,6 @@ def obtain_feature(SFS, sampled_params, experiment_config, sim_directory, sim_nu
     with open(sampled_params, "rb") as f:
         sampled_params = pickle.load(f)
 
-    if experiment_config["demographic_model"] == "bottleneck_model":
-        fixed_tb_start = sampled_params['t_bottleneck_start']
-
-        # Set the same fixed value across all relevant fields
-        experiment_config["lower_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start - 500
-        experiment_config["upper_bound_optimization"]["t_bottleneck_start"] = fixed_tb_start + 500
-        experiment_config["optimization_initial_guess"]["t_bottleneck_start"] = fixed_tb_start
-
     # It's strange because we also want to optimize the ancestral size but indirectly through theta. Therefore, the ancestral population size will not be an element in the upper or lower bounds
     param_order = experiment_config["parameter_names"]
     p0 = [experiment_config["optimization_initial_guess"][param] for param in param_order]

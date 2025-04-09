@@ -8,18 +8,19 @@ from moments.LD.LDstats_mod import LDstats
 import moments.LD.Numerics as NumericsMomentsLD
 def bottleneck_model(sampled_params):
 
-    N0, nuB, nuF, t_bottleneck_start, t_bottleneck_end = (
-        sampled_params["N0"],
-        sampled_params["Nb"],
+    N0 = 10000
+    nuB = 4000
+
+    nuF, t_bottleneck_start, t_bottleneck_end = (
         sampled_params["N_recover"],
-        sampled_params["t_bottleneck_start"],
+        sampled_params['t_bottleneck_start'],
         sampled_params["t_bottleneck_end"],
     )
     b = demes.Builder()
     b.add_deme(
         "N0",
         epochs=[
-            dict(start_size=N0, end_time=t_bottleneck_start),
+            dict(start_size=N0, end_time=t_bottleneck_start), # I could change this to anything, so long as it's greater than the maximum value of t_bottleneck_end
             dict(start_size=nuB, end_time=t_bottleneck_end),
             dict(start_size=nuF, end_time=0),
         ],
@@ -31,11 +32,14 @@ def bottleneck_model(sampled_params):
 # Define TB_fixed globally before calling optimization
 TB_fixed = None  # Default to None
 
-def set_TB_fixed(value):
+def set_TB_fixed(t_bottleneck_end, N0, t_bottleneck_start = 2000):
     """
     Set the global TB_fixed variable.
     """
     global TB_fixed
+
+    value = (t_bottleneck_start - t_bottleneck_end)/(2*N0)
+
     TB_fixed = value
 
 def three_epoch_fixed(params, ns, pts):
@@ -58,7 +62,7 @@ def three_epoch_fixed(params, ns, pts):
     return fs
 
 # Update parameter names to reflect that TB is no longer optimized
-three_epoch_fixed.__param_names__ = ['nuB', 'nuF', 'TF']
+three_epoch_fixed.__param_names__ = ['nuF', 'TB', 'TF']
 
 
 def three_epoch_fixed_moments(params, ns, pop_ids=None):
@@ -76,40 +80,83 @@ def three_epoch_fixed_moments(params, ns, pop_ids=None):
     :param ns: Number of samples in resulting Spectrum.
     :param pop_ids: Optional list of length one specifying the population ID.
     """
-    if TB_fixed is None:
-        raise ValueError("TB_fixed is not set before calling three_epoch_fixed")
     if pop_ids is not None and len(pop_ids) != 1:
         raise ValueError("pop_ids must have length 1")
 
-    nuB, nuF, _, TF = params  # TB is now fixed, so it's removed from params.
+    N_recover, t_bottleneck_start, t_bottleneck_end = params
+    N0 = 10000
+    N_bottleneck = 4000
+
+    # Convert the parameters to dadi units 
+    TB = (t_bottleneck_start - t_bottleneck_end)/(2*N0)
+    TF = (t_bottleneck_end)/(2*N0)
+    nuB = N_bottleneck/N0
+    nuF = N_recover/N0
+
     sts = moments.LinearSystem_1D.steady_state_1D(ns[0])
     fs = moments.Spectrum(sts, pop_ids=pop_ids)
 
     # Use TB_fixed instead of optimizing TB
-    fs.integrate([nuB], TB_fixed, 0.01)
+    fs.integrate([nuB], TB, 0.01)
     fs.integrate([nuF], TF, 0.01)
     
     return fs
 
-# Define TB_fixed globally before calling optimization
-T1_fixed = None  # Default to None
+# # Define TB_fixed globally before calling optimization
+# T1_fixed = None  # Default to None
 
-def set_T1_fixed(value):
-    """
-    Set the fixed value for T1 (bottleneck duration in coalescent units).
-    """
-    global T1_fixed
-    T1_fixed = value
+# def set_T1_fixed(value):
+#     """
+#     Set the fixed value for T1 (bottleneck duration in coalescent units).
+#     """
+#     global T1_fixed
+#     T1_fixed = value
+
+# def three_epoch_fixed_MomentsLD(params, order=2, rho=None, theta=0.001, pop_ids=None):
+#     """
+#     Three-epoch bottleneck model with a fixed bottleneck duration.
+
+#     :param params: The relative sizes and integration times of recent epochs,
+#         in genetic units: (nuB, nuF, T2).
+#         - nuB: Bottleneck population size relative to ancestral size (N0).
+#         - nuF: Final recovered population size relative to N0.
+#         - T2: Duration of the recovery phase (in genetic units).
+#     :type params: list
+#     :param order: The maximum order of the LD statistics. Defaults to 2.
+#     :type order: int
+#     :param rho: Population-scaled recombination rate (4Nr),
+#         given as scalar or list of rhos.
+#     :type rho: float or list of floats, optional
+#     :param theta: Population-scaled mutation rate (4Nu). Defaults to 0.001.
+#     :type theta: float
+#     :param pop_ids: List of population IDs of length 1.
+#     :type pop_ids: list of str, optional
+#     """
+#     if TB_fixed is None:
+#         raise ValueError("TB_fixed is not set before calling three_epoch_fixed_MomentsLD")
+
+#     if pop_ids is not None and len(pop_ids) != 1:
+#         raise ValueError("pop_ids must have length 1")
+    
+#     nuB, nuF, T2 = params  # T1 is removed from params and fixed globally
+
+#     Y = NumericsMomentsLD.steady_state([1], rho=rho, theta=theta)
+#     Y = LDstats(Y, num_pops=1, pop_ids=pop_ids)
+
+#     # **1st epoch: Bottleneck phase (`Nb`) with fixed duration `T1_fixed`**
+#     Y.integrate([nuB], TB_fixed, rho=rho, theta=theta)
+
+#     # **2nd epoch: Recovery phase (`N_recover`)**
+#     Y.integrate([nuF], T2, rho=rho, theta=theta)
+
+#     return Y
 
 def three_epoch_fixed_MomentsLD(params, order=2, rho=None, theta=0.001, pop_ids=None):
     """
-    Three-epoch bottleneck model with a fixed bottleneck duration.
+    Three epoch model with constant sized epochs.
 
     :param params: The relative sizes and integration times of recent epochs,
-        in genetic units: (nuB, nuF, T2).
-        - nuB: Bottleneck population size relative to ancestral size (N0).
-        - nuF: Final recovered population size relative to N0.
-        - T2: Duration of the recovery phase (in genetic units).
+        in genetic units: (nu1, nu2, T1, T2).
     :type params: list
     :param order: The maximum order of the LD statistics. Defaults to 2.
     :type order: int
@@ -119,26 +166,19 @@ def three_epoch_fixed_MomentsLD(params, order=2, rho=None, theta=0.001, pop_ids=
     :param theta: Population-scaled mutation rate (4Nu). Defaults to 0.001.
     :type theta: float
     :param pop_ids: List of population IDs of length 1.
-    :type pop_ids: list of str, optional
+    :type pop_ids: lits of str, optional
     """
-    if T1_fixed is None:
-        raise ValueError("T1_fixed is not set before calling three_epoch_fixed_MomentsLD")
-
-    if pop_ids is not None and len(pop_ids) != 1:
-        raise ValueError("pop_ids must have length 1")
-    
-    nuB, nuF, T2 = params  # T1 is removed from params and fixed globally
-
+    # print(params)
+    nu1, nu2, T1, T2, Ne = params
+    T1_new = T1/(2*Ne)
+    print(T1_new)
     Y = NumericsMomentsLD.steady_state([1], rho=rho, theta=theta)
     Y = LDstats(Y, num_pops=1, pop_ids=pop_ids)
-
-    # **1st epoch: Bottleneck phase (`Nb`) with fixed duration `T1_fixed`**
-    Y.integrate([nuB], T1_fixed, rho=rho, theta=theta)
-
-    # **2nd epoch: Recovery phase (`N_recover`)**
-    Y.integrate([nuF], T2, rho=rho, theta=theta)
-
+    Y.integrate([nu1], T1_new, rho=rho, theta=theta)
+    Y.integrate([nu2], T2, rho=rho, theta=theta)
     return Y
+
+
 
 
 
