@@ -21,6 +21,49 @@ def norm(p, mean, stddev):
 def unnorm(z, mean, stddev):
     return [z_i * s + m for z_i, m, s in zip(z, mean, stddev)]
 
+def optimize_moments_nlopt_bobyqa(
+    x0,              
+    sfs,            
+    model_func,     
+    lower_bound,    
+    upper_bound,    
+    maxeval=5000,
+    ftol_rel=1e-6,
+    xtol_rel=1e-6,
+    verbose=False
+):
+    iteration_counter = {"count": 0}
+
+    def objective_function(current_params, grad):
+        model_sfs = model_func(current_params)
+        ll = moments.Inference.ll(model_sfs, sfs)
+        if verbose:
+            print(f"[{iteration_counter['count']}] Params: {current_params}, Log-likelihood: {ll}")
+        iteration_counter["count"] += 1
+        return -ll  # minimize negative log-likelihood
+
+    opt = nlopt.opt(nlopt.LN_BOBYQA, len(x0))
+    if lower_bound is not None:
+        opt.set_lower_bounds(lower_bound)
+    if upper_bound is not None:
+        opt.set_upper_bounds(upper_bound)
+
+    opt.set_maxeval(maxeval)
+    opt.set_ftol_rel(ftol_rel)
+    opt.set_xtol_rel(xtol_rel)
+    opt.set_min_objective(objective_function)
+
+    try:
+        best_x = opt.optimize(x0)
+    except nlopt.RoundoffLimited:
+        print("⚠️ Optimization stopped due to roundoff limitations. Returning best-so-far.")
+        best_x = opt.get_x()
+
+    minf = opt.last_optimum_value()
+    best_ll = -minf
+
+    return best_x, best_ll
+
 def real_to_dadi_params(real_params, demographic_model, parameter_names=None):
     """
     Suppose real_params = (N1, N2, M12, M21, Tsplit_in_gen) or a dict if parameter_names is None.
@@ -136,7 +179,10 @@ def diffusion_sfs_moments(parameters: list[float],
     # Typically, you'd set theta = 4 * Nref * mu * L for a given reference size Nref,
     # but here we just use the first population's size as "N0".
     # Adjust to your model's convention for Nref if needed.
-    Nref = parameters[0]  # or define some other reference population size
+    # Nref = parameters[0]  # or define some other reference population size
+    if demographic_model == "bottleneck_model":
+        Nref = 10000
+
     theta = 4 * Nref * mutation_rate * sequence_length
 
     sfs = moments.Spectrum.from_demes(
@@ -254,7 +300,9 @@ def diffusion_sfs_dadi(
 
     # 5) Scale by theta if you want an absolute SFS. Typically, we do:
     #    theta = 4 * Nref * mu * L. If you consider parameters[0] = N0, then:
-    Nref = parameters[0]
+    # Nref = parameters[0]
+    if demographic_model == "bottleneck_model":
+        Nref = 10000
     theta = 4.0 * Nref * mutation_rate * sequence_length
 
     model_fs *= theta
@@ -399,54 +447,50 @@ def _optimize_dadi(
 
 def _optimize_moments(
     queue,
-    init_z,  # Initial guess in z-space
+    p_guess,  # initial guess
     sfs,
     demographic_model,
     sample_sizes_fit,
     lower_bound,
     upper_bound,
     mutation_rate,
-    sequence_length,
-    mean,
-    stddev
+    sequence_length
 ):
     """
     Runs moments optimization in *z-scored* space, then returns the
-    best-fit *un-z-scored* parameters + LL to the parent process via 'queue'.
-    Uses the diffusion SFS from moments.
+    best-fit real-space parameters + LL to the parent process via 'queue'.
     """
 
-    # 1) Convert real-space bounds to z-space
-    lb_z = norm(lower_bound, mean, stddev)
-    ub_z = norm(upper_bound, mean, stddev)
+    # Define a wrapper function for computing the model SFS with Moments
+    def raw_wrapper(scaled_params):
+        # For example, your custom function:
+        return diffusion_sfs_moments(
+            scaled_params, 
+            sample_sizes_fit, 
+            demographic_model, 
+            mutation_rate, 
+            sequence_length
+        )
 
-    # 2) Define wrapper function for moments optimization in z-space
-    def z_wrapper(z_params, ns):
-        scaled_params = unnorm(z_params, mean, stddev)
-        return diffusion_sfs_moments(scaled_params, sample_sizes_fit, demographic_model, mutation_rate, sequence_length)
-
-    # 3) Run the optimizer in z-space
-    xopt = moments.Inference.optimize_powell(
-        init_z,
-        sfs,
-        lambda z, n: z_wrapper(z, n),
-        lower_bound=lb_z,
-        upper_bound=ub_z,
-        multinom=False,
-        verbose=0,
-        flush_delay=0.0,
-        full_output=True
+    # Instead of moments.Inference.optimize_powell(...), call your nlopt-based function:
+    fitted_params, ll_value = optimize_moments_nlopt_bobyqa(
+        x0=p_guess,
+        sfs=sfs,
+        model_func=raw_wrapper,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        maxeval=5000,
+        ftol_rel=1e-6,
+        xtol_rel=1e-6, 
+        verbose=True
     )
 
-    # 4) Convert best-fit from z-space to real (scaled) space
-    fitted_params = unnorm(xopt[0], mean, stddev)
-    ll_value = xopt[1]
 
     print(f"Best-fit moments params (real-space): {fitted_params}")
-    
-    # 5) Send results back to parent process
-    queue.put((fitted_params, ll_value))
+    print(f"Maximum log-likelihood: {ll_value}")
 
+    # Pass results back
+    queue.put((fitted_params, ll_value))
 
 def run_inference_dadi(
     sfs,
@@ -489,7 +533,7 @@ def run_inference_dadi(
 
     # 4) Perturb the initial guess to avoid local minima
     p_guess = moments.Misc.perturb_params(
-        p0, fold=0.1, lower_bound=lower_bound, upper_bound=upper_bound
+        p0, fold=1, lower_bound=lower_bound, upper_bound=upper_bound
     )
 
     p_guess = p0.copy()
@@ -607,11 +651,11 @@ def run_inference_moments(
     )
 
     # Compute mean and stddev for z-score normalization
-    mean = [(l + u) / 2 for (l, u) in zip(lower_bound, upper_bound)]
-    stddev = [(u - l) / np.sqrt(12) for (l, u) in zip(lower_bound, upper_bound)]
+    # mean = [(l + u) / 2 for (l, u) in zip(lower_bound, upper_bound)]
+    # stddev = [(u - l) / np.sqrt(12) for (l, u) in zip(lower_bound, upper_bound)]
 
-    print(f'Mean is: {mean}')
-    print(f'Stddev is: {stddev}')
+    # print(f'Mean is: {mean}')
+    # print(f'Stddev is: {stddev}')
 
     # Perturb the initial guess
     p_guess = moments.Misc.perturb_params(
@@ -621,17 +665,17 @@ def run_inference_moments(
     p_guess = p0.copy()
     print(f'Initial guess in real-space: {p_guess}')
 
-    # Convert to z-space
-    init_z = norm(p_guess, mean, stddev)
+    # # Convert to z-space
+    # init_z = norm(p_guess, mean, stddev)
 
-    print(f'Initial guess in z-space for moments: {init_z}')
+    # print(f'Initial guess in z-space for moments: {init_z}')
 
     # Run optimization in a separate process
     queue = multiprocessing.Queue()
     process = multiprocessing.Process(
         target=_optimize_moments,
-        args=(queue, init_z, sfs, demographic_model, sample_sizes_fit,
-              lower_bound, upper_bound, mutation_rate, length, mean, stddev)
+        args=(queue, p_guess, sfs, demographic_model, sample_sizes_fit,
+              lower_bound, upper_bound, mutation_rate, length)
     )
 
     process.start()
