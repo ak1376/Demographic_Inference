@@ -3,7 +3,7 @@
 #SBATCH --array=0-9999           
 #SBATCH --output=logs/ld_stats_%A_%a.out
 #SBATCH --error=logs/ld_stats_%A_%a.err
-#SBATCH --time=36:00:00
+#SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --partition=kern,preempt,kerngpu

@@ -81,34 +81,34 @@ echo "JobName,JobID,StartTime,EndTime,Elapsed,MaxMemory" > logs/job_stats.txt
 # Submit jobs and start tracking times
 echo "Submitting all jobs and capturing start times..."
 
+# 1. Setup
 setup_id=$(submit_job "bash_scripts/setup.sh")
 setup_start=$(date +%s)
 wait_for_job_array_completion "$setup_id" "Setup" "$setup_start"
 
+# 2. Simulation
 sim_id=$(submit_job "bash_scripts/running_simulation.sh" "$setup_id")
 sim_start=$(date +%s)
 wait_for_job_array_completion "$sim_id" "Simulation" "$sim_start"
 
-genome_id=$(submit_job "bash_scripts/genome_windows.sh" "$sim_id")
-genome_start=$(date +%s)
-wait_for_job_array_completion "$genome_id" "Genome Windows" "$genome_start"
+# -- Removed genome windows and combine metadata steps --
 
-combine_metadata_id=$(submit_job "bash_scripts/combine_metadata.sh" "$genome_id")
-combine_metadata_start=$(date +%s)
-wait_for_job_array_completion "$combine_metadata_id" "Combine Metadata" "$combine_metadata_start"
-
-ld_stats_id=$(submit_job "bash_scripts/LD_stats_windows.sh" "$combine_metadata_id")
+# 3. LD Stats (depends directly on Simulation now)
+ld_stats_id=$(submit_job "bash_scripts/LD_stats_windows.sh" "$sim_id")
 ld_stats_start=$(date +%s)
 wait_for_job_array_completion "$ld_stats_id" "LD Stats Window" "$ld_stats_start"
 
+# 4. momentsLD inferences
 momentsld_id=$(submit_job "bash_scripts/momentsLD_inferences.sh" "$ld_stats_id")
 momentsld_start=$(date +%s)
 wait_for_job_array_completion "$momentsld_id" "MomentsLD" "$momentsld_start"
 
+# 5. moments/dadi
 moments_dadi_id=$(submit_job "bash_scripts/moments_dadi.sh" "$momentsld_id")
 moments_dadi_start=$(date +%s)
 wait_for_job_array_completion "$moments_dadi_id" "Moments/Dadi" "$moments_dadi_start"
 
+# 6. Aggregate features
 aggregate_features_id=$(submit_job "bash_scripts/aggregate_features.sh" "$moments_dadi_id")
 aggregate_features_start=$(date +%s)
 wait_for_job_array_completion "$aggregate_features_id" "Aggregate Features" "$aggregate_features_start"

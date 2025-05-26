@@ -332,7 +332,7 @@ def get_LD_stats(vcf_file, r_bins, flat_map_path, pop_file_path):
         pops=unique_populations,  # Now correctly ordered
         r_bins=r_bins,
         report=False,
-        use_h5=False
+        use_h5=True
     )
 
     return ld_stats
@@ -789,7 +789,7 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
 
     if demographic_model == "bottleneck_model":
         # demo_func = demographic_models.three_epoch_fixed_MomentsLD
-        demo_func = moments.LD.Demographics1D.three_epoch
+        demo_func = demographic_models.three_epoch_fixed_MomentsLD
         demes_func = demographic_models.bottleneck_model
     elif demographic_model == "split_isolation_model":
         demo_func = demographic_models.split_isolation_model_momentsLD
@@ -804,10 +804,11 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
 
     print('Demes Graph Computation')
     g = demes_func(sampled_params)
+    print(f'Demes Graph: {g}')
 
     # Expected LD stats plots
     if demographic_model == "bottleneck_model":
-        y = moments.Demes.LD(g, sampled_demes=["N0"], rho=4 * sampled_params["N0"] * r_bins)
+        y = moments.Demes.LD(g, sampled_demes=["N0"], rho=4 * 10000 * r_bins) # Hardcoded ancestral size 
     elif demographic_model == "split_migration_model":
         y = moments.Demes.LD(g, sampled_demes=["N1", "N2"], rho=4 * sampled_params["N0"] * r_bins)
     elif demographic_model == "split_isolation_model":
@@ -875,61 +876,51 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
         fig_size=(6, 4),
     )
 
-    p_guess = [0.5, 0.5, 0.075, 2, 50000]
+    # Guess
+    # Convert the guess dictionary to a list
+    p_guess = [p_guess[k] for k in p_guess.keys()]
+    lower_bound = [experiment_config["lower_bound_optimization"][k] for k in experiment_config['lower_bound_optimization'].keys()]
+    upper_bound = [experiment_config["upper_bound_optimization"][k] for k in experiment_config['upper_bound_optimization'].keys()]
+
     p_guess = moments.LD.Util.perturb_params(p_guess, fold=0.1)
-    bottleneck_size_fixed = sampled_params['N_recover']/sampled_params['N0']
-    print(f'bottleneck size fixed: {bottleneck_size_fixed}')
+    # p_guess.append(10000) #Weird 
 
     opt_params, ll = moments.LD.Inference.optimize_log_lbfgsb(
         p_guess, 
         [mv["means"], mv["varcovs"]], 
         [demo_func], 
         rs=r_bins,
-        fixed_params=[None, bottleneck_size_fixed, None, None, None],
-        upper_bound=[1, 3, 0.2, 0.2, 100000],
+        Ne=10000,
+        pass_Ne=False,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        # fixed_params=[None, bottleneck_size_fixed, None, None, None],
+        # upper_bound=[1, 3, 0.2, 0.2, 100000],
         verbose=1
     )
-
-    physical_units = moments.LD.Util.rescale_params(
-        opt_params, ["nu", "nu", "T", "T", "Ne"]
-    )
-
-    print("Simulated parameters:")
-    print(f"  N1(deme0)         :  {g.demes[0].epochs[1].start_size:.1f}")
-    print(f"  N2(deme1)         :  {g.demes[0].epochs[2].start_size:.1f}")
-    print(f"  T1 (gen)  :  {g.demes[0].epochs[1].start_time:.1f}")
-    print(f"  T2 (gen)   :  {g.demes[0].epochs[2].start_time:.6f}")
-    print(f"  N(ancestral)     :  {g.demes[0].epochs[0].start_size:.1f}")
-    
-    print("best fit parameters:")
-    print(f"  N1(deme0)         :  {physical_units[0]:.1f}")
-    print(f"  N2(deme1)         :  {physical_units[1]:.1f}")
-    print(f"  T1 (gen)  :  {physical_units[2]:.1f}")
-    print(f"  T2 (gen)   :  {physical_units[3]:.6f}")
-    print(f"  N(ancestral)     :  {physical_units[4]:.1f}")
-
     ll_list.append(ll)
 
-    opt_params_dict = {}
     if demographic_model == "bottleneck_model":
-        # opt_params[0]: Nb
-        # opt_params[1]: N_recover 
-        # opt_params[2]: t_bottleneck_end
-        # opt_params[3]: N_ref
-        opt_params_dict = {
-            "N0": opt_params[4],
-            "Nb": opt_params[0] * opt_params[4],
-            "N_recover": opt_params[1] * opt_params[4],
-            "t_bottleneck_end": opt_params[3] * 2 * opt_params[4]
-        }
+    
+        print(f'opt_params: {opt_params}')
 
-        print(f'best fit parameters:')
-        print(f'  N0         :  {opt_params[4]:.1f}')
-        print(f'  Nb         :  {opt_params[0] * opt_params[4]:.1f}')
-        print(f'  N_recover  :  {opt_params[1] * opt_params[4]:.1f}')
-        print(f'  t_bottleneck_end (gen)  :  {opt_params[3] * 2 * opt_params[4]:.1f}')
+        print("Simulated parameters:")
+        print(f"  N_recover           :  {g.demes[0].epochs[2].start_size:.1f}")
+        print(f"  t_bottleneck_start  :  {g.demes[0].epochs[1].start_time:.1f}")
+        print(f"  t_bottleneck_end    :  {g.demes[0].epochs[2].start_time:.6f}")
+
         
+        print("best fit parameters:")
+        print(f"  N_recover         :  {opt_params[0]:.1f}")
+        print(f"  t_bottleneck_start  :  {opt_params[1]:.1f}")
+        print(f"  t_bottleneck_end   :  {opt_params[2]:.6f}")
 
+        opt_params_dict = {
+            "N_recover": opt_params[0],
+            "t_bottleneck_start": opt_params[1],
+            "t_bottleneck_end": opt_params[2]
+        }
+        
     elif demographic_model == "split_isolation_model":
         physical_units = moments.LD.Util.rescale_params(  # type: ignore
             opt_params, ["nu", "nu", "T", "m", "Ne"]

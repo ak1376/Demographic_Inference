@@ -8,7 +8,7 @@ import numpy as np
 
 # Adjust imports to match your project layout
 from src.parameter_inference import run_inference_momentsLD
-from src.demographic_models import set_T1_fixed
+from src.demographic_models import set_TB_fixed
 
 
 def main(
@@ -34,12 +34,6 @@ def main(
     # 3. Load combined LD stats (observed data for inference)
     with open(combined_ld_stats_path, "rb") as f:
         combined_ld_stats = pickle.load(f)
-
-    # 4. If it's a bottleneck model, set T1 (or Tb) to a fixed value
-    if experiment_config.get("demographic_model") == "bottleneck_model":
-        # Example usage: fix T1 to (start - end) / 2N0
-        tb_value = (sampled_params["t_bottleneck_start"] - sampled_params["t_bottleneck_end"]) / (2 * sampled_params["N0"])
-        set_T1_fixed(tb_value)
 
     # 5. Prepare an initial parameter guess from config (dictionary or list)
     p_guess = experiment_config["optimization_initial_guess"].copy()  

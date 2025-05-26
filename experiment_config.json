@@ -37,7 +37,7 @@
     "num_samples": {
         "N0": 20
     },
-    "num_sims_pretrain": 100,
+    "num_sims_pretrain": 5000,
     "num_sims_inference": 1,
     "dadi_analysis": true,
     "moments_analysis": true,
@@ -52,8 +52,8 @@
     "normalization": true,
     "remove_outliers": true,
     "use_FIM": true,
-    "k": 100,
-    "top_values_k": 1,
+    "k": 10,
+    "top_values_k": 2,
     "training_percentage": 0.5,
     "demographic_model": "bottleneck_model",
     "vcf_filepath": "/sietch_colab/akapoor/GHIST-bottleneck.vcf.gz",

@@ -36,7 +36,7 @@ ANALYSES=("dadi" "moments")
 NUM_ANALYSES=${#ANALYSES[@]}  # Number of analyses
 
 # Define batch size
-BATCH_SIZE=3  # Number of tasks to run in each job
+BATCH_SIZE=10  # Number of tasks to run in each job
 TOTAL_TASKS=$((NUM_SIMS_PRETRAIN * NUM_REPLICATES * NUM_ANALYSES))  # Total tasks
 NUM_BATCHES=$(((TOTAL_TASKS + BATCH_SIZE - 1) / BATCH_SIZE))  # Calculate total batches
 
