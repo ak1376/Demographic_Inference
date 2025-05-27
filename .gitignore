@@ -21,3 +21,5 @@ moments_dadi_features/
 old_logs/
 model_results/
 model_1_results/
+notebooks/
+split_migration_model_*/
