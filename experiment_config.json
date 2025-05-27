@@ -15,7 +15,7 @@
     "m21": 0,
     "t_split": 500
   },
-  "num_sims_pretrain": 100,
+  "num_sims_pretrain": 10,
   "num_sims_inference": 1,
   "num_samples": {
     "N1": 15,
@@ -29,7 +29,7 @@
   "genome_length": 100000000.0,
   "mutation_rate": 1.5e-08,
   "recombination_rate": 1.5e-08,
-  "seed": 295,
+  "seed": 78,
   "maxiter": 20,
   "normalization": true,
   "remove_outliers": true,

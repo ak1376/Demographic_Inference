@@ -97,7 +97,7 @@ class Processor:
     @staticmethod
     def write_samples_and_rec_map(experiment_config, window_number, folderpath):
         # Create the window-specific subdirectory
-        folderpath = os.path.join(folderpath, f"window_{window_number}")
+        # folderpath = os.path.join(folderpath, f"window_{window_number}")
         os.makedirs(folderpath, exist_ok=True)
 
         # Define the file paths
