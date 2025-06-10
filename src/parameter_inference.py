@@ -82,6 +82,20 @@ def real_to_dadi_params(real_params, demographic_model, parameter_names=None):
             't_bottleneck_end': t_end / (2 * N_anc),
         }
 
+    elif demographic_model == "island_model":
+        N_anc = real_params['N0']
+        N1 = real_params['N1']
+        N2 = real_params['N2']
+        M12 = real_params['m12']
+        M21 = real_params['m21']
+
+        scaled_params = {
+            'nu1': N1 / N_anc,
+            'nu2': N2 / N_anc,
+            'm12': M12 * (2 * N_anc),
+            'm21': M21 * (2 * N_anc),
+        }
+
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
@@ -863,6 +877,8 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
         fig_size=(6, 4),
     )
 
+    print(f'p_guess is: {p_guess}')
+
     p_guess_scaled = real_to_dadi_params(p_guess, demographic_model)
     # p_guess_scaled = real_to_dadi_params(sampled_params, demographic_model) # Let's pass in the ground truth and see if we can recover the true generative params. Sanity check. 
 
@@ -890,6 +906,10 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
         p_guess_scaled = [p_guess_scaled['nuB'], p_guess_scaled['nuF'], p_guess_scaled['t_bottleneck_end']]
         lower_bound_scaled = [lower_bound_scaled['nuB'], lower_bound_scaled['nuF'], lower_bound_scaled['t_bottleneck_end']]
         upper_bound_scaled = [upper_bound_scaled['nuB'], upper_bound_scaled['nuF'], upper_bound_scaled['t_bottleneck_end']]
+    elif demographic_model == "island_model":
+        p_guess_scaled = [p_guess_scaled['nu1'], p_guess_scaled['nu2'], p_guess_scaled['m12'], p_guess_scaled['m21']]
+        lower_bound_scaled = [lower_bound_scaled['nu1'], lower_bound_scaled['nu2'], lower_bound_scaled['m12'], lower_bound_scaled['m21']]
+        upper_bound_scaled = [upper_bound_scaled['nu1'], upper_bound_scaled['nu2'], upper_bound_scaled['m12'], upper_bound_scaled['m21']]
     else:
         raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
@@ -900,12 +920,20 @@ def run_inference_momentsLD(ld_stats, demographic_model, p_guess, sampled_params
     # Append the real ancestral size to the end of p_guess_scaled
     if demographic_model == "split_migration_model":
         p_guess_scaled = np.append(p_guess_scaled, p_guess['N0'])
-        lower_bound_scaled = np.append(lower_bound_scaled, experiment_config["lower_bound_optimization"]['N0'])
+        lower_bound_scaled = np.append(lower_bound_scaled, experiment_config["lower_bound_optimization"]['N0']) 
         upper_bound_scaled = np.append(upper_bound_scaled, experiment_config["upper_bound_optimization"]['N0'])
     elif demographic_model == "split_isolation_model":
         p_guess_scaled = np.append(p_guess_scaled, p_guess['Na'])
     elif demographic_model == "bottleneck_model":
         p_guess_scaled = np.append(p_guess_scaled, p_guess['N0'])
+    elif demographic_model == "island_model":
+        p_guess_scaled = np.append(p_guess_scaled, p_guess['N0'])
+        lower_bound_scaled = np.array([0,0,0,0, 100])  # For island model, we set lower bounds to zero
+        upper_bound_scaled = np.array([1, 1, 100, 100, 30000])  # For island model, we set upper bounds to one
+        # lower_bound_scaled = np.append(lower_bound_scaled, experiment_config["lower_bound_optimization"]['N0'])
+        # upper_bound_scaled = np.append(upper_bound_scaled, experiment_config["upper_bound_optimization"]['N0'])
+    else:
+        raise ValueError(f"Unsupported demographic model: {demographic_model}")
 
     # print(f'Initial guess in real space: {p_guess}')
 

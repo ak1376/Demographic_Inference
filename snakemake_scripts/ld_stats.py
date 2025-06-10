@@ -7,93 +7,85 @@ import tskit
 import os
 import shutil
 
-# Function to create LD statistics
-def ld_stat_creation(vcf_filepath, flat_map_path, pop_file_path, sim_directory, sim_number, window_number):
+from src.parameter_inference import get_LD_stats
+import argparse
+import numpy as np
+import pickle
+import json
+import os
+import msprime
+import src.demographic_models  # Ensure this module is accessible
+from src.preprocess import Processor  # To generate sample and flat map files
+
+def ld_stat_creation(sampled_params_path, sim_directory, sim_number, window_number, experiment_config_filepath):
     # Define recombination bins
     r_bins = np.array([0, 1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3])
-    errors_to_retry = (IndexError, ValueError)  # Specific errors for retry logic
+    
+    print(f"Calculating LD stats for replicate {window_number}, sim {sim_number}")
 
-    try:
-        print(f"Calculating LD stats for window {window_number}, sim {sim_number}")
+    # Load the sampled parameters and experiment configuration
+    with open(sampled_params_path, "rb") as f:
+        sampled_params = pickle.load(f)
+    with open(experiment_config_filepath, "r") as f:
+        experiment_config = json.load(f)
 
-        # Calculate LD stats
-        ld_stats = get_LD_stats(vcf_filepath, r_bins, flat_map_path, pop_file_path)
+    # Build the demography using split migration model
+    samples = {pop_name: num_samples for pop_name, num_samples in experiment_config['num_samples'].items()}
+    g = src.demographic_models.split_migration_model_simulation(sampled_params)
+    demog = msprime.Demography.from_demes(g)
+    
+    # Simulate the tree sequence (ancestry)
+    ts = msprime.sim_ancestry(
+        samples, 
+        demography=demog,
+        sequence_length=experiment_config['genome_length'],
+        recombination_rate=experiment_config['recombination_rate'],
+        random_seed=experiment_config['seed'] + window_number
+    )
+    # Simulate mutations so that genotype data is available
+    ts = msprime.sim_mutations(ts, rate=experiment_config['mutation_rate'], random_seed=window_number + 1)
+    if ts.num_sites == 0:
+        raise ValueError("No mutations were simulated. Please check that your mutation rate and genome length are high enough.")
+    
+    # Write the mutated tree sequence to VCF on disk
+    window_dir = f"{sim_directory}/sim_{sim_number}/window_{window_number}"
+    os.makedirs(window_dir, exist_ok=True)
+    vcf_filepath = f"{window_dir}/vcf_window.{window_number}.vcf"
+    with open(vcf_filepath, "w+") as fout:
+        ts.write_vcf(fout, allow_position_zero=True)
+    os.system(f"gzip {vcf_filepath}")
+    vcf_filepath += ".gz"
+    print(f"VCF file written to: {vcf_filepath}")
 
-        # Save LD stats to a file
-        os.makedirs(f"{sim_directory}/sim_{sim_number}/window_{window_number}/", exist_ok = True)
-        output_file = f"{sim_directory}/sim_{sim_number}/window_{window_number}/ld_stats_window.{window_number}.pkl"
-        with open(output_file, "wb") as f:
-            pickle.dump(ld_stats, f)
+    # Generate the samples and flat map files internally
+    # Processor.write_samples_and_rec_map() is assumed to create these files in window_dir.
+    Processor.write_samples_and_rec_map(experiment_config, window_number=window_number, folderpath=window_dir)
+    # Now assume the samples file and flat map file are:
+    pop_file_path = f"{window_dir}/samples.txt"
+    flat_map_path = f"{window_dir}/flat_map.txt"
 
-        print(f"LD stats successfully created for window {window_number}, sim {sim_number}")
-    except errors_to_retry as e:
-        print(f"Error encountered ({e}) for window {window_number}, sim {sim_number}. Regenerating the window...")
+    # Calculate LD stats
+    ld_stats = get_LD_stats(vcf_filepath, r_bins, flat_map_path, pop_file_path)
+    
+    # Save LD stats to a pickle file
+    output_file = f"{window_dir}/ld_stats_window.{window_number}.pkl"
+    with open(output_file, "wb") as f:
+        pickle.dump(ld_stats, f)
+    print(f"LD stats successfully created for window {window_number}, sim {sim_number}")
 
-        # First delete the windows
-        dir_path = f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}"
-        print("========================================================")
-        print(f'WINDOWS PATH TO REMOVE: {dir_path}')
-        print("========================================================")
-
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)  # Recursively delete the directory and its contents
-            print(f"Deleted directory and all contents: {dir_path}")
-        else:
-            print(f"Directory not found: {dir_path}")
-                    
-        # Delete the LD stats that correspond to each window
-        [os.remove(os.path.join(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}", f)) for f in os.listdir(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}") if os.path.isfile(os.path.join(f"/projects/kernlab/akapoor/Demographic_Inference/LD_inferences/sim_{sim_number}", f))]
-
-        from src.preprocess import Processor
-
-        # Reload experiment configuration
-        with open("/projects/kernlab/akapoor/Demographic_Inference/experiment_config.json", "r") as f:
-            experiment_config = json.load(f)
-
-        # Load the tree sequence
-        ts_path = f"/projects/kernlab/akapoor/Demographic_Inference/simulated_parameters_and_inferences/simulation_results/ts_sim_{sim_number}.trees"
-        ts = tskit.load(ts_path)
-
-        genome_window_dir = f"/projects/kernlab/akapoor/Demographic_Inference/sampled_genome_windows/sim_{sim_number}"
-
-        # Regenerate the window
-        Processor.run_msprime_replicates(ts, experiment_config, window_number, genome_window_dir)
-        Processor.write_samples_and_rec_map(experiment_config, window_number, genome_window_dir)
-
-        # Update file paths for the regenerated window
-        new_vcf_filepath = f"{genome_window_dir}/window_{window_number}/window.{window_number}.vcf.gz"
-        new_flat_map_path = f"{genome_window_dir}/window_{window_number}/flat_map.txt"
-
-        print(f"Retrying LD stats calculation for regenerated window {window_number}, sim {sim_number}")
-        os.makedirs(f"{sim_directory}/sim_{sim_number}/window_{window_number}/", exist_ok = True)
-        ld_stat_creation(vcf_filepath= new_vcf_filepath, 
-        flat_map_path = new_flat_map_path, 
-        pop_file_path = pop_file_path, 
-        sim_directory = sim_directory, 
-        sim_number = sim_number, 
-        window_number = window_number)
-
-    except Exception as e:
-        print(f"Unexpected error: {e} for window {window_number}, sim {sim_number}. Type: {type(e)}")
-        print(f"Failed to create LD stats for window {window_number}, sim {sim_number}.")
-
-# Main entry point
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate LD statistics for specified simulation windows.")
-    parser.add_argument("--vcf_filepath", type=str, required=True, help="Path to the VCF file containing simulated data")
-    parser.add_argument("--flat_map_path", type=str, required=True, help="Path to the flat map file")
-    parser.add_argument("--pop_file_path", type=str, required=True, help="Path to the population file")
-    parser.add_argument("--sim_directory", type=str, required=True, help="Path to the simulation directory")
+    parser.add_argument("--sampled_params_path", type=str, required=True, help="Path to the sampled parameters pickle file")
+    parser.add_argument("--experiment_config_filepath", type=str, required=True, help="Path to the experiment configuration JSON file")
+    parser.add_argument("--sim_directory", type=str, required=True, help="Path to the simulation directory (for LD inferences)")
     parser.add_argument("--sim_number", type=int, required=True, help="Simulation number")
     parser.add_argument("--window_number", type=int, required=True, help="Window number")
     args = parser.parse_args()
 
-    # Run the LD statistics creation function
     ld_stat_creation(
-        vcf_filepath=args.vcf_filepath,
-        flat_map_path=args.flat_map_path,
-        pop_file_path=args.pop_file_path,
+        sampled_params_path=args.sampled_params_path,
         sim_directory=args.sim_directory,
         sim_number=args.sim_number,
-        window_number=args.window_number
+        window_number=args.window_number,
+        experiment_config_filepath=args.experiment_config_filepath
     )
