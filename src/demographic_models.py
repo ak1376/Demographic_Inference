@@ -3,6 +3,7 @@ from dadi import Numerics, PhiManip, Integration
 from dadi.Spectrum_mod import Spectrum
 import moments
 import numpy as np
+import math
 
 from moments.LD.LDstats_mod import LDstats
 import moments.LD.Numerics as NumericsMomentsLD
@@ -199,48 +200,65 @@ def split_migration_model_simulation(sampled_params):
     g = b.resolve()
     return g
 
+import math
+import demes
+
 def island_model_simulation(sampled_params):
     """
-    Define an island model demographic scenario using demes.
-    
-    This model consists of two populations with constant sizes that exchange migrants.
-    
-    Expected keys in sampled_params:
-      - "N1": Size of population 1
-      - "N2": Size of population 2
-      - "m12": Migration rate from population 1 to 2
-      - "m21": Migration rate from population 2 to 1
-      
-    Note: There is no ancestral population or split time in the island model.
-    
-    Returns:
-      A demes graph representing the island model.
+    Island model with a single ancestral root (required by moments.Demes.LD).
+    Two daughter demes (N1, N2) exchange migrants continuously.
+
+    Expected keys in sampled_params
+    --------------------------------
+      N1   : size of population 1
+      N2   : size of population 2
+      m12  : migration rate N1 -> N2   (0 ≤ m12 ≤ 1)
+      m21  : migration rate N2 -> N1   (0 ≤ m21 ≤ 1)
+      N0   : (optional) ancestral size.  If absent, uses mean(N1, N2).
+
+    Returns
+    -------
+    demes.Graph
     """
-    # Unpack the sampled parameters (ignoring N0 and t_split)
-    N1 = sampled_params["N1"]
-    N2 = sampled_params["N2"]
+    N1  = sampled_params["N1"]
+    N2  = sampled_params["N2"]
     m12 = sampled_params["m12"]
     m21 = sampled_params["m21"]
+    N0  = sampled_params.get("N0", (N1 + N2) / 2)
 
-    # Check if the migration rates are valid
-    if not (0 <= m12 <= 1) or not (0 <= m21 <= 1):
-        print(f"[ERROR] Invalid migration rates detected! m12={m12}, m21={m21}")
+    # sanity-check migration rates
+    if not (0 <= m12 <= 1 and 0 <= m21 <= 1):
         raise ValueError(f"Invalid migration rates: m12={m12}, m21={m21}")
 
-    # Define the demographic model using demes
     b = demes.Builder()
-    
-    # Add the two demes (populations) with constant sizes
-    b.add_deme("N1", epochs=[{"start_size": N1}])
-    b.add_deme("N2", epochs=[{"start_size": N2}])
-    
-    # Add migration between the demes (can be asymmetric)
+
+    # 1) single root deme: from ∞ down to time 1
+    b.add_deme(
+        name="ancestral",
+        start_time=math.inf,
+        epochs=[{"end_time": 1, "start_size": N0}],
+    )
+
+    # 2) daughter demes exist from time 1 → 0 (present)
+    b.add_deme(
+        name="N1",
+        ancestors=["ancestral"],
+        start_time=1,
+        epochs=[{"end_time": 0, "start_size": N1}],
+    )
+    b.add_deme(
+        name="N2",
+        ancestors=["ancestral"],
+        start_time=1,
+        epochs=[{"end_time": 0, "start_size": N2}],
+    )
+
+    # 3) continuous (possibly asymmetric) migration
     b.add_migration(source="N1", dest="N2", rate=m12)
     b.add_migration(source="N2", dest="N1", rate=m21)
-    
-    # Resolve and return the demography graph
-    g = b.resolve()
-    return g
+
+    return b.resolve()
+
 
 
 

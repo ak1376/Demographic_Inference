@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ld_stats_array
-#SBATCH --array=0-9999           
+#SBATCH --array=0-999           
 #SBATCH --output=logs/ld_stats_%A_%a.out
 #SBATCH --error=logs/ld_stats_%A_%a.err
 #SBATCH --time=36:00:00
@@ -19,8 +19,8 @@ SIM_DIR_BASE="${BASE_DIR}/LD_inferences"
 SNAKEMAKE_DIR="${BASE_DIR}"  # Root Snakemake directory
 
 # Define the batch size and total tasks
-BATCH_SIZE=50
-TOTAL_TASKS=500000
+BATCH_SIZE=1
+TOTAL_TASKS=1000
 
 # Calculate simulation and window numbers for the current task
 for TASK_ID in $(seq $((SLURM_ARRAY_TASK_ID * BATCH_SIZE)) $(((SLURM_ARRAY_TASK_ID + 1) * BATCH_SIZE - 1))); do
