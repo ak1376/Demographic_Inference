@@ -53,12 +53,14 @@ def main(experiment_config, sim_directory, sim_number):
     elif experiment_config["demographic_model"] == "split_migration_model":
         demographic_model = demographic_models.split_migration_model_simulation
 
+    elif experiment_config["demographic_model"] == "island_model":
+        demographic_model = demographic_models.island_model_simulation
+
     else:
         raise ValueError(
             f"Unsupported demographic model: {experiment_config['demographic_model']}"
         )
     
-
     print("BEGINNING THE PROCESS OF SIMULATING THE CHROMOSOME")
 
     # Now simulate the chromosome

@@ -1,19 +1,15 @@
 {
   "upper_bound_params": {
-    "N0": 30000,
     "N1": 30000,
     "N2": 30000,
-    "m12": 0.001,
-    "m21": 0.001,
-    "t_split": 20000
+    "m12": 0.0001,
+    "m21": 0.0001
   },
   "lower_bound_params": {
-    "N0": 100,
     "N1": 100,
     "N2": 100,
     "m12": 0,
-    "m21": 0,
-    "t_split": 500
+    "m21": 0
   },
   "num_sims_pretrain": 10,
   "num_sims_inference": 1,
@@ -29,54 +25,44 @@
   "genome_length": 100000000.0,
   "mutation_rate": 1.5e-08,
   "recombination_rate": 1.5e-08,
-  "seed": 78,
+  "seed": 1776,
   "maxiter": 20,
   "normalization": true,
   "remove_outliers": true,
-  "use_FIM": true,
+  "use_FIM": false,
   "k": 3,
   "top_values_k": 2,
   "training_percentage": 0.5,
-  "demographic_model": "split_migration_model",
+  "demographic_model": "island_model",
   "parameter_names": [
-    "N0",
     "N1",
     "N2",
     "m12",
-    "m21",
-    "t_split"
+    "m21"
   ],
   "parameters_to_estimate": [
-    "N0",
     "N1",
     "N2",
     "m12",
-    "m21",
-    "t_split"
+    "m21"
   ],
   "optimization_initial_guess": {
-    "N0": 9200,
     "N1": 6700,
-    "N2": 6000,
-    "m12": 0.0005,
-    "m21": 0.0005,
-    "t_split": 10000
+    "N2": 500,
+    "m12": 0.00005,
+    "m21": 0.00005
   },
   "lower_bound_optimization": {
-    "N0": 100,
     "N1": 100,
     "N2": 100,
     "m12": 0,
-    "m21": 0,
-    "t_split": 500
+    "m21": 0
   },
   "upper_bound_optimization": {
-    "N0": 30000,
     "N1": 30000,
     "N2": 30000,
-    "m12": 0.001,
-    "m21": 0.001,
-    "t_split": 20000
+    "m12": 0.0001,
+    "m21": 0.0001
   },
   "vcf_filepath": "/sietch_colab/akapoor/GHIST-split-migration.vcf.gz",
   "txt_filepath": "/sietch_colab/akapoor/wisent.txt",
